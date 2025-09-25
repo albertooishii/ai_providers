@@ -9,15 +9,10 @@ documentation: https://github.com/albertooishii/ai_providers#readme
 # Professional metadata for pub.dev
 topics:
   - ai
-  - openai
-  - google-ai
-  - llm
   - flutter
+  - openai
+  - llm
   - sdk
-  - architecture
-  - enterprise
-  - provider
-  - facade
 
 # Platform support
 platforms:
