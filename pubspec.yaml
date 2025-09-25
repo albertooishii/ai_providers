@@ -1,0 +1,80 @@
+name: ai_providers
+description: Professional Flutter AI SDK with unified API for multiple providers (OpenAI, Google AI, XAI). Advanced architecture showcasing enterprise patterns, caching, retry logic, and comprehensive monitoring.
+version: 1.0.0
+homepage: https://github.com/albertooishii/ai_providers
+repository: https://github.com/albertooishii/ai_providers
+issue_tracker: https://github.com/albertooishii/ai_providers/issues
+documentation: https://github.com/albertooishii/ai_providers#readme
+
+# Professional metadata for pub.dev
+topics:
+  - ai
+  - openai
+  - google-ai
+  - llm
+  - flutter
+  - sdk
+  - architecture
+  - enterprise
+  - provider
+  - facade
+
+# Platform support
+platforms:
+  android:
+  ios:
+  linux:
+  macos:
+  web:
+  windows:
+
+environment:
+  sdk: '>=3.2.0 <4.0.0'
+  flutter: ">=3.16.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # Core HTTP and networking
+  http: ^1.1.0
+  
+  # Utilities
+  crypto: ^3.0.3
+  path: ^1.8.3
+  
+  # Storage and preferences
+  path_provider: ^2.1.1
+  shared_preferences: ^2.2.2
+  flutter_secure_storage: ^9.2.2
+  
+  # Audio capabilities
+  flutter_tts: ^4.0.2
+  speech_to_text: ^7.0.0
+  record: ^5.0.4
+  
+  # Permissions
+  permission_handler: ^12.0.1
+  
+  # Configuration
+  yaml: ^3.1.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  test: ^1.24.0
+  flutter_lints: ^4.0.0
+
+flutter:
+  assets:
+    - assets/ai_providers_config.yaml
+
+# Pub.dev screenshot and funding info
+screenshots:
+  - description: 'AI Providers SDK Architecture Overview'
+    path: docs/images/architecture.png
+  - description: 'Unified API Examples'
+    path: docs/images/api_examples.png
+
+funding:
+  - https://github.com/sponsors/albertooishii

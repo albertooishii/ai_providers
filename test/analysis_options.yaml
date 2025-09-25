@@ -1,0 +1,29 @@
+# Configuración de lint personalizada para tests de ai_providers
+# Permite el uso de print statements en tests para debugging y documentación
+
+include: ../../../../analysis_options.yaml
+
+linter:
+  rules:
+    # Desactivar reglas relacionadas con print en tests
+    avoid_print: false
+    
+    # Permitir otras reglas comunes en tests que pueden ser útiles
+    prefer_const_constructors: false
+    prefer_const_literals_to_create_immutables: false
+    
+    # Desactivar la regla de dependencias para tests ubicados en lib/
+    depend_on_referenced_packages: false
+    
+analyzer:
+  errors:
+    # Convertir warnings de print a info level
+    avoid_print: info
+    
+    # Silenciar completamente las advertencias de dependencias para tests en lib/
+    depend_on_referenced_packages: ignore
+  
+  exclude:
+    # No analizar archivos temporales o generados si existen
+    - "**/*.g.dart"
+    - "**/*.freezed.dart"

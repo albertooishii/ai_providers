@@ -1,0 +1,236 @@
+# 🚀 AI Providers Configuration
+# Dynamic AI Providers System - Configuration File
+# This file defines all available AI providers, their capabilities, and fallback chains
+
+version: "1.0"
+metadata:
+  description: "AI Providers configuration for AI-chan"
+  created: "2025-09-08"
+  last_updated: "2025-09-24"
+
+# Global settings
+global_settings:
+  max_retries: 3
+  retry_delay_seconds: 1
+  tts_cache_enabled: true
+  tts_cache_duration_hours: 24
+  # Logging level for ai_providers system: off, error, warn, info, debug
+  log_level: "debug"
+
+# AI Providers Configuration
+ai_providers:
+  openai:
+    enabled: true
+    priority: 1
+    display_name: "OpenAI GPT"
+    description: "OpenAI models with advanced text generation, image analysis, and creation"
+    
+    capabilities:
+      - text_generation
+      - image_generation
+      - image_analysis
+      - audio_generation
+      - audio_transcription
+      - realtime_conversation
+      - function_calling
+    
+    api_settings:
+      base_url: "https://api.openai.com"
+      version: "v1"
+      authentication_type: "bearer_token"
+      required_env_keys:
+        - "OPENAI_API_KEYS"
+    
+    defaults:
+      text_generation: "gpt-4.1-mini"
+      image_generation: "gpt-4.1-mini"
+      image_analysis: "gpt-4.1-mini"
+      audio_generation: "gpt-4o-mini-tts"
+      audio_transcription: "gpt-4o-mini-transcribe"
+      realtime_conversation: "gpt-realtime"
+    
+    # Model prefixes for automatic registration
+    model_prefixes:
+      - "gpt-"
+      - "dall-e"
+      - "gpt-realtime"
+    
+    # API endpoints
+    endpoints:
+      chat: "/v1/responses"
+      models: "/v1/models"
+      audio_speech: "/v1/audio/speech"
+      audio_transcriptions: "/v1/audio/transcriptions"
+    
+    voices:
+      default: "marin"
+      tts_default: "marin"
+    
+    rate_limits:
+      requests_per_minute: 3500
+      tokens_per_minute: 350000
+    
+    configuration:
+      max_context_tokens: 128000
+      max_output_tokens: 4096
+      supports_streaming: true
+      supports_function_calling: true
+      supports_tools: true
+
+  google:
+    enabled: true
+    priority: 2
+    display_name: "Google Gemini"
+    description: "Google Gemini models with multimodal capabilities"
+    
+    capabilities:
+      - text_generation
+      - image_generation
+      - image_analysis
+      - realtime_conversation
+    
+    api_settings:
+      base_url: "https://generativelanguage.googleapis.com"
+      version: "v1beta"
+      authentication_type: "api_key"
+      required_env_keys:
+        - "GEMINI_API_KEYS"
+    
+    defaults:
+      text_generation: "gemini-2.5-flash"
+      image_generation: "gemini-2.5-flash-image-preview"
+      image_analysis: "gemini-2.5-flash"
+      realtime_conversation: "gemini-2.5-flash"
+    
+    # Model prefixes for automatic registration
+    model_prefixes:
+      - "gemini-"
+      - "imagen-"
+    
+    # API endpoints
+    endpoints:
+      chat: "/v1beta/models/{model}:generateContent"
+      models: "/v1beta/models" 
+      tts_voices: "https://texttospeech.googleapis.com/v1/voices"  # Full URL for different domain
+    
+    voices:
+      default: "es-ES-Neural2-A"
+    
+    rate_limits:
+      requests_per_minute: 2000
+      tokens_per_minute: 1000000
+    
+    configuration:
+      max_context_tokens: 1000000
+      max_output_tokens: 8192
+      supports_streaming: true
+      supports_function_calling: true
+      supports_tools: false
+
+  xai:
+    enabled: true
+    priority: 3
+    display_name: "X.AI Grok"
+    description: "X.AI Grok models for advanced reasoning and text generation"
+    
+    capabilities:
+      - text_generation
+      - image_analysis
+    
+    api_settings:
+      base_url: "https://api.x.ai"
+      version: "v1"
+      authentication_type: "bearer_token"
+      required_env_keys:
+        - "GROK_API_KEYS"
+    
+    defaults:
+      text_generation: "grok-4"
+      image_analysis: "grok-vision-beta"
+    
+    # Model prefixes for automatic registration
+    model_prefixes:
+      - "grok-"
+    
+    # API endpoints
+    endpoints:
+      chat: "/v1/chat/completions"
+      models: "/v1/models"
+    
+    rate_limits:
+      requests_per_minute: 5000
+      tokens_per_minute: 200000
+    
+    configuration:
+      max_context_tokens: 131072
+      max_output_tokens: 4096
+      supports_streaming: false
+      supports_function_calling: false
+      supports_tools: false
+
+  android_native:
+    enabled: true
+    priority: 0  # Máxima prioridad para funcionalidad nativa
+    display_name: "Android Native TTS/STT"
+    description: "Síntesis y reconocimiento de voz nativo de Android usando flutter_tts y speech_to_text"
+    
+    capabilities:
+      - audio_generation
+      - audio_transcription
+    
+    api_settings:
+      authentication_type: "none"
+      required_env_keys: []
+    
+    defaults:
+      audio_generation: "android_native_tts"
+      audio_transcription: "android_native_stt"
+    
+    # Model prefixes for automatic registration
+    model_prefixes:
+      - "android_native"
+    
+    voices:
+      default: "es-ES-default"
+    
+    rate_limits:
+      requests_per_minute: 1000
+    
+    configuration:
+      supports_streaming: false
+      supports_function_calling: false
+      platform_requirement: "android"
+
+# Fallback chains define which providers to try in sequence for each capability
+fallback_chains:
+  text_generation:
+    primary: "google"
+    fallbacks:
+      - "openai"
+      - "xai"
+    
+  image_generation:
+    primary: "openai"
+    fallbacks:
+      - "google"
+    
+  image_analysis:
+    primary: "openai"
+    fallbacks:
+      - "google"
+    
+  audio_generation:
+    primary: "android_native"
+    fallbacks:
+      - "openai"
+  
+  audio_transcription:
+    primary: "android_native"
+    fallbacks:
+      - "openai"
+    
+  realtime_conversation:
+    primary: "openai"
+    fallbacks:
+      - "google"
+      - "xai"
