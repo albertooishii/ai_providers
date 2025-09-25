@@ -70,11 +70,3 @@ flutter:
     - assets/ai_providers_config.yaml
 
 # Pub.dev screenshot and funding info
-screenshots:
-  - description: 'AI Providers SDK Architecture Overview'
-    path: docs/images/architecture.png
-  - description: 'Unified API Examples'
-    path: docs/images/api_examples.png
-
-funding:
-  - https://github.com/sponsors/albertooishii
