@@ -27,9 +27,6 @@ class GoogleProvider extends BaseProvider {
   String get providerId => 'google';
 
   @override
-  String get apiKeyType => 'gemini';
-
-  @override
   AIProviderMetadata createMetadata() {
     return AIProviderMetadata(
       providerId: providerId,
@@ -67,10 +64,15 @@ class GoogleProvider extends BaseProvider {
 
       if (isSuccessfulResponse(response.statusCode)) {
         final data = jsonDecode(response.body);
-        return (data['models'] as List<dynamic>)
+        final models = (data['models'] as List<dynamic>)
             .map((final model) =>
                 (model['name'] as String).replaceFirst('models/', ''))
+            .where((final model) => isValidModelForProvider(model))
             .toList();
+
+        // Apply priority-based sorting
+        models.sort(compareModels);
+        return models;
       }
       return null;
     } on Exception catch (_) {

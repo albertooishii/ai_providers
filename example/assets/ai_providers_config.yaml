@@ -1,6 +1,6 @@
 # 🚀 AI Providers Configuration
 # Dynamic AI Providers System - Configuration File
-# This file defines all available AI providers, their capabilities, and fallback chains
+# This file defines all available AI providers, their capabilities, and preferences per capability
 
 version: "1.0"
 metadata:
@@ -21,7 +21,6 @@ global_settings:
 ai_providers:
   openai:
     enabled: true
-    priority: 1
     display_name: "OpenAI GPT"
     description: "OpenAI models with advanced text generation, image analysis, and creation"
     
@@ -79,7 +78,6 @@ ai_providers:
 
   google:
     enabled: true
-    priority: 2
     display_name: "Google Gemini"
     description: "Google Gemini models with multimodal capabilities"
     
@@ -129,7 +127,6 @@ ai_providers:
 
   xai:
     enabled: true
-    priority: 3
     display_name: "X.AI Grok"
     description: "X.AI Grok models for advanced reasoning and text generation"
     
@@ -145,7 +142,7 @@ ai_providers:
         - "GROK_API_KEYS"
     
     defaults:
-      text_generation: "grok-4"
+      text_generation: "grok-4-0709"
       image_analysis: "grok-vision-beta"
     
     # Model prefixes for automatic registration
@@ -170,7 +167,6 @@ ai_providers:
 
   android_native:
     enabled: true
-    priority: 0  # Máxima prioridad para funcionalidad nativa
     display_name: "Android Native TTS/STT"
     description: "Síntesis y reconocimiento de voz nativo de Android usando flutter_tts y speech_to_text"
     
@@ -201,8 +197,9 @@ ai_providers:
       supports_function_calling: false
       platform_requirement: "android"
 
-# Fallback chains define which providers to try in sequence for each capability
-fallback_chains:
+# Capability-specific provider preferences define which providers to use for each capability
+# These preferences override the default behavior and allow granular control per capability
+capability_preferences:
   text_generation:
     primary: "google"
     fallbacks:

@@ -1,7 +1,7 @@
 # Configuración de lint personalizada para tests de ai_providers
 # Permite el uso de print statements en tests para debugging y documentación
 
-include: ../../../../analysis_options.yaml
+include: package:lints/recommended.yaml
 
 linter:
   rules:

@@ -247,7 +247,23 @@ AI API Status:
   /// Considera tanto el modelo guardado en preferencias como el del YAML
   static Future<String?> getCurrentModel(final AICapability capability) async {
     await _manager.initialize();
-    return await _manager.getSavedModelForCapabilityIfSupported(capability);
+
+    // Primero intentar obtener el modelo guardado en preferencias
+    final savedModel =
+        await _manager.getSavedModelForCapabilityIfSupported(capability);
+    if (savedModel != null && savedModel.isNotEmpty) {
+      return savedModel;
+    }
+
+    // Si no hay modelo guardado, usar el modelo por defecto del YAML
+    return await _manager.getDefaultModelForCapability(capability);
+  }
+
+  /// Get the default model for a specific provider (text generation)
+  static Future<String?> getDefaultModelForProvider(
+      String providerId, AICapability capability) async {
+    await _manager.initialize();
+    return await _manager.getDefaultModelForProvider(providerId, capability);
   }
 
   /// 🎯 Obtiene el modelo seleccionado para text generation (reemplaza PrefsUtils.getSelectedModel)
@@ -315,11 +331,16 @@ AI API Status:
     return AIProviderConfigLoader.getDefaultVoiceForProvider(providerId);
   }
 
-  /// 🎯 Obtiene todos los modelos disponibles para una capability específica
+  /// 🎯 Obtiene todos los modelos disponibles de un proveedor específico
   static Future<List<String>> getAvailableModels(
-      final AICapability capability) async {
+      final String providerId) async {
     await _manager.initialize();
-    return await _manager.getAvailableModels(capability);
+    try {
+      return await _manager.getAvailableModels(providerId);
+    } on Exception catch (e) {
+      AILogger.w('Error getting models for provider $providerId: $e');
+      return [];
+    }
   }
 
   /// 🗣️ Obtiene la voz TTS actualmente configurada
@@ -380,48 +401,37 @@ AI API Status:
   static Future<String?> getCurrentProvider(
       final AICapability capability) async {
     await _manager.initialize();
-    final providers = _manager.getProvidersByCapability(capability);
-    return providers.isNotEmpty ? providers.first : null;
+    return _manager.getPrimaryProvider(capability);
   }
 
-  /// 🎛️ Obtiene todos los proveedores disponibles para una capability
-  static List<String> getAvailableProviders(final AICapability capability) {
-    if (!_manager.isInitialized) return [];
-    return _manager.getProvidersByCapability(capability);
-  }
+  /// 🎛️ Obtiene todos los proveedores disponibles con información rica para una capability
+  static List<Map<String, dynamic>> getAvailableProviders(
+      final AICapability capability) {
+    if (!_manager.isInitialized || _manager.config == null) return [];
 
-  /// 🔧 Obtiene información sobre todos los proveedores cargados
-  static Map<String, dynamic> getProvidersInfo() {
-    if (!_manager.isInitialized) return {};
-    return _manager.providers.map(
-      (final key, final value) => MapEntry(key, {
-        'id': key,
-        'capabilities': value.capabilities.map((final c) => c.name).toList(),
-        'isActive': true, // TODO: Implementar estado de actividad
-      }),
-    );
-  }
+    // Get provider IDs that support the capability in fallback order
+    final providerIds = _manager.getProvidersForCapabilityInOrder(capability);
 
-  /// 📋 Obtiene todos los modelos por proveedor para una capability específica
-  static Future<Map<String, List<String>>> getAllModelsByProvider(
-      final AICapability capability) async {
-    await _manager.initialize();
-    final result = <String, List<String>>{};
-    final providers = _manager.getProvidersByCapability(capability);
-
-    for (final provider in providers) {
-      try {
-        final models =
-            await _manager.getAvailableModels(capability, providerId: provider);
-        if (models.isNotEmpty) {
-          result[provider] = models;
-        }
-      } on Exception catch (e) {
-        AILogger.w('Error getting models for provider $provider: $e');
+    // Convert provider IDs to rich information from YAML config
+    return providerIds.map((final providerId) {
+      final providerConfig = _manager.config!.aiProviders[providerId];
+      if (providerConfig == null) {
+        throw StateError(
+          'Provider "$providerId" is initialized but not found in configuration. '
+          'This indicates a configuration mismatch - check ai_providers_config.yaml',
+        );
       }
-    }
 
-    return result;
+      return {
+        'id': providerId,
+        'displayName': providerConfig.displayName,
+        'description': providerConfig.description,
+        'capabilities':
+            providerConfig.capabilities.map((final c) => c.identifier).toList(),
+        'enabled': providerConfig.enabled,
+      };
+    }).toList();
+    // No need to sort again as _getProvidersForCapability already returns in fallback order
   }
 
   /// 🗣️ Obtiene todas las voces por proveedor

@@ -72,17 +72,24 @@ class AIProviderManager {
     if (_initialized) return;
 
     try {
-      // Load configuration first to configure logging
+      // Load configuration with automatic .env support and optional overrides
+      _config = await AIProviderConfigLoader.loadConfig(initConfig: config);
+
+      // Create effective config for ApiKeyManager initialization
+      AIInitConfig effectiveConfig;
       if (config != null) {
-        _config = await AIProviderConfigLoader.loadFromInitConfig(config);
-        // Initialize API Key Manager with injected configuration
-        ApiKeyManager.initialize(config);
-        // Configure MediaPersistenceService with app directory
-        MediaPersistenceService.instance
-            .configureAppDirectory(config.appDirectoryName);
+        effectiveConfig = config;
       } else {
-        _config = await AIProviderConfigLoader.loadDefault();
+        // Create config automatically from .env when no config provided
+        effectiveConfig = AIProviderConfigLoader.createInitConfigFromEnv();
       }
+
+      // Initialize API Key Manager with effective config
+      ApiKeyManager.initialize(effectiveConfig);
+
+      // Configure MediaPersistenceService with app directory
+      MediaPersistenceService.instance
+          .configureAppDirectory(effectiveConfig.appDirectoryName);
 
       // Configure internal logger
       AILogger.configure(level: _config!.globalSettings.logLevel);
@@ -228,8 +235,7 @@ class AIProviderManager {
     try {
       final selectedModel = await _getSavedModelForCapability(capability);
       if (selectedModel != null) {
-        final modelProvider =
-            await getProviderForModel(selectedModel, capability);
+        final modelProvider = await getProviderForModel(selectedModel);
         if (modelProvider != null) {
           preferredProviderId = modelProvider.providerId;
           AILogger.d(
@@ -297,7 +303,7 @@ class AIProviderManager {
     try {
       final savedModel = await _getSavedModelForCapability(capability);
       if (savedModel != null) {
-        final modelProvider = await getProviderForModel(savedModel, capability);
+        final modelProvider = await getProviderForModel(savedModel);
         if (modelProvider != null) {
           preferredProviderId = modelProvider.providerId;
           AILogger.d(
@@ -506,9 +512,8 @@ class AIProviderManager {
     );
   }
 
-  /// Get available models for a specific capability
-  Future<List<String>> getAvailableModels(final AICapability capability,
-      {final String? providerId}) async {
+  /// Get available models from a specific provider
+  Future<List<String>> getAvailableModels(final String providerId) async {
     // Wait for initialization if needed
     if (!_initialized) {
       await _ensureInitialized();
@@ -518,30 +523,12 @@ class AIProviderManager {
       throw StateError('AIProviderManager failed to initialize');
     }
 
-    if (providerId != null) {
-      final provider = _providers[providerId];
-      if (provider != null && provider.supportsCapability(capability)) {
-        return await provider.getAvailableModelsForCapability(capability);
-      }
-      return [];
+    final provider = _providers[providerId];
+    if (provider != null) {
+      return await provider.fetchModelsFromAPI() ?? [];
     }
 
-    // Get models from all providers that support the capability
-    final allModels = <String>[];
-    for (final entry in _providers.entries) {
-      final provider = entry.value;
-      if (provider.supportsCapability(capability)) {
-        try {
-          final models =
-              await provider.getAvailableModelsForCapability(capability);
-          allModels.addAll(models);
-        } on Exception catch (e) {
-          AILogger.w('Failed to get models from provider ${entry.key}: $e');
-        }
-      }
-    }
-
-    return allModels.toSet().toList(); // Remove duplicates
+    return [];
   }
 
   /// Get all available providers
@@ -563,9 +550,23 @@ class AIProviderManager {
         .toList();
   }
 
+  /// Get the primary provider for a capability based on fallback chains
+  String? getPrimaryProvider(final AICapability capability) {
+    if (!_initialized) return null;
+
+    // Use the same logic as _getProvidersForCapability but return only the primary
+    final providers = _getProvidersForCapability(capability, null);
+    return providers.isNotEmpty ? providers.first : null;
+  }
+
+  /// Get providers for a capability in fallback order (public version)
+  List<String> getProvidersForCapabilityInOrder(final AICapability capability) {
+    if (!_initialized) return [];
+    return _getProvidersForCapability(capability, null);
+  }
+
   /// Get the appropriate provider for a specific model
-  Future<dynamic> getProviderForModel(
-      final String modelId, final AICapability capability) async {
+  Future<dynamic> getProviderForModel(final String modelId) async {
     if (!_initialized) return null;
 
     final modelLower = modelId.toLowerCase().trim();
@@ -575,14 +576,8 @@ class AIProviderManager {
       final provider = entry.value;
       final providerId = entry.key;
 
-      // Skip if provider doesn't support the capability
-      if (!provider.supportsCapability(capability)) {
-        continue;
-      }
-
       // Check if this provider supports this model
-      final availableModels =
-          await provider.getAvailableModelsForCapability(capability);
+      final availableModels = await provider.fetchModelsFromAPI() ?? [];
       final supportsModel = availableModels.any(
           (final String model) => model.toLowerCase().trim() == modelLower);
 
@@ -600,8 +595,7 @@ class AIProviderManager {
       }
     }
 
-    AILogger.w(
-        'No provider found for model: $modelId with capability: $capability');
+    AILogger.w('No provider found for model: $modelId.');
     return null;
   }
 
@@ -752,19 +746,19 @@ class AIProviderManager {
       providers.add(preferredProviderId);
     }
 
-    // Add providers from fallback chain
-    if (_config!.fallbackChains.containsKey(capability)) {
-      final chain = _config!.fallbackChains[capability]!;
+    // Add providers from capability preferences
+    if (_config!.capabilityPreferences.containsKey(capability)) {
+      final preference = _config!.capabilityPreferences[capability]!;
 
       // Add primary provider if not already added
-      if (!providers.contains(chain.primary) &&
-          _providers.containsKey(chain.primary) &&
-          _providers[chain.primary]!.supportsCapability(capability)) {
-        providers.add(chain.primary);
+      if (!providers.contains(preference.primary) &&
+          _providers.containsKey(preference.primary) &&
+          _providers[preference.primary]!.supportsCapability(capability)) {
+        providers.add(preference.primary);
       }
 
       // Add fallback providers
-      for (final fallbackId in chain.fallbacks) {
+      for (final fallbackId in preference.fallbacks) {
         if (!providers.contains(fallbackId) &&
             _providers.containsKey(fallbackId) &&
             _providers[fallbackId]!.supportsCapability(capability)) {
@@ -772,21 +766,14 @@ class AIProviderManager {
         }
       }
     } else {
-      // No fallback chain defined, add all available providers sorted by priority
+      // No capability preference defined, add all available providers
       final availableProviders = _providers.entries
           .where((final entry) =>
               !providers.contains(entry.key) &&
               entry.value.supportsCapability(capability))
-          .toList();
+          .map((final entry) => entry.key);
 
-      // Sort by priority (lower number = higher priority)
-      availableProviders.sort((final a, final b) {
-        final priorityA = _config!.aiProviders[a.key]?.priority ?? 999;
-        final priorityB = _config!.aiProviders[b.key]?.priority ?? 999;
-        return priorityA.compareTo(priorityB);
-      });
-
-      providers.addAll(availableProviders.map((final entry) => entry.key));
+      providers.addAll(availableProviders);
     }
 
     return providers;
@@ -920,6 +907,33 @@ class AIProviderManager {
     } on Exception catch (e) {
       AILogger.e(
           '[AIProviderManager] Error getting default model for ${capability.identifier}: $e');
+      return null;
+    }
+  }
+
+  /// Get the default model for a specific provider and capability
+  Future<String?> getDefaultModelForProvider(
+      final String providerId, final AICapability capability) async {
+    try {
+      if (_config == null) {
+        AILogger.w('[AIProviderManager] Configuration not loaded');
+        return null;
+      }
+
+      final model = _selectModel(providerId, capability, null);
+      if (model != null) {
+        AILogger.d(
+          '[AIProviderManager] ✅ Default model for provider $providerId and ${capability.identifier}: $model',
+        );
+        return model;
+      }
+
+      AILogger.w(
+          '[AIProviderManager] No default model found for provider $providerId and capability: ${capability.identifier}');
+      return null;
+    } on Exception catch (e) {
+      AILogger.e(
+          '[AIProviderManager] Error getting default model for provider $providerId and ${capability.identifier}: $e');
       return null;
     }
   }

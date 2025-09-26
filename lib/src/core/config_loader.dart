@@ -3,7 +3,9 @@
 /// to strongly-typed configuration models.
 library;
 
+import 'dart:convert';
 import 'dart:io';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../utils/logger.dart';
 import '../core/ai_provider_manager.dart';
 import '../models/ai_provider_config.dart';
@@ -38,7 +40,27 @@ class AIProviderConfigLoader {
   /// Internal method to get environment variable value
   /// This replaces dependency on external Config service
   static String _getEnvVar(final String key, [final String defaultValue = '']) {
-    return Platform.environment[key] ?? defaultValue;
+    // First try Platform.environment (system env vars)
+    String? value = Platform.environment[key];
+
+    // If not found, try dotenv (from .env file)
+    if (value == null || value.isEmpty) {
+      try {
+        value = dotenv.env[key];
+        if (value != null && value.isNotEmpty) {
+          AILogger.i('🎉 Found $key in dotenv: ${value.length} chars');
+        } else {
+          AILogger.w('❌ $key not found in dotenv');
+        }
+      } catch (e) {
+        // If dotenv is not initialized, continue with system env only
+        AILogger.w('DotEnv not accessible for $key: $e');
+      }
+    } else {
+      AILogger.i('🎯 Found $key in Platform.environment');
+    }
+
+    return value ?? defaultValue;
   }
 
   /// Ensure configuration is loaded and return cached config
@@ -52,7 +74,6 @@ class AIProviderConfigLoader {
     return {
       'ai_providers': {
         'default_provider': {
-          'priority': 1,
           'voices': {
             'default': 'default-voice', // Valor genérico en lugar de hardcodear
           },
@@ -70,33 +91,82 @@ class AIProviderConfigLoader {
     return config;
   }
 
+  /// Load configuration with automatic .env loading and optional overrides
+  /// This is the main method that should be used for initialization
+  static Future<AIProvidersConfig> loadConfig({
+    final AIInitConfig? initConfig,
+    final String configPath = _defaultConfigPath,
+  }) async {
+    try {
+      AILogger.i(
+          'Loading AI providers configuration with automatic .env support');
+
+      // 1. Load base configuration from assets
+      final String yamlString = await rootBundle.loadString(configPath);
+      final dynamic yamlDoc = loadYaml(yamlString);
+
+      if (yamlDoc is! YamlMap) {
+        throw const ConfigurationLoadException(
+            'Configuration must be a YAML map/object');
+      }
+
+      // 2. Convert to Map<String, dynamic>
+      final Map<String, dynamic> configMap = _yamlToMap(yamlDoc);
+
+      // 3. Validate basic structure
+      _validateBasicStructure(configMap);
+
+      // 4. Apply environment variables from .env (automático)
+      final processedConfig = _applyEnvironmentOverrides(configMap);
+
+      // 5. Apply manual overrides from initConfig if provided
+      final finalConfig = initConfig != null
+          ? _applyInitConfigOverrides(processedConfig, initConfig)
+          : processedConfig;
+
+      // 6. Create configuration object (no environment validation needed)
+      final config = AIProvidersConfig.fromMap(finalConfig);
+
+      // Cache the configuration
+      _cachedConfig = finalConfig;
+
+      return config;
+    } on Exception catch (e) {
+      AILogger.e('Failed to load configuration', error: e);
+      if (e is ConfigurationLoadException) rethrow;
+      throw ConfigurationLoadException('Failed to load configuration', e);
+    }
+  }
+
   /// Load configuration from external init config (for portability)
   static Future<AIProvidersConfig> loadFromInitConfig(
       final AIInitConfig initConfig) async {
     try {
       AILogger.i('Loading AI providers configuration from init config');
 
-      // Start with default configuration from assets
-      final defaultConfig = await loadFromAssets();
+      // Start with default configuration from assets (without env validation)
+      final defaultConfig = await _loadFromAssetsNoValidation();
 
       // Convert to map for modification
       final Map<String, dynamic> configMap = defaultConfig.toMap();
 
-      // Update API keys for each configured provider
+      // Update API keys for each configured provider (only if apiKeys is provided)
       final aiProviders =
           configMap['ai_providers'] as Map<String, dynamic>? ?? {};
 
-      for (final entry in initConfig.apiKeys.entries) {
-        final providerId = entry.key;
-        final apiKeys = entry.value;
+      if (initConfig.apiKeys != null) {
+        for (final entry in initConfig.apiKeys!.entries) {
+          final providerId = entry.key;
+          final apiKeys = entry.value;
 
-        if (aiProviders.containsKey(providerId) && apiKeys.isNotEmpty) {
-          final providerConfig =
-              aiProviders[providerId] as Map<String, dynamic>;
-          // Use first API key as primary, store others for fallback
-          providerConfig['api_key'] = apiKeys.first;
-          if (apiKeys.length > 1) {
-            providerConfig['fallback_api_keys'] = apiKeys.skip(1).toList();
+          if (aiProviders.containsKey(providerId) && apiKeys.isNotEmpty) {
+            final providerConfig =
+                aiProviders[providerId] as Map<String, dynamic>;
+            // Use first API key as primary, store others for fallback
+            providerConfig['api_key'] = apiKeys.first;
+            if (apiKeys.length > 1) {
+              providerConfig['fallback_api_keys'] = apiKeys.skip(1).toList();
+            }
           }
         }
       }
@@ -122,6 +192,23 @@ class AIProviderConfigLoader {
 
       final String yamlString = await rootBundle.loadString(configPath);
       return _parseConfiguration(yamlString);
+    } on Exception catch (e) {
+      AILogger.e('Failed to load configuration from assets', error: e);
+      throw ConfigurationLoadException(
+          'Failed to load configuration from assets at $configPath', e);
+    }
+  }
+
+  /// Load configuration from assets without environment validation
+  /// Used internally by loadFromInitConfig since API keys are provided directly
+  static Future<AIProvidersConfig> _loadFromAssetsNoValidation(
+      {final String configPath = _defaultConfigPath}) async {
+    try {
+      AILogger.i(
+          'Loading AI providers configuration from assets (no env validation): $configPath');
+
+      final String yamlString = await rootBundle.loadString(configPath);
+      return _parseConfigurationNoValidation(yamlString);
     } on Exception catch (e) {
       AILogger.e('Failed to load configuration from assets', error: e);
       throw ConfigurationLoadException(
@@ -161,6 +248,72 @@ class AIProviderConfigLoader {
     }
   }
 
+  /// Parse configuration without environment variable validation
+  /// Used when API keys are provided directly via AIInitConfig
+  static AIProvidersConfig _parseConfigurationNoValidation(
+      final String yamlString) {
+    try {
+      // Parse YAML
+      final dynamic yamlDoc = loadYaml(yamlString);
+
+      if (yamlDoc is! YamlMap) {
+        throw const ConfigurationLoadException(
+            'Configuration must be a YAML map/object');
+      }
+
+      // Convert to Map<String, dynamic>
+      final Map<String, dynamic> configMap = _yamlToMap(yamlDoc);
+
+      // Validate basic structure
+      _validateBasicStructure(configMap);
+
+      // Apply environment overrides (still needed for other settings)
+      final processedConfig = _applyEnvironmentOverrides(configMap);
+
+      // Skip environment validation - API keys provided directly via AIInitConfig
+
+      // Create configuration object
+      return AIProvidersConfig.fromMap(processedConfig);
+    } on Exception catch (e) {
+      AILogger.e('Failed to parse YAML configuration', error: e);
+      if (e is ConfigurationLoadException) rethrow;
+      throw ConfigurationLoadException('Failed to parse YAML configuration', e);
+    }
+  }
+
+  /// Apply manual API key overrides from AIInitConfig
+  static Map<String, dynamic> _applyInitConfigOverrides(
+      Map<String, dynamic> configMap, AIInitConfig initConfig) {
+    final Map<String, dynamic> updatedConfig = Map.from(configMap);
+
+    // Update API keys for each configured provider (only if apiKeys is provided)
+    final aiProviders =
+        updatedConfig['ai_providers'] as Map<String, dynamic>? ?? {};
+
+    if (initConfig.apiKeys != null) {
+      for (final entry in initConfig.apiKeys!.entries) {
+        final providerId = entry.key;
+        final apiKeys = entry.value;
+
+        if (aiProviders.containsKey(providerId) && apiKeys.isNotEmpty) {
+          final providerConfig = Map<String, dynamic>.from(
+              aiProviders[providerId] as Map<String, dynamic>);
+
+          // Use first API key as primary, store others for fallback
+          providerConfig['api_key'] = apiKeys.first;
+          if (apiKeys.length > 1) {
+            providerConfig['fallback_api_keys'] = apiKeys.skip(1).toList();
+          }
+
+          aiProviders[providerId] = providerConfig;
+        }
+      }
+    }
+
+    updatedConfig['ai_providers'] = aiProviders;
+    return updatedConfig;
+  }
+
   /// Convert YAML nodes to dynamic (preserving structure)
   static dynamic _yamlToMap(final dynamic yamlNode) {
     if (yamlNode is YamlMap) {
@@ -186,7 +339,7 @@ class AIProviderConfigLoader {
       'metadata',
       'global_settings',
       'ai_providers',
-      'fallback_chains'
+      'capability_preferences'
     ];
     for (final key in requiredKeys) {
       if (!configMap.containsKey(key)) {
@@ -228,7 +381,6 @@ class AIProviderConfigLoader {
           final provider = providerConfig as Map<String, dynamic>;
           final requiredProviderKeys = [
             'enabled',
-            'priority',
             'display_name',
             'capabilities'
           ];
@@ -472,7 +624,7 @@ class AIProviderConfigLoader {
 
   // --- Audio and Voice Configuration ---
 
-  /// Get default audio provider based on priority and capability
+  /// Get default audio provider based on capability
   static String getDefaultAudioProvider() {
     try {
       AILogger.d('[DEBUG] getDefaultAudioProvider() called');
@@ -480,7 +632,7 @@ class AIProviderConfigLoader {
       final providers = config['ai_providers'] as Map<String, dynamic>? ?? {};
       AILogger.d('[DEBUG] Found ${providers.length} providers in config');
 
-      // Find providers with audio generation capability, sorted by priority
+      // Find providers with audio generation capability
       final audioProviders = <String>[];
 
       for (final entry in providers.entries) {
@@ -502,13 +654,7 @@ class AIProviderConfigLoader {
 
       AILogger.d('[DEBUG] Audio providers found: $audioProviders');
 
-      // Sort by priority (lower number = higher priority)
-      audioProviders.sort((final a, final b) {
-        final priorityA = providers[a]?['priority'] as int? ?? 999;
-        final priorityB = providers[b]?['priority'] as int? ?? 999;
-        return priorityA.compareTo(priorityB);
-      });
-
+      // Return first available provider (capability_preferences will handle order)
       final result = audioProviders.isNotEmpty ? audioProviders.first : '';
       AILogger.d('[DEBUG] getDefaultAudioProvider() returning: "$result"');
       return result;
@@ -679,6 +825,101 @@ class AIProviderConfigLoader {
       AILogger.w(
           'Failed to get TTS not configured subtitle for provider $providerId: $e');
       return 'No configurado';
+    }
+  }
+
+  /// Create AIInitConfig automatically from environment variables (.env)
+  /// This method extracts API keys from .env and creates a proper AIInitConfig
+  static AIInitConfig createInitConfigFromEnv() {
+    try {
+      AILogger.i(
+          'Creating AIInitConfig automatically from environment variables');
+
+      final Map<String, List<String>> apiKeys = {};
+
+      // Get configuration from cached config to read required_env_keys dynamically
+      final yamlConfig = _ensureConfigLoaded();
+      final providers =
+          yamlConfig['ai_providers'] as Map<String, dynamic>? ?? {};
+
+      // Iterate through all providers and extract their required environment keys
+      for (final entry in providers.entries) {
+        final providerId = entry.key;
+        final providerConfig = entry.value as Map<String, dynamic>? ?? {};
+
+        // Skip disabled providers
+        if (providerConfig['enabled'] != true) continue;
+
+        final apiSettings =
+            providerConfig['api_settings'] as Map<String, dynamic>? ?? {};
+        final requiredEnvKeys =
+            apiSettings['required_env_keys'] as List<dynamic>? ?? [];
+
+        // Extract API keys for this provider
+        for (final envKey in requiredEnvKeys) {
+          final envKeyStr = envKey.toString();
+          final envValue = _getEnvVar(envKeyStr);
+
+          if (envValue.isNotEmpty) {
+            final keys = _parseApiKeysFromEnv(envValue);
+            if (keys.isNotEmpty) {
+              apiKeys[providerId] = keys;
+              AILogger.i(
+                  '✅ Found ${keys.length} API key(s) for $providerId from $envKeyStr');
+            }
+          } else {
+            AILogger.d(
+                '⚠️ No value found for $envKeyStr (provider: $providerId)');
+          }
+        }
+      }
+
+      // Get app directory name from env or use default
+      final appDirectoryName =
+          _getEnvVar('APP_DIRECTORY_NAME', 'ai_providers_app');
+
+      final initConfig = AIInitConfig(
+        apiKeys: apiKeys.isNotEmpty ? apiKeys : null,
+        appDirectoryName: appDirectoryName,
+      );
+
+      AILogger.i(
+          '🎉 Created AIInitConfig from .env: ${apiKeys.length} providers configured');
+      return initConfig;
+    } catch (e) {
+      AILogger.w('Failed to create AIInitConfig from .env: $e');
+      // Return minimal config on error
+      return const AIInitConfig();
+    }
+  }
+
+  /// Parse API keys from environment variable (supports JSON array format)
+  /// Format: ["key1", "key2"] or just "key1"
+  static List<String> _parseApiKeysFromEnv(String envValue) {
+    try {
+      envValue = envValue.trim();
+
+      // If it looks like a JSON array, parse it
+      if (envValue.startsWith('[') && envValue.endsWith(']')) {
+        final dynamic parsed = json.decode(envValue);
+        if (parsed is List) {
+          return parsed
+              .map((e) => e.toString())
+              .where((s) => s.isNotEmpty)
+              .toList();
+        }
+      }
+
+      // Otherwise, treat as single key
+      if (envValue.isNotEmpty) {
+        return [envValue];
+      }
+
+      return [];
+    } catch (e) {
+      AILogger.w('Failed to parse API keys from env value "$envValue": $e');
+      // Try to return as single key if JSON parsing fails
+      return envValue.trim().isNotEmpty ? [envValue.trim()] : [];
     }
   }
 }

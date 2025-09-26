@@ -23,7 +23,6 @@ abstract class BaseProvider {
 
   /// Provider-specific constants from YAML config
   String get providerId;
-  String get apiKeyType;
 
   /// Default values - can be overridden by providers
   Map<String, dynamic> get defaults => {
@@ -52,10 +51,10 @@ abstract class BaseProvider {
 
   /// Get API key with rotation support
   String get apiKey {
-    final key = ApiKeyManager.getNextAvailableKey(apiKeyType);
+    final key = ApiKeyManager.getNextAvailableKey(providerId);
     if (key == null || key.isEmpty) {
       throw Exception(
-        'No valid $apiKeyType API key available. Please configure ${config.apiSettings.requiredEnvKeys.first} in environment.',
+        'No valid $providerId API key available. Please configure ${config.apiSettings.requiredEnvKeys.first} in environment.',
       );
     }
     return key;
@@ -96,27 +95,19 @@ abstract class BaseProvider {
 
     switch (statusCode) {
       case 401:
-        ApiKeyManager.markCurrentKeyFailed(apiKeyType, 'Invalid API key (401)');
-        AILogger.w(
-            '[$providerId] 🔑 API key marked as invalid, rotating to next key');
-        break;
+        ApiKeyManager.markCurrentKeyFailed(providerId, 'Invalid API key (401)');
+        throw Exception('Invalid API key');
       case 429:
-        ApiKeyManager.markCurrentKeyExhausted(apiKeyType);
-        AILogger.w(
-            '[$providerId] 🚦 API key rate limited, rotating to next key');
-        break;
+        ApiKeyManager.markCurrentKeyExhausted(providerId);
+        throw Exception('Rate limit exceeded');
       case 402:
         ApiKeyManager.markCurrentKeyFailed(
-            apiKeyType, 'Payment required (402)');
-        AILogger.w(
-            '[$providerId] 💳 Payment required for API key, rotating to next key');
-        break;
+            providerId, 'Payment required (402)');
+        throw Exception('Payment required');
       case 403:
         ApiKeyManager.markCurrentKeyFailed(
-            apiKeyType, 'Access forbidden (403)');
-        AILogger.w(
-            '[$providerId] 🚫 API key access forbidden, rotating to next key');
-        break;
+            providerId, 'Access forbidden (403)');
+        throw Exception('Access forbidden');
       default:
         AILogger.w(
             '[$providerId] ⚠️ API error $statusCode for operation: $operation');
@@ -182,25 +173,6 @@ abstract class BaseProvider {
 
   /// Build authentication headers - provider specific
   Map<String, String> buildAuthHeaders();
-
-  /// Each provider implements their specific request patterns
-  Future<List<String>> getAvailableModelsForCapability(
-      final AICapability capability) async {
-    try {
-      if (apiKey.trim().isEmpty) {
-        return _metadata.getAvailableModels(capability);
-      }
-
-      final response = await fetchModelsFromAPI();
-      if (response != null) {
-        return filterModelsForProvider(response);
-      }
-
-      return _metadata.getAvailableModels(capability);
-    } on Exception catch (_) {
-      return _metadata.getAvailableModels(capability);
-    }
-  }
 
   /// Fetch models from API - provider specific implementation
   Future<List<String>?> fetchModelsFromAPI();

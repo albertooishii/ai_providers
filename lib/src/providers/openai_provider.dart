@@ -28,9 +28,6 @@ class OpenAIProvider extends BaseProvider {
   String get providerId => 'openai';
 
   @override
-  String get apiKeyType => 'openai';
-
-  @override
   AIProviderMetadata createMetadata() {
     return AIProviderMetadata(
       providerId: providerId,
@@ -72,9 +69,14 @@ class OpenAIProvider extends BaseProvider {
 
       if (isSuccessfulResponse(response.statusCode)) {
         final data = jsonDecode(response.body);
-        return (data['data'] as List<dynamic>)
+        final models = (data['data'] as List<dynamic>)
             .map((final model) => model['id'] as String)
+            .where((final model) => isValidModelForProvider(model))
             .toList();
+
+        // Apply priority-based sorting
+        models.sort(compareModels);
+        return models;
       }
       return null;
     } on Exception catch (_) {

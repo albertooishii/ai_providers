@@ -18,10 +18,11 @@ class AIProvidersConfig {
         map['ai_providers'],
       ).map((final key, final value) => MapEntry(
           key, ProviderConfig.fromMap(Map<String, dynamic>.from(value)))),
-      fallbackChains: Map<String, dynamic>.from(map['fallback_chains']).map(
+      capabilityPreferences:
+          Map<String, dynamic>.from(map['capability_preferences']).map(
         (final key, final value) => MapEntry(
           AICapabilityExtension.fromIdentifier(key)!,
-          FallbackChain.fromMap(Map<String, dynamic>.from(value)),
+          CapabilityPreference.fromMap(Map<String, dynamic>.from(value)),
         ),
       ),
       environments: map['environments'] != null
@@ -45,7 +46,7 @@ class AIProvidersConfig {
     required this.metadata,
     required this.globalSettings,
     required this.aiProviders,
-    required this.fallbackChains,
+    required this.capabilityPreferences,
     this.environments = const {},
     this.routingRules,
     this.healthChecks,
@@ -55,7 +56,7 @@ class AIProvidersConfig {
   final ConfigMetadata metadata;
   final GlobalSettings globalSettings;
   final Map<String, ProviderConfig> aiProviders;
-  final Map<AICapability, FallbackChain> fallbackChains;
+  final Map<AICapability, CapabilityPreference> capabilityPreferences;
   final Map<String, EnvironmentConfig> environments;
   final RoutingRules? routingRules;
   final HealthCheckConfig? healthChecks;
@@ -67,7 +68,7 @@ class AIProvidersConfig {
       'global_settings': globalSettings.toMap(),
       'ai_providers': aiProviders
           .map((final key, final value) => MapEntry(key, value.toMap())),
-      'fallback_chains': fallbackChains.map(
+      'capability_preferences': capabilityPreferences.map(
           (final key, final value) => MapEntry(key.identifier, value.toMap())),
       if (environments.isNotEmpty)
         'environments': environments
@@ -150,7 +151,6 @@ class ProviderConfig {
 
     return ProviderConfig(
       enabled: map['enabled'] as bool,
-      priority: map['priority'] as int,
       displayName: map['display_name'] as String,
       description: map['description'] as String,
       capabilities: (map['capabilities'] as List)
@@ -189,7 +189,6 @@ class ProviderConfig {
   }
   const ProviderConfig({
     required this.enabled,
-    required this.priority,
     required this.displayName,
     required this.description,
     required this.capabilities,
@@ -204,7 +203,6 @@ class ProviderConfig {
   });
 
   final bool enabled;
-  final int priority;
   final String displayName;
   final String description;
   final List<AICapability> capabilities;
@@ -220,7 +218,6 @@ class ProviderConfig {
   Map<String, dynamic> toMap() {
     return {
       'enabled': enabled,
-      'priority': priority,
       'display_name': displayName,
       'description': description,
       'capabilities': capabilities.map((final cap) => cap.identifier).toList(),
@@ -331,14 +328,14 @@ class ProviderConfiguration {
   }
 }
 
-/// Fallback chain configuration for a capability
-class FallbackChain {
-  factory FallbackChain.fromMap(final Map<String, dynamic> map) {
-    return FallbackChain(
+/// Capability-specific provider preference configuration
+class CapabilityPreference {
+  factory CapabilityPreference.fromMap(final Map<String, dynamic> map) {
+    return CapabilityPreference(
         primary: map['primary'] as String,
         fallbacks: (map['fallbacks'] as List).cast<String>());
   }
-  const FallbackChain({required this.primary, required this.fallbacks});
+  const CapabilityPreference({required this.primary, required this.fallbacks});
 
   final String primary;
   final List<String> fallbacks;

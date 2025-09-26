@@ -6,7 +6,7 @@ library;
 /// This model is designed to be simple and focused only on what ai_providers needs.
 class AIInitConfig {
   const AIInitConfig({
-    required this.apiKeys,
+    this.apiKeys,
     this.appDirectoryName = 'ai_providers_app',
   });
 
@@ -24,7 +24,8 @@ class AIInitConfig {
 
   /// API keys organized by provider ID.
   /// Format: {"openai": ["key1", "key2"], "google": ["key1"]}
-  final Map<String, List<String>> apiKeys;
+  /// If null, the system will try to load API keys from environment variables (.env)
+  final Map<String, List<String>>? apiKeys;
 
   /// Directory name for storing media files (images, audio).
   /// This allows the ai_providers package to be app-agnostic.
@@ -33,23 +34,24 @@ class AIInitConfig {
 
   /// Get API keys for a specific provider
   List<String> getApiKeysForProvider(final String providerId) {
-    return apiKeys[providerId] ?? [];
+    return apiKeys?[providerId] ?? [];
   }
 
   /// Check if provider has any configured API keys
   bool hasApiKeysForProvider(final String providerId) {
-    final keys = apiKeys[providerId];
+    final keys = apiKeys?[providerId];
     return keys != null && keys.isNotEmpty;
   }
 
   /// Get all configured provider IDs
-  Set<String> get configuredProviders => apiKeys.keys.toSet();
+  Set<String> get configuredProviders => apiKeys?.keys.toSet() ?? {};
 
   @override
   String toString() {
-    final providerCounts = apiKeys.map(
-      (final key, final value) => MapEntry(key, value.length),
-    );
+    final providerCounts = apiKeys?.map(
+          (final key, final value) => MapEntry(key, value.length),
+        ) ??
+        {};
     return 'AIInitConfig(providers: $providerCounts, appDirectory: $appDirectoryName)';
   }
 

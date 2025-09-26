@@ -100,7 +100,6 @@ void main() {
       test('should create from map correctly', () {
         final map = {
           'enabled': true,
-          'priority': 1,
           'display_name': 'Test Provider',
           'description': 'A test provider',
           'capabilities': ['text_generation', 'image_generation'],
@@ -134,7 +133,6 @@ void main() {
         final provider = ProviderConfig.fromMap(map);
 
         expect(provider.enabled, true);
-        expect(provider.priority, 1);
         expect(provider.displayName, 'Test Provider');
         expect(provider.description, 'A test provider');
         expect(provider.capabilities,
@@ -155,15 +153,15 @@ void main() {
           'fallbacks': ['google', 'xai'],
         };
 
-        final chain = FallbackChain.fromMap(map);
+        final chain = CapabilityPreference.fromMap(map);
 
         expect(chain.primary, 'openai');
         expect(chain.fallbacks, ['google', 'xai']);
       });
 
       test('should convert to map correctly', () {
-        const chain =
-            FallbackChain(primary: 'openai', fallbacks: ['google', 'xai']);
+        const chain = CapabilityPreference(
+            primary: 'openai', fallbacks: ['google', 'xai']);
 
         final map = chain.toMap();
 
@@ -192,7 +190,6 @@ void main() {
           'ai_providers': {
             'openai': {
               'enabled': true,
-              'priority': 1,
               'display_name': 'OpenAI',
               'description': 'OpenAI GPT models',
               'capabilities': ['text_generation'],
@@ -219,7 +216,7 @@ void main() {
               },
             },
           },
-          'fallback_chains': {
+          'capability_preferences': {
             'text_generation': {
               'primary': 'openai',
               'fallbacks': ['google'],
@@ -234,8 +231,9 @@ void main() {
         expect(config.globalSettings.maxRetries, 3);
         expect(config.aiProviders.length, 1);
         expect(config.aiProviders['openai']?.displayName, 'OpenAI');
-        expect(config.fallbackChains.length, 1);
-        expect(config.fallbackChains[AICapability.textGeneration]?.primary,
+        expect(config.capabilityPreferences.length, 1);
+        expect(
+            config.capabilityPreferences[AICapability.textGeneration]?.primary,
             'openai');
       });
 
@@ -256,7 +254,6 @@ void main() {
           aiProviders: {
             'openai': ProviderConfig(
               enabled: true,
-              priority: 1,
               displayName: 'OpenAI',
               description: 'OpenAI GPT models',
               capabilities: [AICapability.textGeneration],
@@ -282,9 +279,9 @@ void main() {
               ),
             ),
           },
-          fallbackChains: {
+          capabilityPreferences: {
             AICapability.textGeneration:
-                FallbackChain(primary: 'openai', fallbacks: ['google']),
+                CapabilityPreference(primary: 'openai', fallbacks: ['google']),
           },
         );
 
@@ -294,7 +291,8 @@ void main() {
         expect(map['metadata']['description'], 'Test configuration');
         expect(map['global_settings']['max_retries'], 3);
         expect(map['ai_providers']['openai']['display_name'], 'OpenAI');
-        expect(map['fallback_chains']['text_generation']['primary'], 'openai');
+        expect(map['capability_preferences']['text_generation']['primary'],
+            'openai');
       });
     });
 
