@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter_tts/flutter_tts.dart';
 
 import '../../ai_providers.dart';
+import '../core/ai_provider_manager.dart';
 import '../services/media_persistence_service.dart';
 import '../utils/logger.dart';
 
@@ -38,6 +39,35 @@ class AudioGenerationService {
   static final AudioGenerationService _instance = AudioGenerationService._();
   static AudioGenerationService get instance => _instance;
 
+  /// 🎯 MÉTODO DE INTEGRACIÓN - usado por AI.speak()
+  ///
+  /// Recibe mismos parámetros que AI.speak() y delega a AIProviderManager.
+  /// Esta es la firma EXACTA que necesita AI.speak() para evitar circular dependency.
+  Future<AIResponse> synthesize(
+    String text, [
+    SynthesizeInstructions? instructions,
+    bool saveToCache = false,
+  ]) async {
+    try {
+      AILogger.d(
+          '[AudioGenerationService] 🎤 Sintetizando audio: ${text.substring(0, text.length.clamp(0, 50))}...');
+
+      // Crear SystemPrompt con instrucciones de síntesis
+      final systemPrompt = _createSynthesizeSystemPrompt(instructions);
+
+      // Llamar directamente a AIProviderManager (no a AI.speak() para evitar circular dependency)
+      return await AIProviderManager.instance.sendMessage(
+        message: text,
+        systemPrompt: systemPrompt,
+        capability: AICapability.audioGeneration,
+        saveToCache: saveToCache,
+      );
+    } catch (e) {
+      AILogger.e('[AudioGenerationService] ❌ Error sintetizando audio: $e');
+      rethrow;
+    }
+  }
+
   /// Genera audio/TTS usando AI.speak() (simplificado)
   Future<String?> synthesizeTts(
     final String text, {
@@ -53,8 +83,8 @@ class AudioGenerationService {
       AILogger.d(
           '[AudioGenerationService] 🎤 Generando TTS: ${text.substring(0, text.length.clamp(0, 50))}...');
 
-      // 🚀 Usar AI.speak() que ya maneja cache y persistencia
-      final response = await AI.speak(text);
+      // 🚀 Usar nuestro método de integración (no AI.speak() para evitar circular)
+      final response = await synthesize(text, null, true);
 
       // Si hay archivo de audio, devolverlo
       if (response.audioFileName.isNotEmpty) {
@@ -197,6 +227,24 @@ class AudioGenerationService {
   }
 
   // === MÉTODOS PRIVADOS ===
+
+  /// Crea SystemPrompt para síntesis de audio con instrucciones
+  AISystemPrompt _createSynthesizeSystemPrompt(
+      SynthesizeInstructions? instructions) {
+    final effectiveInstructions =
+        instructions ?? const SynthesizeInstructions();
+
+    final context = <String, dynamic>{
+      'task': 'audio_generation',
+      'tts': true,
+    };
+
+    return AISystemPrompt(
+      context: context,
+      dateTime: DateTime.now(),
+      instructions: effectiveInstructions.toMap(),
+    );
+  }
 
   /// Actualizar estado de reproducción
   void _updateState(AudioPlaybackState newState) {

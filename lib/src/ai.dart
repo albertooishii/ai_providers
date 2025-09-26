@@ -7,6 +7,8 @@ import 'package:ai_providers/ai_providers.dart';
 
 import 'core/ai_provider_manager.dart';
 import 'core/config_loader.dart';
+import 'capabilities/text_generation_service.dart';
+import 'capabilities/audio_generation_service.dart';
 import 'utils/logger.dart';
 
 /// 🎯 Clase AI - API Principal Ultra-Directa
@@ -29,7 +31,8 @@ class AI {
     AILogger.d('[AI] 💬 text() - generating response: ${message.length} chars');
     await _manager.initialize();
 
-    return _manager.sendMessage(message: message, systemPrompt: systemPrompt);
+    // Delegar a TextGenerationService (nueva arquitectura)
+    return TextGenerationService.instance.generate(message, systemPrompt);
   }
 
   /// 🖼️ Generación de imágenes
@@ -47,20 +50,9 @@ class AI {
         '[AI] 🖼️ image() - generating image: ${prompt.length} chars, saveToCache: $saveToCache');
     await _manager.initialize();
 
-    // Crear SystemPrompt por defecto si no se proporciona
-    final effectiveSystemPrompt = systemPrompt ??
-        AISystemPrompt(
-          context: {'task': 'image_generation'},
-          dateTime: DateTime.now(),
-          instructions: {'quality': 'high', 'style': 'general'},
-        );
-
-    return _manager.sendMessage(
-      message: prompt,
-      systemPrompt: effectiveSystemPrompt,
-      capability: AICapability.imageGeneration,
-      saveToCache: saveToCache,
-    );
+    // Delegar a ImageGenerationService (nueva arquitectura)
+    return ImageGenerationService.instance
+        .generateImage(prompt, systemPrompt, saveToCache);
   }
 
   /// 👁️ Análisis de imagen/visión
@@ -99,22 +91,8 @@ class AI {
     AILogger.d('[AI] 🎤 speak() - generating audio: ${text.length} chars');
     await _manager.initialize();
 
-    // Usar instrucciones por defecto si no se proporcionan
-    final synthesizeInstructions =
-        instructions ?? const SynthesizeInstructions();
-
-    // Crear un AISystemPrompt con las instrucciones de síntesis
-    final systemPrompt = AISystemPrompt(
-      context: synthesizeInstructions.toMap(),
-      dateTime: DateTime.now(),
-      instructions: synthesizeInstructions.toMap(),
-    );
-
-    return _manager.sendMessage(
-        message: text,
-        systemPrompt: systemPrompt,
-        capability: AICapability.audioGeneration,
-        saveToCache: saveToCache);
+    // Delegar a AudioGenerationService (nueva arquitectura)
+    return AudioGenerationService.instance.synthesize(text, instructions, saveToCache);
   }
 
   /// 🎧 Escuchar/transcribir audio/STT
@@ -127,24 +105,8 @@ class AI {
     AILogger.d('[AI] 🎧 listen() - transcribing audio');
     await _manager.initialize();
 
-    // Usar instrucciones por defecto si no se proporcionan
-    final transcribeInstructions =
-        instructions ?? const TranscribeInstructions();
-
-    // Crear un AISystemPrompt con las instrucciones de transcripción
-    final systemPrompt = AISystemPrompt(
-      context: transcribeInstructions.toMap(),
-      dateTime: DateTime.now(),
-      instructions: transcribeInstructions.toMap(),
-    );
-
-    return _manager.sendMessage(
-      message:
-          'Transcribe the provided audio according to the given instructions',
-      systemPrompt: systemPrompt,
-      capability: AICapability.audioTranscription,
-      imageBase64: audioBase64, // Reutilizamos imageBase64 para audio
-    );
+    // Delegar a AudioTranscriptionService (nueva arquitectura)
+    return AudioTranscriptionService.instance.transcribe(audioBase64, instructions);
   }
 
   /// 💬 Crear conversación híbrida con streams TTS/STT/respuesta

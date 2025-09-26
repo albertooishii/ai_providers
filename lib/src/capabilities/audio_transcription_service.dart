@@ -5,7 +5,10 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:record/record.dart';
 import '../models/ai_response.dart';
-import '../ai.dart';
+import '../models/transcribe_instructions.dart';
+import '../models/ai_capability.dart';
+import '../models/ai_system_prompt.dart';
+import '../core/ai_provider_manager.dart';
 import '../utils/logger.dart';
 import '../utils/waveform_utils.dart';
 
@@ -49,6 +52,35 @@ class AudioTranscriptionService {
   Stream<String> get transcriptStream => _transcriptController.stream;
   Stream<Duration> get durationStream => _durationController.stream;
 
+  /// 🎯 MÉTODO DE INTEGRACIÓN - usado por AI.listen()
+  ///
+  /// Recibe mismos parámetros que AI.listen() y delega a AIProviderManager.
+  /// Esta es la firma EXACTA que necesita AI.listen() para evitar circular dependency.
+  Future<AIResponse> transcribe(
+    String audioBase64, [
+    TranscribeInstructions? instructions,
+  ]) async {
+    try {
+      AILogger.d('[AudioTranscriptionService] 🎧 Transcribiendo audio...');
+
+      // Crear SystemPrompt con las instrucciones de transcripción
+      final systemPrompt = _createTranscriptionSystemPrompt(instructions);
+
+      // Llamar directamente a AIProviderManager (no a AI.listen() para evitar circular dependency)
+      return await AIProviderManager.instance.sendMessage(
+        message:
+            'Transcribe the provided audio according to the given instructions',
+        systemPrompt: systemPrompt,
+        capability: AICapability.audioTranscription,
+        imageBase64: audioBase64, // Reutilizamos imageBase64 para audio
+      );
+    } catch (e) {
+      AILogger.e(
+          '[AudioTranscriptionService] ❌ Error transcribiendo audio: $e');
+      rethrow;
+    }
+  }
+
   /// Transcribir archivo de audio usando AI.listen()
   Future<AIResponse> transcribeAudioFile(final String filePath) async {
     try {
@@ -64,8 +96,8 @@ class AudioTranscriptionService {
       final audioBytes = await File(filePath).readAsBytes();
       final base64Audio = base64Encode(audioBytes);
 
-      // 🚀 Usar nueva API AI.listen()
-      final response = await AI.listen(base64Audio);
+      // 🚀 Usar nuestro método de integración (no AI.listen() para evitar circular)
+      final response = await transcribe(base64Audio);
 
       AILogger.d(
         '[AudioTranscriptionService] ✅ Transcripción completada: ${response.text.length} chars',
@@ -83,7 +115,7 @@ class AudioTranscriptionService {
   Future<AIResponse> transcribeAudio(final String audioBase64) async {
     try {
       AILogger.d('[AudioTranscriptionService] 🎧 Transcribiendo audio base64');
-      return await AI.listen(audioBase64);
+      return await transcribe(audioBase64);
     } on Exception catch (e) {
       AILogger.e('[AudioTranscriptionService] Error transcribiendo base64: $e');
       rethrow;
@@ -97,7 +129,7 @@ class AudioTranscriptionService {
         '[AudioTranscriptionService] 🎧 Transcribiendo ${audioBytes.length} bytes',
       );
       final base64Audio = base64Encode(audioBytes);
-      return await AI.listen(base64Audio);
+      return await transcribe(base64Audio);
     } on Exception catch (e) {
       AILogger.e('[AudioTranscriptionService] Error transcribiendo bytes: $e');
       rethrow;
@@ -258,6 +290,24 @@ class AudioTranscriptionService {
   }
 
   // === MÉTODOS PRIVADOS ===
+
+  /// Crea SystemPrompt para transcripción de audio con instrucciones
+  AISystemPrompt _createTranscriptionSystemPrompt(
+      TranscribeInstructions? instructions) {
+    final effectiveInstructions =
+        instructions ?? const TranscribeInstructions();
+
+    final context = <String, dynamic>{
+      'task': 'audio_transcription',
+      'stt': true,
+    };
+
+    return AISystemPrompt(
+      context: context,
+      dateTime: DateTime.now(),
+      instructions: effectiveInstructions.toMap(),
+    );
+  }
 
   void _startRecordingTimers() {
     _recordingTimer = Timer.periodic(const Duration(milliseconds: 100), (

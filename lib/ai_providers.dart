@@ -88,15 +88,19 @@ export 'src/ai.dart';
 // ═══════════════════════════════════════════════════════════════════════════════
 //
 // ❌ AIProviderManager - INTERNAL ONLY (use AI.* instead)
-// ❌ TextGenerationService - INTERNAL ONLY (use AI.text() instead)
-// ❌ AudioGenerationService - INTERNAL ONLY (use AI.speak() instead)
-// ❌ ImageGenerationService - INTERNAL ONLY (use AI.image() instead)
 // ❌ MultiModelRouter - INTERNAL ONLY
-// ✅ ConfigLoader - YA NO EXPORTADO (usar AI.getDefaultAudioProvider() en su lugar)
+// ❌ ConfigLoader - INTERNAL ONLY (use AI.* for everything)
 
-// ✅ HybridConversationService - PÚBLICO para conversación híbrida con streams
-// Necesario para declarar variables del tipo, se crea con AI.createConversation()
-export 'src/capabilities/hybrid_conversation_service.dart';
+// ✅ Services - PÚBLICOS para uso avanzado (nueva arquitectura)
+// Uso básico: AI.* | Uso avanzado: Service.instance.* para control total
+
+// ✅ TextGenerationService - Para uso avanzado (historial, contexto, defaults)
+// Uso básico: AI.text() | Uso avanzado: TextGenerationService.instance
+export 'src/capabilities/text_generation_service.dart';
+
+// ✅ AudioGenerationService - Para uso avanzado (síntesis + reproducción)
+// Uso básico: AI.speak() | Uso avanzado: AudioGenerationService.instance
+export 'src/capabilities/audio_generation_service.dart' hide AudioPlaybackState;
 
 // ✅ AudioTranscriptionService - Para uso avanzado (grabación con streams)
 // Uso básico: AI.listen() | Uso avanzado: AudioTranscriptionService.instance
@@ -105,6 +109,10 @@ export 'src/capabilities/audio_transcription_service.dart';
 // ✅ ImageGenerationService - Para uso avanzado (tipos de imagen, análisis)
 // Uso básico: AI.image() | Uso avanzado: ImageGenerationService.instance
 export 'src/capabilities/image_generation_service.dart';
+
+// ✅ HybridConversationService - PÚBLICO para conversación híbrida con streams
+// Necesario para declarar variables del tipo, se crea con AI.createConversation()
+export 'src/capabilities/hybrid_conversation_service.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // � INTERNAL REGISTRY (NO LONGER EXPORTED)
