@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
+import 'package:ai_providers/ai_providers.dart';
 
 class AudioDemoScreen extends StatefulWidget {
   const AudioDemoScreen({super.key});
@@ -19,6 +20,19 @@ class _AudioDemoScreenState extends State<AudioDemoScreen>
 
   late AnimationController _waveController;
 
+  // Provider and model selection for TTS and STT
+  String _selectedTTSProvider = '';
+  String _selectedTTSModel = '';
+  String _selectedTTSVoice = '';
+  String _selectedSTTProvider = '';
+  String _selectedSTTModel = '';
+
+  // Tab controller to track active tab
+  late TabController _tabController;
+
+  // Switch for save mode
+  bool _saveToCache = false;
+
   @override
   void initState() {
     super.initState();
@@ -30,6 +44,70 @@ class _AudioDemoScreenState extends State<AudioDemoScreen>
     _textController.addListener(() {
       setState(() {}); // Update UI when text changes
     });
+
+    // Initialize tab controller
+    _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(() {
+      setState(() {}); // Update header when tab changes
+    });
+
+    // Load default providers and models
+    _loadDefaultConfiguration();
+  }
+
+  Future<void> _loadDefaultConfiguration() async {
+    try {
+      // Load default provider and model for audio generation (TTS)
+      final ttsProvider =
+          await AI.getCurrentProvider(AICapability.audioGeneration);
+      if (ttsProvider != null) {
+        setState(() {
+          _selectedTTSProvider = ttsProvider;
+        });
+
+        final ttsModel = await AI.getCurrentModel(AICapability.audioGeneration);
+        if (ttsModel != null && _selectedTTSModel.isEmpty) {
+          setState(() {
+            _selectedTTSModel = ttsModel;
+          });
+        }
+
+        // Load configured voice for TTS provider (from cache or default)
+        final currentVoice = await AI.getCurrentVoiceForProvider(ttsProvider);
+        if (currentVoice != null && _selectedTTSVoice.isEmpty) {
+          setState(() {
+            _selectedTTSVoice = currentVoice;
+          });
+        } else {
+          // Fallback: get available voices and use first one
+          final voices = await _getVoicesForProvider(ttsProvider);
+          if (voices.isNotEmpty && _selectedTTSVoice.isEmpty) {
+            setState(() {
+              _selectedTTSVoice = voices.first;
+            });
+          }
+        }
+      }
+
+      // Load default provider and model for audio transcription (STT)
+      final sttProvider =
+          await AI.getCurrentProvider(AICapability.audioTranscription);
+      if (sttProvider != null) {
+        setState(() {
+          _selectedSTTProvider = sttProvider;
+        });
+
+        final sttModel =
+            await AI.getCurrentModel(AICapability.audioTranscription);
+        if (sttModel != null && _selectedSTTModel.isEmpty) {
+          setState(() {
+            _selectedSTTModel = sttModel;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading default audio configuration: $e');
+    }
   }
 
   @override
@@ -44,6 +122,13 @@ class _AudioDemoScreenState extends State<AudioDemoScreen>
           icon: const Icon(Icons.arrow_back_rounded),
           onPressed: () => context.go('/'),
         ),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.settings_rounded, color: Colors.green.shade700),
+            tooltip: 'AI Configuration',
+            onPressed: () => _showConfigurationDialog(context),
+          ),
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(24),
@@ -76,14 +161,44 @@ class _AudioDemoScreenState extends State<AudioDemoScreen>
                               fontWeight: FontWeight.bold,
                             ),
                       ),
+                      // Show info based on active tab
                       Text(
-                        'Speech synthesis and transcription',
+                        _tabController.index == 0
+                            ? 'Provider: ${_formatProviderName(_selectedTTSProvider)}'
+                            : 'Provider: ${_formatProviderName(_selectedSTTProvider)}',
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                               color: Theme.of(context)
                                   .colorScheme
                                   .onSurfaceVariant,
                             ),
                       ),
+                      if ((_tabController.index == 0 &&
+                              _selectedTTSModel.isNotEmpty) ||
+                          (_tabController.index == 1 &&
+                              _selectedSTTModel.isNotEmpty))
+                        Text(
+                          'Model: ${_tabController.index == 0 ? _selectedTTSModel : _selectedSTTModel}',
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                        ),
+                      // Show voice only for TTS (tab 0)
+                      if (_tabController.index == 0 &&
+                          _selectedTTSVoice.isNotEmpty)
+                        Text(
+                          'Voice: $_selectedTTSVoice',
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                        ),
                     ],
                   ),
                 ),
@@ -93,38 +208,37 @@ class _AudioDemoScreenState extends State<AudioDemoScreen>
             const SizedBox(height: 32),
 
             // Tabs
-            DefaultTabController(
-              length: 2,
-              child: Expanded(
-                child: Column(
-                  children: [
-                    TabBar(
-                      labelColor: Colors.green.shade700,
-                      unselectedLabelColor:
-                          Theme.of(context).colorScheme.onSurfaceVariant,
-                      indicatorColor: Colors.green.shade700,
-                      tabs: const [
-                        Tab(
-                          icon: Icon(Icons.record_voice_over_rounded),
-                          text: 'Text to Speech',
-                        ),
-                        Tab(
-                          icon: Icon(Icons.mic_rounded),
-                          text: 'Speech to Text',
-                        ),
+            Expanded(
+              child: Column(
+                children: [
+                  TabBar(
+                    controller: _tabController,
+                    labelColor: Colors.green.shade700,
+                    unselectedLabelColor:
+                        Theme.of(context).colorScheme.onSurfaceVariant,
+                    indicatorColor: Colors.green.shade700,
+                    tabs: const [
+                      Tab(
+                        icon: Icon(Icons.record_voice_over_rounded),
+                        text: 'Text to Speech',
+                      ),
+                      Tab(
+                        icon: Icon(Icons.mic_rounded),
+                        text: 'Speech to Text',
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  Expanded(
+                    child: TabBarView(
+                      controller: _tabController,
+                      children: [
+                        _buildTextToSpeechTab(),
+                        _buildSpeechToTextTab(),
                       ],
                     ),
-                    const SizedBox(height: 24),
-                    Expanded(
-                      child: TabBarView(
-                        children: [
-                          _buildTextToSpeechTab(),
-                          _buildSpeechToTextTab(),
-                        ],
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
           ],
@@ -149,6 +263,48 @@ class _AudioDemoScreenState extends State<AudioDemoScreen>
             prefixIcon: const Icon(Icons.text_fields_rounded),
           ),
         ).animate().fadeIn(delay: 200.ms),
+
+        const SizedBox(height: 20),
+
+        // Switch para modo de guardado
+        Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    _saveToCache
+                        ? 'Guardar en dispositivo'
+                        : 'Vista previa temporal',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: Colors.green.shade700,
+                        ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    _saveToCache
+                        ? 'El audio se guardará como archivo temporal en caché'
+                        : 'Solo reproducir el audio sin guardar',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
+                  ),
+                ],
+              ),
+            ),
+            Switch(
+              value: _saveToCache,
+              onChanged: (value) {
+                setState(() {
+                  _saveToCache = value;
+                });
+              },
+              activeTrackColor: Colors.green.shade600,
+            ),
+          ],
+        ).animate().fadeIn(delay: 250.ms),
 
         const SizedBox(height: 24),
 
@@ -353,17 +509,51 @@ class _AudioDemoScreenState extends State<AudioDemoScreen>
     });
 
     try {
-      // Simulate speech generation
-      await Future.delayed(const Duration(seconds: 3));
+      // Set the selected provider and model if specified
+      if (_selectedTTSProvider.isNotEmpty && _selectedTTSModel.isNotEmpty) {
+        await AI.setModel(
+          _selectedTTSProvider,
+          _selectedTTSModel,
+          AICapability.audioGeneration,
+        );
+      }
+
+      // Use AI.speak for real TTS
+      final instructions = SynthesizeInstructions(
+        voiceStyle:
+            _selectedTTSVoice.isNotEmpty ? _selectedTTSVoice : 'neutral',
+        language: 'es-ES', // Default language
+        speed: 1.0,
+        pitch: 'medium',
+      );
+
+      final response = await AI.speak(
+        _textController.text.trim(),
+        instructions,
+        _saveToCache, // Pasar el modo de guardado
+      );
 
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Speech generated successfully!')),
-      );
+
+      if (response.audioBase64 != null && response.audioBase64!.isNotEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content: Text(
+                  '✨ Audio generated by ${_selectedTTSProvider.toUpperCase()}!')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content:
+                  Text('Generated: ${response.text.substring(0, 100)}...')),
+        );
+      }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: ${e.toString()}')),
+        SnackBar(
+            content:
+                Text('❌ Error with ${_selectedTTSProvider.toUpperCase()}: $e')),
       );
     } finally {
       setState(() {
@@ -385,21 +575,657 @@ class _AudioDemoScreenState extends State<AudioDemoScreen>
       _isRecording = false;
     });
 
-    // Simulate transcription
-    Future.delayed(const Duration(seconds: 1), () {
+    // Start transcription process
+    _transcribeAudio();
+  }
+
+  Future<void> _transcribeAudio() async {
+    try {
+      // Set the selected provider and model if specified
+      if (_selectedSTTProvider.isNotEmpty && _selectedSTTModel.isNotEmpty) {
+        await AI.setModel(
+          _selectedSTTProvider,
+          _selectedSTTModel,
+          AICapability.audioTranscription,
+        );
+      }
+
+      // Use AI.listen for real STT
+      // Note: In a real app, you would have actual audio data from recording
+      final mockAudioBase64 =
+          'data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABA...'; // Mock audio data
+
+      final instructions = TranscribeInstructions(
+        language: 'es-ES', // Default to Spanish
+        format: 'detailed',
+        accuracy: 'high',
+        includePunctuation: true,
+      );
+
+      final response = await AI.listen(mockAudioBase64, instructions);
+
       if (!mounted) return;
+
+      setState(() {
+        if (response.text.isNotEmpty) {
+          _transcribedText = response.text;
+        } else {
+          _transcribedText =
+              'Transcripción de ejemplo con ${_selectedSTTProvider.toUpperCase()}. '
+              'En una aplicación real, aquí aparecería el texto transcrito de tu audio grabado.';
+        }
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content: Text(
+                '✨ Audio transcribed by ${_selectedSTTProvider.toUpperCase()}!')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
       setState(() {
         _transcribedText =
-            'This is a simulated transcription of your recorded audio. '
-            'The AI Providers SDK would process your actual speech here.';
+            'Error en transcripción con ${_selectedSTTProvider.toUpperCase()}: $e\n\n'
+            'Nota: La transcripción real requiere implementar la grabación de audio desde el micrófono.';
       });
-    });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+            content:
+                Text('❌ Error with ${_selectedSTTProvider.toUpperCase()}: $e')),
+      );
+    }
+  }
+
+  Future<void> _showConfigurationDialog(BuildContext context) async {
+    await showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Row(
+                children: [
+                  Icon(Icons.settings_rounded, color: Colors.green),
+                  SizedBox(width: 8),
+                  Text('AI Audio Configuration'),
+                ],
+              ),
+              content: SizedBox(
+                width: 450,
+                height: 600,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Audio Processing Settings',
+                        style:
+                            Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Text-to-Speech Section
+                      _buildCapabilitySection(
+                        context: context,
+                        setDialogState: setDialogState,
+                        capability: AICapability.audioGeneration,
+                        title: 'Text-to-Speech (TTS)',
+                        icon: Icons.record_voice_over_rounded,
+                        color: Colors.blue,
+                        selectedProvider: _selectedTTSProvider,
+                        selectedModel: _selectedTTSModel,
+                        selectedVoice: _selectedTTSVoice,
+                        showVoice: true,
+                        onProviderChanged: (provider) {
+                          setDialogState(() {
+                            _selectedTTSProvider = provider;
+                            _selectedTTSModel = '';
+                            _selectedTTSVoice = '';
+                          });
+                          _autoSelectModelAndVoiceForProvider(
+                              provider,
+                              AICapability.audioGeneration,
+                              setDialogState,
+                              true);
+                        },
+                        onModelChanged: (model) {
+                          setDialogState(() {
+                            _selectedTTSModel = model;
+                          });
+                        },
+                        onVoiceChanged: (voice) {
+                          setDialogState(() {
+                            _selectedTTSVoice = voice;
+                          });
+                        },
+                      ),
+
+                      const SizedBox(height: 32),
+                      const Divider(),
+                      const SizedBox(height: 24),
+
+                      // Speech-to-Text Section
+                      _buildCapabilitySection(
+                        context: context,
+                        setDialogState: setDialogState,
+                        capability: AICapability.audioTranscription,
+                        title: 'Speech-to-Text (STT)',
+                        icon: Icons.mic_rounded,
+                        color: Colors.orange,
+                        selectedProvider: _selectedSTTProvider,
+                        selectedModel: _selectedSTTModel,
+                        selectedVoice: '', // STT doesn't use voice
+                        showVoice: false,
+                        onProviderChanged: (provider) {
+                          setDialogState(() {
+                            _selectedSTTProvider = provider;
+                            _selectedSTTModel = '';
+                          });
+                          _autoSelectModelAndVoiceForProvider(
+                              provider,
+                              AICapability.audioTranscription,
+                              setDialogState,
+                              false);
+                        },
+                        onModelChanged: (model) {
+                          setDialogState(() {
+                            _selectedSTTModel = model;
+                          });
+                        },
+                        onVoiceChanged: (voice) {
+                          // STT doesn't use voice, do nothing
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () async {
+                    final navigator = Navigator.of(context);
+                    final messenger = ScaffoldMessenger.of(context);
+
+                    try {
+                      // Save TTS configurations
+                      if (_selectedTTSProvider.isNotEmpty &&
+                          _selectedTTSModel.isNotEmpty) {
+                        await AI.setModel(
+                          _selectedTTSProvider,
+                          _selectedTTSModel,
+                          AICapability.audioGeneration,
+                        );
+                      }
+                      if (_selectedTTSVoice.isNotEmpty &&
+                          _selectedTTSProvider.isNotEmpty) {
+                        await AI.setSelectedVoiceForProvider(
+                          _selectedTTSProvider,
+                          _selectedTTSVoice,
+                        );
+                      }
+
+                      // Save STT configurations
+                      if (_selectedSTTProvider.isNotEmpty &&
+                          _selectedSTTModel.isNotEmpty) {
+                        await AI.setModel(
+                          _selectedSTTProvider,
+                          _selectedSTTModel,
+                          AICapability.audioTranscription,
+                        );
+                      }
+
+                      setState(() {
+                        // Update main state with dialog selections
+                      });
+
+                      navigator.pop();
+
+                      messenger.showSnackBar(
+                        const SnackBar(
+                            content: Text('Configuration saved successfully!')),
+                      );
+                    } catch (e) {
+                      messenger.showSnackBar(
+                        SnackBar(
+                            content: Text('Error saving configuration: $e')),
+                      );
+                    }
+                  },
+                  child: const Text('Apply'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildCapabilitySection({
+    required BuildContext context,
+    required StateSetter setDialogState,
+    required AICapability capability,
+    required String title,
+    required IconData icon,
+    required Color color,
+    required String selectedProvider,
+    required String selectedModel,
+    required String selectedVoice,
+    required bool showVoice,
+    required Function(String) onProviderChanged,
+    required Function(String) onModelChanged,
+    required Function(String) onVoiceChanged,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Section Header
+        Row(
+          children: [
+            Icon(icon, color: color, size: 20),
+            const SizedBox(width: 8),
+            Text(
+              title,
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: color,
+                  ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+
+        // Provider Selection
+        Builder(
+          builder: (context) {
+            try {
+              final providersInfo = AI.getAvailableProviders(capability);
+
+              if (providersInfo.isEmpty) {
+                return Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.warning_amber_rounded,
+                          color: Colors.orange.shade700, size: 16),
+                      const SizedBox(width: 8),
+                      Text(
+                        'No providers available for $title',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Colors.orange.shade700,
+                            ),
+                      ),
+                    ],
+                  ),
+                );
+              }
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Provider',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                  ),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedProvider.isNotEmpty &&
+                            providersInfo
+                                .any((p) => p['id'] == selectedProvider)
+                        ? selectedProvider
+                        : null,
+                    decoration: InputDecoration(
+                      border: const OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.business_rounded, color: color),
+                    ),
+                    items: providersInfo.map((providerInfo) {
+                      final providerId = providerInfo['id'] as String;
+                      final displayName = providerInfo['displayName'] as String;
+                      return DropdownMenuItem(
+                        value: providerId,
+                        child: Text(displayName),
+                      );
+                    }).toList(),
+                    onChanged: (newProvider) {
+                      if (newProvider != null) {
+                        onProviderChanged(newProvider);
+                      }
+                    },
+                  ),
+                ],
+              );
+            } catch (e) {
+              return Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.red.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  'Error loading providers: $e',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Colors.red.shade700,
+                      ),
+                ),
+              );
+            }
+          },
+        ),
+
+        const SizedBox(height: 16),
+
+        // Model Selection
+        if (selectedProvider.isNotEmpty)
+          FutureBuilder<List<String>>(
+            key: ValueKey('models_${selectedProvider}_$capability'),
+            future: _getModelsForProvider(selectedProvider),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) {
+                return const SizedBox(
+                  height: 40,
+                  child: Center(child: CircularProgressIndicator()),
+                );
+              }
+
+              final models = snapshot.data!;
+              if (models.isEmpty) {
+                return Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    'No models available for this provider',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Colors.orange.shade700,
+                        ),
+                  ),
+                );
+              }
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Model',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                  ),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedModel.isNotEmpty &&
+                            models.contains(selectedModel)
+                        ? selectedModel
+                        : null,
+                    decoration: InputDecoration(
+                      border: const OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.psychology_rounded, color: color),
+                      hintText: 'Select a model...',
+                    ),
+                    items: models.map((model) {
+                      return DropdownMenuItem(
+                        value: model,
+                        child: Text(model),
+                      );
+                    }).toList(),
+                    onChanged: (newModel) {
+                      if (newModel != null) {
+                        onModelChanged(newModel);
+                      }
+                    },
+                  ),
+                ],
+              );
+            },
+          ),
+
+        // Voice Selection (only for TTS)
+        if (showVoice && selectedProvider.isNotEmpty) ...[
+          const SizedBox(height: 16),
+          FutureBuilder<List<String>>(
+            key: ValueKey('voices_$selectedProvider'),
+            future: _getVoicesForProvider(selectedProvider),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) {
+                return const SizedBox(
+                  height: 40,
+                  child: Center(child: CircularProgressIndicator()),
+                );
+              }
+
+              final voices = snapshot.data!;
+              if (voices.isEmpty) {
+                return Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    'No voices available for this provider',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Colors.orange.shade700,
+                        ),
+                  ),
+                );
+              }
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Voice',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                  ),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    initialValue: selectedVoice.isNotEmpty &&
+                            voices.contains(selectedVoice)
+                        ? selectedVoice
+                        : null,
+                    decoration: InputDecoration(
+                      border: const OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.record_voice_over, color: color),
+                      hintText: 'Select a voice...',
+                    ),
+                    items: voices.map((voice) {
+                      return DropdownMenuItem(
+                        value: voice,
+                        child: Text(voice),
+                      );
+                    }).toList(),
+                    onChanged: (newVoice) {
+                      if (newVoice != null) {
+                        onVoiceChanged(newVoice);
+                      }
+                    },
+                  ),
+                ],
+              );
+            },
+          ),
+        ],
+
+        const SizedBox(height: 16),
+
+        // Current Configuration Info
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Current Configuration',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: color,
+                    ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Provider: ${_formatProviderName(selectedProvider)}',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              Text(
+                'Model: ${selectedModel.isEmpty ? "Default" : selectedModel}',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              if (showVoice)
+                Text(
+                  'Voice: ${selectedVoice.isEmpty ? "Default" : selectedVoice}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _autoSelectModelAndVoiceForProvider(String providerId,
+      AICapability capability, StateSetter setDialogState, bool isTTS) async {
+    try {
+      // Auto-select default model
+      final defaultModel =
+          await AI.getDefaultModelForProvider(providerId, capability);
+      if (defaultModel != null) {
+        setDialogState(() {
+          if (isTTS) {
+            _selectedTTSModel = defaultModel;
+          } else {
+            _selectedSTTModel = defaultModel;
+          }
+        });
+      }
+
+      // Auto-select default voice for TTS
+      if (isTTS) {
+        // First try to get saved voice for this provider
+        final currentVoice = await AI.getCurrentVoiceForProvider(providerId);
+        if (currentVoice != null) {
+          setDialogState(() {
+            _selectedTTSVoice = currentVoice;
+          });
+        } else {
+          // Fallback to first available voice
+          final voices = await _getVoicesForProvider(providerId);
+          if (voices.isNotEmpty) {
+            setDialogState(() {
+              _selectedTTSVoice = voices.first;
+            });
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error auto-selecting model and voice: $e');
+    }
+  }
+
+  Future<List<String>> _getModelsForProvider(String providerId) async {
+    try {
+      final models = await AI.getAvailableModels(providerId);
+      return models;
+    } catch (e) {
+      debugPrint('Error getting models for provider $providerId: $e');
+      return [];
+    }
+  }
+
+  Future<List<String>> _getVoicesForProvider(String providerId) async {
+    try {
+      // Get voices from AI SDK for specific provider
+      final voicesData = await AI.getVoicesForProvider(providerId);
+
+      if (voicesData.isNotEmpty) {
+        return voicesData.map<String>((voiceData) {
+          // Extract voice name/id from voice data
+          return voiceData['name']?.toString() ??
+              voiceData['id']?.toString() ??
+              voiceData.toString();
+        }).toList();
+      }
+
+      // Fallback: return mock voices based on provider if SDK method fails
+      switch (providerId.toLowerCase()) {
+        case 'google':
+          return ['Puck', 'Zephyr', 'Charon', 'Kore', 'Fenrir', 'Leda'];
+        case 'openai':
+          return ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'];
+        case 'elevenlabs':
+          return ['Rachel', 'Domi', 'Bella', 'Antoni', 'Elli', 'Josh'];
+        default:
+          return ['default'];
+      }
+    } catch (e) {
+      debugPrint('Error getting voices for provider $providerId: $e');
+      // Return mock voices as fallback
+      switch (providerId.toLowerCase()) {
+        case 'google':
+          return ['Puck', 'Zephyr', 'Charon', 'Kore', 'Fenrir', 'Leda'];
+        case 'openai':
+          return ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'];
+        default:
+          return ['default'];
+      }
+    }
+  }
+
+  String _formatProviderName(String providerId) {
+    try {
+      // Try to get display name from TTS providers first
+      final ttsProviders =
+          AI.getAvailableProviders(AICapability.audioGeneration);
+      final providerInfo = ttsProviders.firstWhere(
+        (provider) => provider['id'] == providerId,
+        orElse: () => {},
+      );
+
+      if (providerInfo.isNotEmpty) {
+        return providerInfo['displayName'] ?? providerId;
+      }
+
+      // If not found, try STT providers
+      final sttProviders =
+          AI.getAvailableProviders(AICapability.audioTranscription);
+      final sttProviderInfo = sttProviders.firstWhere(
+        (provider) => provider['id'] == providerId,
+        orElse: () => {},
+      );
+
+      return sttProviderInfo['displayName'] ?? providerId;
+    } catch (e) {
+      return providerId.isEmpty ? 'N/A' : providerId;
+    }
   }
 
   @override
   void dispose() {
     _textController.dispose();
     _waveController.dispose();
+    _tabController.dispose();
     super.dispose();
   }
 }

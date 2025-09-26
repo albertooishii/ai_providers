@@ -7,10 +7,10 @@
 /// **Uso:**
 /// ```dart
 /// // Con valores por defecto
-/// await AI.transcribe(audioBase64);
+/// await AI.listen(audioBase64);
 ///
 /// // Con instrucciones personalizadas
-/// await AI.transcribe(audioBase64, TranscribeInstructions(
+/// await AI.listen(audioBase64, TranscribeInstructions(
 ///   language: 'en-US',
 ///   format: 'detailed',
 ///   includePunctuation: false

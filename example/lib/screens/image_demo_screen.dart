@@ -1,6 +1,10 @@
+import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
+import 'package:ai_providers/ai_providers.dart';
+import '../utils/file_utils.dart';
 
 class ImageDemoScreen extends StatefulWidget {
   const ImageDemoScreen({super.key});
@@ -9,10 +13,31 @@ class ImageDemoScreen extends StatefulWidget {
   State<ImageDemoScreen> createState() => _ImageDemoScreenState();
 }
 
-class _ImageDemoScreenState extends State<ImageDemoScreen> {
+class _ImageDemoScreenState extends State<ImageDemoScreen>
+    with TickerProviderStateMixin {
   final TextEditingController _promptController = TextEditingController();
+
   bool _isGenerating = false;
-  String? _generatedImagePath;
+  bool _isAnalyzing = false;
+  String? _generatedImageBase64;
+  String? _generatedImageFileName;
+  bool _hasSelectedImage = false;
+  String? _analysisResult;
+  bool _saveToDevice = false; // Switch for save mode
+
+  // Image selection for analysis
+  File? _selectedImageFile;
+  String? _selectedImageBase64;
+  String? _selectedImageMimeType;
+
+  // Provider and model selection for generation and analysis
+  String _selectedGenerationProvider = '';
+  String _selectedGenerationModel = '';
+  String _selectedAnalysisProvider = '';
+  String _selectedAnalysisModel = '';
+
+  // Tab controller to track active tab
+  late TabController _tabController;
 
   @override
   void initState() {
@@ -20,13 +45,79 @@ class _ImageDemoScreenState extends State<ImageDemoScreen> {
     _promptController.addListener(() {
       setState(() {}); // Update UI when text changes
     });
+
+    // Initialize tab controller
+    _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(() {
+      setState(() {}); // Update header when tab changes
+    });
+
+    // Load default providers and models
+    _loadDefaultConfiguration();
+  }
+
+  Future<void> _loadDefaultConfiguration() async {
+    try {
+      // Load default provider and model for image generation
+      final generationProvider =
+          await AI.getCurrentProvider(AICapability.imageGeneration);
+      if (generationProvider != null) {
+        setState(() {
+          _selectedGenerationProvider = generationProvider;
+        });
+
+        final generationModel =
+            await AI.getCurrentModel(AICapability.imageGeneration);
+        if (generationModel != null && _selectedGenerationModel.isEmpty) {
+          setState(() {
+            _selectedGenerationModel = generationModel;
+          });
+        } else {
+          // Fallback: get models for provider and use first one
+          final models =
+              await _getModelsForProvider(_selectedGenerationProvider);
+          if (models.isNotEmpty && _selectedGenerationModel.isEmpty) {
+            setState(() {
+              _selectedGenerationModel = models.first;
+            });
+          }
+        }
+      }
+
+      // Load default provider and model for image analysis
+      final analysisProvider =
+          await AI.getCurrentProvider(AICapability.imageAnalysis);
+      if (analysisProvider != null) {
+        setState(() {
+          _selectedAnalysisProvider = analysisProvider;
+        });
+
+        final analysisModel =
+            await AI.getCurrentModel(AICapability.imageAnalysis);
+        if (analysisModel != null && _selectedAnalysisModel.isEmpty) {
+          setState(() {
+            _selectedAnalysisModel = analysisModel;
+          });
+        } else {
+          // Fallback: get models for provider and use first one
+          final models = await _getModelsForProvider(_selectedAnalysisProvider);
+          if (models.isNotEmpty && _selectedAnalysisModel.isEmpty) {
+            setState(() {
+              _selectedAnalysisModel = models.first;
+            });
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading default configuration: $e');
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Image Generation'),
+        title: const Text('Image Processing'),
         backgroundColor: Colors.purple.withValues(alpha: 0.1),
         foregroundColor: Colors.purple.shade700,
         elevation: 0,
@@ -34,6 +125,13 @@ class _ImageDemoScreenState extends State<ImageDemoScreen> {
           icon: const Icon(Icons.arrow_back_rounded),
           onPressed: () => context.go('/'),
         ),
+        actions: [
+          IconButton(
+            icon: Icon(Icons.settings_rounded, color: Colors.purple.shade700),
+            tooltip: 'AI Configuration',
+            onPressed: () => _showConfigurationDialog(context),
+          ),
+        ],
       ),
       body: Padding(
         padding: const EdgeInsets.all(24),
@@ -61,19 +159,36 @@ class _ImageDemoScreenState extends State<ImageDemoScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'AI Image Generation',
+                        'AI Image Processing',
                         style: Theme.of(context).textTheme.titleLarge?.copyWith(
                               fontWeight: FontWeight.bold,
                             ),
                       ),
+                      // Show info based on active tab
                       Text(
-                        'Create stunning images from text descriptions',
+                        _tabController.index == 0
+                            ? 'Provider: ${_formatProviderName(_selectedGenerationProvider)}'
+                            : 'Provider: ${_formatProviderName(_selectedAnalysisProvider)}',
                         style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                               color: Theme.of(context)
                                   .colorScheme
                                   .onSurfaceVariant,
                             ),
                       ),
+                      if ((_tabController.index == 0 &&
+                              _selectedGenerationModel.isNotEmpty) ||
+                          (_tabController.index == 1 &&
+                              _selectedAnalysisModel.isNotEmpty))
+                        Text(
+                          'Model: ${_tabController.index == 0 ? _selectedGenerationModel : _selectedAnalysisModel}',
+                          style:
+                              Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                        ),
                     ],
                   ),
                 ),
@@ -82,125 +197,560 @@ class _ImageDemoScreenState extends State<ImageDemoScreen> {
 
             const SizedBox(height: 32),
 
-            // Input field
-            TextField(
-              controller: _promptController,
-              maxLines: 3,
-              decoration: InputDecoration(
-                labelText: 'Describe the image you want to create',
-                hintText: 'A beautiful sunset over mountains...',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                prefixIcon: const Icon(Icons.palette_rounded),
-              ),
-            ).animate().fadeIn(delay: 200.ms),
-
-            const SizedBox(height: 24),
-
-            // Generate button
-            FilledButton.icon(
-              onPressed: _isGenerating || _promptController.text.trim().isEmpty
-                  ? null
-                  : _generateImage,
-              icon: _isGenerating
-                  ? SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Theme.of(context).colorScheme.onPrimary,
-                      ),
-                    )
-                  : const Icon(Icons.auto_awesome_rounded),
-              label: Text(_isGenerating ? 'Generating...' : 'Generate Image'),
-              style: FilledButton.styleFrom(
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                backgroundColor: Colors.purple.shade600,
-              ),
-            ).animate().fadeIn(delay: 300.ms),
-
-            const SizedBox(height: 32),
-
-            // Results area
+            // Tabs
             Expanded(
-              child: _generatedImagePath != null
-                  ? Card(
-                      clipBehavior: Clip.antiAlias,
-                      child: Column(
-                        children: [
-                          Expanded(
-                            child: Container(
-                              width: double.infinity,
-                              decoration: const BoxDecoration(
-                                color: Colors.grey,
-                              ),
-                              child: const Center(
-                                child: Text(
-                                  '🖼️\nGenerated Image\nWould Appear Here',
-                                  textAlign: TextAlign.center,
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    color: Colors.white,
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Row(
-                              children: [
-                                const Icon(Icons.check_circle,
-                                    color: Colors.green),
-                                const SizedBox(width: 8),
-                                const Text('Image generated successfully!'),
-                                const Spacer(),
-                                IconButton(
-                                  onPressed: () {
-                                    // Save image logic
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                          content: Text('Image saved!')),
-                                    );
-                                  },
-                                  icon: const Icon(Icons.download_rounded),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
+              child: Column(
+                children: [
+                  TabBar(
+                    controller: _tabController,
+                    labelColor: Colors.purple.shade700,
+                    unselectedLabelColor:
+                        Theme.of(context).colorScheme.onSurfaceVariant,
+                    indicatorColor: Colors.purple.shade700,
+                    tabs: const [
+                      Tab(
+                        icon: Icon(Icons.auto_awesome_rounded),
+                        text: 'Generate Image',
                       ),
-                    ).animate().fadeIn().scale()
-                  : Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(
-                            Icons.photo_library_outlined,
-                            size: 64,
-                            color: Theme.of(context)
-                                .colorScheme
-                                .onSurfaceVariant
-                                .withValues(alpha: 0.5),
-                          ),
-                          const SizedBox(height: 16),
-                          Text(
-                            'Generated image will appear here',
-                            style:
-                                Theme.of(context).textTheme.bodyLarge?.copyWith(
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .onSurfaceVariant,
-                                    ),
-                          ),
-                        ],
+                      Tab(
+                        icon: Icon(Icons.search_rounded),
+                        text: 'Analyze Image',
                       ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  Expanded(
+                    child: TabBarView(
+                      controller: _tabController,
+                      children: [
+                        _buildImageGenerationTab(),
+                        _buildImageAnalysisTab(),
+                      ],
                     ),
+                  ),
+                ],
+              ),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildImageGenerationTab() {
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
+            controller: _promptController,
+            maxLines: 4,
+            decoration: InputDecoration(
+              labelText: 'Describe the image you want to create',
+              hintText:
+                  'A beautiful sunset over mountains with reflection in water...',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              prefixIcon: const Icon(Icons.palette_rounded),
+            ),
+          ).animate().fadeIn(delay: 200.ms),
+
+          const SizedBox(height: 16),
+
+          // Save mode toggle
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.purple.withValues(alpha: 0.05),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: Colors.purple.withValues(alpha: 0.2),
+                width: 1,
+              ),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  _saveToDevice ? Icons.save_rounded : Icons.preview_rounded,
+                  color: Colors.purple.shade600,
+                  size: 20,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _saveToDevice
+                            ? 'Guardar en dispositivo'
+                            : 'Vista previa temporal',
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                              color: Colors.purple.shade700,
+                            ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        _saveToDevice
+                            ? 'La imagen se guardará como archivo temporal en caché'
+                            : 'Solo mostrar la imagen sin guardar',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
+                Switch(
+                  value: _saveToDevice,
+                  onChanged: (value) {
+                    setState(() {
+                      _saveToDevice = value;
+                    });
+                  },
+                  activeTrackColor: Colors.purple.shade600,
+                ),
+              ],
+            ),
+          ).animate().fadeIn(delay: 250.ms),
+
+          const SizedBox(height: 24),
+
+          FilledButton.icon(
+            onPressed: _isGenerating || _promptController.text.trim().isEmpty
+                ? null
+                : _generateImage,
+            icon: _isGenerating
+                ? SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Theme.of(context).colorScheme.onPrimary,
+                    ),
+                  )
+                : const Icon(Icons.auto_awesome_rounded),
+            label: Text(_isGenerating ? 'Generating...' : 'Generate Image'),
+            style: FilledButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              backgroundColor: Colors.purple.shade600,
+            ),
+          ).animate().fadeIn(delay: 300.ms),
+
+          const SizedBox(height: 32),
+
+          // Generated image area - Fixed height for better display
+          Container(
+            height: MediaQuery.of(context).size.height *
+                0.6, // 60% of screen height
+            child: (_generatedImageBase64 != null ||
+                    _generatedImageFileName != null)
+                ? Card(
+                    clipBehavior: Clip.antiAlias,
+                    child: Column(
+                      children: [
+                        // Image container that uses fixed height
+                        Expanded(
+                          child: ClipRRect(
+                            borderRadius: const BorderRadius.vertical(
+                              top: Radius.circular(12),
+                            ),
+                            child: GestureDetector(
+                              onTap: () => _showGeneratedImagePreview(context),
+                              child: Container(
+                                width: double.infinity,
+                                height: double.infinity,
+                                child: _generatedImageBase64 != null
+                                    ? Image.memory(
+                                        base64Decode(_generatedImageBase64!),
+                                        fit: BoxFit
+                                            .contain, // Maintain aspect ratio but fill height
+                                        width: double.infinity,
+                                        height: double.infinity,
+                                        errorBuilder:
+                                            (context, error, stackTrace) {
+                                          return _buildImageErrorWidget();
+                                        },
+                                      )
+                                    : _generatedImageFileName != null
+                                        ? FutureBuilder<File>(
+                                            future: _loadImageFromCache(
+                                                _generatedImageFileName!),
+                                            builder: (context, snapshot) {
+                                              if (snapshot.hasData &&
+                                                  snapshot.data!.existsSync()) {
+                                                return Image.file(
+                                                  snapshot.data!,
+                                                  fit: BoxFit
+                                                      .contain, // Maintain aspect ratio but fill height
+                                                  width: double.infinity,
+                                                  height: double.infinity,
+                                                  errorBuilder: (context, error,
+                                                      stackTrace) {
+                                                    return _buildImageErrorWidget();
+                                                  },
+                                                );
+                                              } else if (snapshot.hasError) {
+                                                return _buildImageErrorWidget();
+                                              } else {
+                                                return const Center(
+                                                  child:
+                                                      CircularProgressIndicator(),
+                                                );
+                                              }
+                                            },
+                                          )
+                                        : _buildImageErrorWidget(),
+                              ),
+                            ),
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.all(16),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.check_circle,
+                                  color: Colors.green),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      _saveToDevice
+                                          ? '¡Imagen guardada en dispositivo!'
+                                          : '¡Imagen generada!',
+                                      style: const TextStyle(
+                                          fontWeight: FontWeight.w600),
+                                    ),
+                                    Text(
+                                      'Click para vista completa • Proveedor: ${_selectedGenerationProvider.isNotEmpty ? _formatProviderName(_selectedGenerationProvider) : "Por defecto"}${_saveToDevice ? " • Guardada en caché" : " • Solo vista previa"}',
+                                      style: Theme.of(context)
+                                          .textTheme
+                                          .bodySmall
+                                          ?.copyWith(
+                                            color: Theme.of(context)
+                                                .colorScheme
+                                                .onSurfaceVariant,
+                                          ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ).animate().fadeIn().scale()
+                : Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.auto_awesome_outlined,
+                          size: 64,
+                          color: Theme.of(context)
+                              .colorScheme
+                              .onSurfaceVariant
+                              .withValues(alpha: 0.5),
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Generated image will appear here',
+                          style:
+                              Theme.of(context).textTheme.bodyLarge?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                                  ),
+                        ),
+                      ],
+                    ),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildImageAnalysisTab() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        // Image selection area
+        Card(
+          child: InkWell(
+            onTap: _selectImage,
+            borderRadius: BorderRadius.circular(16),
+            child: Container(
+              height: 200,
+              padding: const EdgeInsets.all(24),
+              child: _hasSelectedImage && _selectedImageFile != null
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Stack(
+                        children: [
+                          // Image preview
+                          Positioned.fill(
+                            child: GestureDetector(
+                              onTap: () => _showImagePreview(context),
+                              child: Image.file(
+                                _selectedImageFile!,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Container(
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                        colors: [
+                                          Colors.purple.shade200,
+                                          Colors.purple.shade400,
+                                        ],
+                                      ),
+                                    ),
+                                    child: const Center(
+                                      child: Column(
+                                        mainAxisAlignment:
+                                            MainAxisAlignment.center,
+                                        children: [
+                                          Icon(
+                                            Icons.error_outline,
+                                            size: 48,
+                                            color: Colors.white,
+                                          ),
+                                          SizedBox(height: 12),
+                                          Text(
+                                            'Error loading image',
+                                            style: TextStyle(
+                                              fontSize: 16,
+                                              color: Colors.white,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
+                          ),
+                          // Dark overlay for text visibility
+                          Positioned.fill(
+                            child: Container(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [
+                                    Colors.transparent,
+                                    Colors.black.withValues(alpha: 0.7),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                          // Image info overlay
+                          Positioned(
+                            bottom: 12,
+                            left: 12,
+                            right: 12,
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  _selectedImageFile!.path.split('/').last,
+                                  style: const TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.white,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                const SizedBox(height: 4),
+                                Row(
+                                  children: [
+                                    FutureBuilder<int>(
+                                      future: _selectedImageFile!.length(),
+                                      builder: (context, snapshot) {
+                                        if (snapshot.hasData) {
+                                          return Text(
+                                            FileUtils.formatFileSize(
+                                                snapshot.data!),
+                                            style: const TextStyle(
+                                              fontSize: 12,
+                                              color: Colors.white70,
+                                            ),
+                                          );
+                                        }
+                                        return const SizedBox.shrink();
+                                      },
+                                    ),
+                                    const Text(
+                                      ' • ',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.white70,
+                                      ),
+                                    ),
+                                    const Text(
+                                      'Tap to change • Click to preview',
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        color: Colors.white70,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          // Change icon in top-right corner
+                          const Positioned(
+                            top: 8,
+                            right: 8,
+                            child: Icon(
+                              Icons.edit_rounded,
+                              color: Colors.white,
+                              size: 20,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  : Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.add_photo_alternate_outlined,
+                          size: 48,
+                          color: Colors.purple.shade400,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Select an image to analyze',
+                          style:
+                              Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    color: Colors.purple.shade700,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Tap here to choose from gallery or camera',
+                          style:
+                              Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                                  ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+            ),
+          ),
+        ).animate().fadeIn(delay: 200.ms),
+
+        const SizedBox(height: 24),
+
+        FilledButton.icon(
+          onPressed: _isAnalyzing || !_hasSelectedImage ? null : _analyzeImage,
+          icon: _isAnalyzing
+              ? SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: Theme.of(context).colorScheme.onPrimary,
+                  ),
+                )
+              : const Icon(Icons.search_rounded),
+          label: Text(_isAnalyzing ? 'Analyzing...' : 'Analyze Image'),
+          style: FilledButton.styleFrom(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            backgroundColor: Colors.purple.shade600,
+          ),
+        ).animate().fadeIn(delay: 300.ms),
+
+        const SizedBox(height: 32),
+
+        // Analysis results
+        Expanded(
+          child: _analysisResult != null
+              ? Card(
+                  child: Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.analytics_rounded,
+                              color: Colors.purple.shade600,
+                            ),
+                            const SizedBox(width: 12),
+                            Text(
+                              'Image Analysis',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .titleMedium
+                                  ?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        Expanded(
+                          child: SingleChildScrollView(
+                            child: Text(
+                              _analysisResult!,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodyLarge
+                                  ?.copyWith(
+                                    height: 1.6,
+                                  ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ).animate().fadeIn().slideY(begin: 0.2)
+              : Center(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(
+                        Icons.analytics_outlined,
+                        size: 64,
+                        color: Theme.of(context)
+                            .colorScheme
+                            .onSurfaceVariant
+                            .withValues(alpha: 0.5),
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        'Image analysis will appear here',
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSurfaceVariant,
+                            ),
+                      ),
+                    ],
+                  ),
+                ),
+        ),
+      ],
     );
   }
 
@@ -210,16 +760,104 @@ class _ImageDemoScreenState extends State<ImageDemoScreen> {
     });
 
     try {
-      // Simulate image generation
-      await Future.delayed(const Duration(seconds: 3));
+      // Create system prompt for image generation
+      final systemPrompt = AISystemPrompt(
+        context:
+            'You are an expert AI image generator. Create high-quality, detailed images based on user prompts.',
+        dateTime: DateTime.now(),
+        instructions: {
+          'provider': _selectedGenerationProvider.isNotEmpty
+              ? _selectedGenerationProvider
+              : null,
+          'model': _selectedGenerationModel.isNotEmpty
+              ? _selectedGenerationModel
+              : null,
+        },
+      );
 
-      setState(() {
-        _generatedImagePath = 'simulated_path';
-      });
+      // Set the selected provider and model if specified
+      if (_selectedGenerationProvider.isNotEmpty &&
+          _selectedGenerationModel.isNotEmpty) {
+        await AI.setModel(
+          _selectedGenerationProvider,
+          _selectedGenerationModel,
+          AICapability.imageGeneration,
+        );
+      }
+
+      // Use AI.image for real image generation
+      final response = await AI.image(
+        _promptController.text.trim(),
+        systemPrompt,
+        _saveToDevice, // Pasar el modo de guardado
+      );
+
+      if (!mounted) return;
+
+      // Handle response based on save mode
+      if (_saveToDevice) {
+        // File mode: Check for saved file
+        if (response.imageFileName.isNotEmpty) {
+          setState(() {
+            _generatedImageFileName = response.imageFileName;
+            _generatedImageBase64 = null; // Clear base64 when using file
+          });
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('¡Imagen guardada en dispositivo!')),
+          );
+        } else if (response.text.isNotEmpty) {
+          // Fallback: no file saved, show text response
+          setState(() {
+            _generatedImageBase64 = null;
+            _generatedImageFileName = null;
+          });
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+                content:
+                    Text('Respuesta: ${response.text.substring(0, 100)}...')),
+          );
+        } else {
+          throw Exception('No se pudo guardar la imagen');
+        }
+      } else {
+        // Preview mode: Use base64 directly
+        if (response.imageBase64 != null && response.imageBase64!.isNotEmpty) {
+          setState(() {
+            _generatedImageBase64 = response.imageBase64!;
+            _generatedImageFileName = null; // Clear filename when using base64
+          });
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('¡Imagen generada!')),
+          );
+        } else if (response.text.isNotEmpty) {
+          // Some providers might return text with image URL or description instead
+          setState(() {
+            _generatedImageBase64 = null;
+            _generatedImageFileName = null;
+          });
+
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+                content:
+                    Text('Respuesta: ${response.text.substring(0, 100)}...')),
+          );
+        } else {
+          throw Exception('No se recibieron datos de imagen del proveedor');
+        }
+      }
     } catch (e) {
       if (!mounted) return;
+
+      setState(() {
+        _generatedImageBase64 = null;
+        _generatedImageFileName = null;
+      });
+
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error: ${e.toString()}')),
+        SnackBar(content: Text('Error generating image: ${e.toString()}')),
       );
     } finally {
       setState(() {
@@ -228,9 +866,714 @@ class _ImageDemoScreenState extends State<ImageDemoScreen> {
     }
   }
 
+  Future<void> _selectImage() async {
+    try {
+      final imageFile = await FileUtils.pickImageFile();
+
+      if (imageFile == null) {
+        // User cancelled selection
+        return;
+      }
+
+      // Get complete image information
+      final imageInfo = await FileUtils.getImageInfo(imageFile);
+
+      if (!imageInfo.isValid) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Please select a valid image file')),
+        );
+        return;
+      }
+
+      setState(() {
+        _selectedImageFile = imageInfo.file;
+        _selectedImageBase64 = imageInfo.base64;
+        _selectedImageMimeType = imageInfo.mimeType;
+        _hasSelectedImage = true;
+        _analysisResult = null; // Reset previous analysis
+      });
+
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+              'Image selected: ${imageInfo.fileName} (${imageInfo.formattedSize})'),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error selecting image: $e')),
+      );
+    }
+  }
+
+  Future<void> _analyzeImage() async {
+    // Check if we have a selected image
+    if (_selectedImageBase64 == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please select an image first')),
+      );
+      return;
+    }
+
+    setState(() {
+      _isAnalyzing = true;
+    });
+
+    try {
+      // Create system prompt for image analysis
+      final systemPrompt = AISystemPrompt(
+        context:
+            'You are an expert image analysis AI. Provide detailed, accurate analysis of images.',
+        dateTime: DateTime.now(),
+        instructions: {
+          'provider': _selectedAnalysisProvider.isNotEmpty
+              ? _selectedAnalysisProvider
+              : null,
+          'model':
+              _selectedAnalysisModel.isNotEmpty ? _selectedAnalysisModel : null,
+        },
+      );
+
+      // Set the selected provider and model if specified
+      if (_selectedAnalysisProvider.isNotEmpty &&
+          _selectedAnalysisModel.isNotEmpty) {
+        await AI.setModel(
+          _selectedAnalysisProvider,
+          _selectedAnalysisModel,
+          AICapability.imageAnalysis,
+        );
+      }
+
+      // Use AI.vision for real image analysis
+      final response = await AI.vision(
+        _selectedImageBase64!,
+        'Analyze this image in detail. Provide information about:\n'
+        '- What you see in the image (objects, scenes, people, etc.)\n'
+        '- Visual properties (colors, lighting, composition, style)\n'
+        '- Technical aspects (quality, estimated resolution)\n'
+        '- Any interesting details or insights\n\n'
+        'Format your response in a clear, structured way with sections and bullet points.',
+        systemPrompt,
+        imageMimeType: _selectedImageMimeType,
+      );
+
+      if (!mounted) return;
+
+      setState(() {
+        _analysisResult = response.text;
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Image analysis completed!')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _analysisResult = 'Error during image analysis: ${e.toString()}';
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error: ${e.toString()}')),
+      );
+    } finally {
+      setState(() {
+        _isAnalyzing = false;
+      });
+    }
+  }
+
+  Future<void> _showConfigurationDialog(BuildContext context) async {
+    await showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: const Row(
+                children: [
+                  Icon(Icons.settings_rounded, color: Colors.purple),
+                  SizedBox(width: 8),
+                  Text('AI Configuration'),
+                ],
+              ),
+              content: SizedBox(
+                width: 450,
+                height: 600,
+                child: SingleChildScrollView(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Image Processing Settings',
+                        style:
+                            Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                      ),
+                      const SizedBox(height: 24),
+
+                      // Image Generation Section
+                      _buildCapabilitySection(
+                        context: context,
+                        setDialogState: setDialogState,
+                        capability: AICapability.imageGeneration,
+                        title: 'Image Generation',
+                        icon: Icons.image_outlined,
+                        color: Colors.green,
+                        selectedProvider: _selectedGenerationProvider,
+                        selectedModel: _selectedGenerationModel,
+                        onProviderChanged: (provider) {
+                          setDialogState(() {
+                            _selectedGenerationProvider = provider;
+                            _selectedGenerationModel = '';
+                          });
+                          _autoSelectModelForProvider(
+                              provider,
+                              AICapability.imageGeneration,
+                              setDialogState,
+                              true);
+                        },
+                        onModelChanged: (model) {
+                          setDialogState(() {
+                            _selectedGenerationModel = model;
+                          });
+                        },
+                      ),
+
+                      const SizedBox(height: 32),
+                      const Divider(),
+                      const SizedBox(height: 24),
+
+                      // Image Analysis Section
+                      _buildCapabilitySection(
+                        context: context,
+                        setDialogState: setDialogState,
+                        capability: AICapability.imageAnalysis,
+                        title: 'Image Analysis',
+                        icon: Icons.analytics_outlined,
+                        color: Colors.blue,
+                        selectedProvider: _selectedAnalysisProvider,
+                        selectedModel: _selectedAnalysisModel,
+                        onProviderChanged: (provider) {
+                          setDialogState(() {
+                            _selectedAnalysisProvider = provider;
+                            _selectedAnalysisModel = '';
+                          });
+                          _autoSelectModelForProvider(
+                              provider,
+                              AICapability.imageAnalysis,
+                              setDialogState,
+                              false);
+                        },
+                        onModelChanged: (model) {
+                          setDialogState(() {
+                            _selectedAnalysisModel = model;
+                          });
+                        },
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  child: const Text('Cancel'),
+                ),
+                FilledButton(
+                  onPressed: () {
+                    setState(() {
+                      // Update main state with dialog selections
+                    });
+                    Navigator.of(context).pop();
+                  },
+                  child: const Text('Apply'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildCapabilitySection({
+    required BuildContext context,
+    required StateSetter setDialogState,
+    required AICapability capability,
+    required String title,
+    required IconData icon,
+    required Color color,
+    required String selectedProvider,
+    required String selectedModel,
+    required Function(String) onProviderChanged,
+    required Function(String) onModelChanged,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Section Header
+        Row(
+          children: [
+            Icon(icon, color: color, size: 20),
+            const SizedBox(width: 8),
+            Text(
+              title,
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: color,
+                  ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 16),
+
+        // Provider Selection
+        Builder(
+          builder: (context) {
+            try {
+              final providersInfo = AI.getAvailableProviders(capability);
+
+              if (providersInfo.isEmpty) {
+                return Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.warning_amber_rounded,
+                          color: Colors.orange.shade700, size: 16),
+                      const SizedBox(width: 8),
+                      Text(
+                        'No providers available for $title',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: Colors.orange.shade700,
+                            ),
+                      ),
+                    ],
+                  ),
+                );
+              }
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Provider',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                  ),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    initialValue:
+                        providersInfo.any((p) => p['id'] == selectedProvider)
+                            ? selectedProvider
+                            : (providersInfo.isNotEmpty
+                                ? providersInfo.first['id'] as String
+                                : null),
+                    decoration: InputDecoration(
+                      border: const OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.business_rounded, color: color),
+                    ),
+                    items: providersInfo.map((providerInfo) {
+                      final providerId = providerInfo['id'] as String;
+                      final displayName = providerInfo['displayName'] as String;
+                      return DropdownMenuItem(
+                        value: providerId,
+                        child: Text(displayName),
+                      );
+                    }).toList(),
+                    onChanged: (newProvider) {
+                      if (newProvider != null) {
+                        onProviderChanged(newProvider);
+                      }
+                    },
+                  ),
+                ],
+              );
+            } catch (e) {
+              return Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: Colors.red.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  'Error loading providers: $e',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: Colors.red.shade700,
+                      ),
+                ),
+              );
+            }
+          },
+        ),
+
+        const SizedBox(height: 16),
+
+        // Model Selection
+        if (selectedProvider.isNotEmpty)
+          FutureBuilder<List<String>>(
+            key: ValueKey('models_${selectedProvider}_$capability'),
+            future: _getModelsForProvider(selectedProvider),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) {
+                return const SizedBox(
+                  height: 40,
+                  child: Center(child: CircularProgressIndicator()),
+                );
+              }
+
+              final models = snapshot.data!;
+              if (models.isEmpty) {
+                return Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    'No models available for this provider',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Colors.orange.shade700,
+                        ),
+                  ),
+                );
+              }
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Model',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                        ),
+                  ),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    initialValue:
+                        models.contains(selectedModel) ? selectedModel : null,
+                    decoration: InputDecoration(
+                      border: const OutlineInputBorder(),
+                      prefixIcon: Icon(Icons.psychology_rounded, color: color),
+                      hintText: 'Select a model...',
+                    ),
+                    items: models.map((model) {
+                      return DropdownMenuItem(
+                        value: model,
+                        child: Text(model),
+                      );
+                    }).toList(),
+                    onChanged: (newModel) {
+                      if (newModel != null) {
+                        onModelChanged(newModel);
+                      }
+                    },
+                  ),
+                ],
+              );
+            },
+          ),
+
+        const SizedBox(height: 16),
+
+        // Current Configuration Info
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.1),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Current Configuration',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: color,
+                    ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Provider: ${_formatProviderName(selectedProvider)}',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              Text(
+                'Model: ${selectedModel.isEmpty ? "Default" : selectedModel}',
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _autoSelectModelForProvider(
+      String providerId,
+      AICapability capability,
+      StateSetter setDialogState,
+      bool isGeneration) async {
+    try {
+      final defaultModel =
+          await AI.getDefaultModelForProvider(providerId, capability);
+      if (defaultModel != null) {
+        setDialogState(() {
+          if (isGeneration) {
+            _selectedGenerationModel = defaultModel;
+          } else {
+            _selectedAnalysisModel = defaultModel;
+          }
+        });
+      }
+    } catch (e) {
+      debugPrint('Error auto-selecting model: $e');
+    }
+  }
+
+  Future<List<String>> _getModelsForProvider(String providerId) async {
+    try {
+      final models = await AI.getAvailableModels(providerId);
+      return models;
+    } catch (e) {
+      debugPrint('Error getting models for provider $providerId: $e');
+      return [];
+    }
+  }
+
+  String _formatProviderName(String providerId) {
+    try {
+      // Try to get display name from image generation providers first
+      final generationProviders =
+          AI.getAvailableProviders(AICapability.imageGeneration);
+      final providerInfo = generationProviders.firstWhere(
+        (provider) => provider['id'] == providerId,
+        orElse: () => {},
+      );
+
+      if (providerInfo.isNotEmpty) {
+        return providerInfo['displayName'] ?? providerId;
+      }
+
+      // If not found, try image analysis providers
+      final analysisProviders =
+          AI.getAvailableProviders(AICapability.imageAnalysis);
+      final analysisProviderInfo = analysisProviders.firstWhere(
+        (provider) => provider['id'] == providerId,
+        orElse: () => {},
+      );
+
+      return analysisProviderInfo['displayName'] ?? providerId;
+    } catch (e) {
+      return providerId;
+    }
+  }
+
+  void _showImagePreview(BuildContext context) {
+    if (_selectedImageFile == null) return;
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          child: Stack(
+            children: [
+              // Background tap to close
+              Positioned.fill(
+                child: GestureDetector(
+                  onTap: () => Navigator.of(context).pop(),
+                  child: Container(color: Colors.transparent),
+                ),
+              ),
+              // Image preview
+              Center(
+                child: Container(
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.of(context).size.height * 0.8,
+                    maxWidth: MediaQuery.of(context).size.width * 0.9,
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: Image.file(
+                      _selectedImageFile!,
+                      fit: BoxFit.contain,
+                    ),
+                  ),
+                ),
+              ),
+              // Close button
+              Positioned(
+                top: 40,
+                right: 20,
+                child: IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(
+                    Icons.close_rounded,
+                    color: Colors.white,
+                    size: 32,
+                  ),
+                  style: IconButton.styleFrom(
+                    backgroundColor: Colors.black54,
+                    shape: const CircleBorder(),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showGeneratedImagePreview(BuildContext context) {
+    if (_generatedImageBase64 == null && _generatedImageFileName == null) {
+      return;
+    }
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return Dialog(
+          backgroundColor: Colors.transparent,
+          child: Stack(
+            children: [
+              // Background tap to close
+              Positioned.fill(
+                child: GestureDetector(
+                  onTap: () => Navigator.of(context).pop(),
+                  child: Container(color: Colors.transparent),
+                ),
+              ),
+              // Image preview
+              Center(
+                child: Container(
+                  constraints: BoxConstraints(
+                    maxHeight: MediaQuery.of(context).size.height * 0.8,
+                    maxWidth: MediaQuery.of(context).size.width * 0.9,
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(16),
+                    child: _generatedImageBase64 != null
+                        ? Image.memory(
+                            base64Decode(_generatedImageBase64!),
+                            fit: BoxFit.contain,
+                          )
+                        : _generatedImageFileName != null
+                            ? FutureBuilder<File>(
+                                future: _loadImageFromCache(
+                                    _generatedImageFileName!),
+                                builder: (context, snapshot) {
+                                  if (snapshot.hasData &&
+                                      snapshot.data!.existsSync()) {
+                                    return Image.file(
+                                      snapshot.data!,
+                                      fit: BoxFit.contain,
+                                    );
+                                  } else {
+                                    return Container(
+                                      padding: const EdgeInsets.all(20),
+                                      child: const Center(
+                                        child: CircularProgressIndicator(),
+                                      ),
+                                    );
+                                  }
+                                },
+                              )
+                            : Container(),
+                  ),
+                ),
+              ),
+              // Close button
+              Positioned(
+                top: 40,
+                right: 20,
+                child: IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(
+                    Icons.close_rounded,
+                    color: Colors.white,
+                    size: 32,
+                  ),
+                  style: IconButton.styleFrom(
+                    backgroundColor: Colors.black54,
+                    shape: const CircleBorder(),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildImageErrorWidget() {
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Colors.red.shade300,
+            Colors.red.shade500,
+          ],
+        ),
+      ),
+      child: const Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.error_outline,
+              size: 64,
+              color: Colors.white,
+            ),
+            SizedBox(height: 16),
+            Text(
+              'Error displaying image',
+              style: TextStyle(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+                color: Colors.white,
+              ),
+            ),
+            SizedBox(height: 8),
+            Text(
+              'Tap to retry',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.white70,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<File> _loadImageFromCache(String fileName) async {
+    // Try to load from cache directory
+    final cacheDir =
+        Directory('/tmp/ai_providers_cache/images'); // Simplified path
+    return File('${cacheDir.path}/$fileName');
+  }
+
   @override
   void dispose() {
     _promptController.dispose();
+    _tabController.dispose();
     super.dispose();
   }
 }

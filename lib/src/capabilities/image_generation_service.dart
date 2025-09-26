@@ -1,99 +1,132 @@
 import 'package:ai_providers/ai_providers.dart';
 import '../utils/logger.dart';
 
-/// Servicio concreto para generación de imágenes usando la nueva API AI
+/// 🖼️ ImageGenerationService - Servicio completo de generación de imágenes
 ///
-/// Métodos súper básicos que wrappean la nueva API AI internamente.
+/// Consolida TODA la funcionalidad de generación de imágenes:
+/// - Generación usando AI.image()
+/// - Guardado automático con MediaPersistenceService
+/// - Diferentes tipos de prompts (general, avatar, artístico)
+/// - Gestión de archivos y persistencia
+///
+/// Reemplaza múltiples servicios con funcionalidad consolidada
 class ImageGenerationService {
-  /// Genera imagen usando AI.image() internamente
-  Future<AIResponse> generateImage(final String prompt) async {
+  ImageGenerationService._();
+  static final ImageGenerationService _instance = ImageGenerationService._();
+  static ImageGenerationService get instance => _instance;
+
+  /// 🎯 MÉTODO PRINCIPAL: Generar imagen y guardar automáticamente
+  /// Este es el método principal del servicio para funcionalidad completa
+  Future<String?> generateAndSave(
+    final String prompt, {
+    final ImageType type = ImageType.general,
+    final ImageQuality quality = ImageQuality.high,
+  }) async {
+    try {
+      AILogger.d(
+        '[ImageGenerationService] 🎯 generateAndSave() - ${prompt.substring(0, prompt.length.clamp(0, 50))}...',
+      );
+
+      // Crear SystemPrompt según el tipo
+      final systemPrompt = _createSystemPrompt(type, quality);
+
+      // Generar imagen con AI.image(saveToCache: true)
+      final response = await AI.image(prompt, systemPrompt, true);
+
+      if (response.imageFileName.isNotEmpty) {
+        AILogger.d(
+          '[ImageGenerationService] ✅ Imagen guardada: ${response.imageFileName}',
+        );
+        return response.imageFileName;
+      } else {
+        AILogger.w('[ImageGenerationService] No se generó archivo de imagen');
+        return null;
+      }
+    } catch (e) {
+      AILogger.e('[ImageGenerationService] Error en generateAndSave(): $e');
+      rethrow;
+    }
+  }
+
+  /// Generar imagen usando AI.image() sin guardar (retorna base64)
+  Future<AIResponse> generateImage(
+    final String prompt, {
+    final ImageType type = ImageType.general,
+    final ImageQuality quality = ImageQuality.high,
+  }) async {
     try {
       AILogger.d(
         '[ImageGenerationService] 🖼️ Generando imagen: ${prompt.substring(0, prompt.length.clamp(0, 50))}...',
       );
 
-      // Crear un AISystemPrompt básico para generación de imágenes
-      final systemPrompt = AISystemPrompt(
-        context: {'image_type': 'general'},
-        dateTime: DateTime.now(),
-        instructions: {'quality': 'high'},
-      );
-      return await AI.image(prompt, systemPrompt);
+      final systemPrompt = _createSystemPrompt(type, quality);
+      return await AI.image(prompt, systemPrompt, false);
     } catch (e) {
       AILogger.e('[ImageGenerationService] Error generando imagen: $e');
       rethrow;
     }
   }
 
-  /// Genera avatar usando AI.image() con contexto específico para avatares
-  Future<AIResponse> generateAvatar(final String appearance) async {
+  /// Generar imagen desde base64 existente (análisis/modificación)
+  Future<AIResponse> analyzeImage(
+      final String imageBase64, final String prompt) async {
     try {
-      AILogger.d(
-        '[ImageGenerationService] 🧝‍♀️ Generando avatar: ${appearance.substring(0, appearance.length.clamp(0, 50))}...',
+      AILogger.d('[ImageGenerationService] �️ Analizando imagen...');
+
+      final systemPrompt = AISystemPrompt(
+        context: {'image_type': 'analysis'},
+        dateTime: DateTime.now(),
+        instructions: {'task': 'analysis', 'quality': 'detailed'},
       );
 
-      // Crear un AISystemPrompt específico para avatares
-      final avatarSystemPrompt = AISystemPrompt(
-        context: {'image_type': 'avatar', 'style': 'portrait'},
-        dateTime: DateTime.now(),
-        instructions: {
-          'quality': 'high',
-          'format': 'portrait',
-          'style': 'anime'
-        },
-      );
-      return await AI.image(appearance, avatarSystemPrompt);
+      return await AI.vision(imageBase64, prompt, systemPrompt);
     } catch (e) {
-      AILogger.e('[ImageGenerationService] Error generando avatar: $e');
+      AILogger.e('[ImageGenerationService] Error analizando imagen: $e');
       rethrow;
     }
   }
 
-  /// Genera imagen situacional específica para novia virtual
-  /// Combina situación y emoción para contexto de pareja
-  Future<AIResponse> generateSituationalImage(
-      final String situation, final String emotion) async {
-    try {
-      AILogger.d(
-          '[ImageGenerationService] 💕 Generando imagen situacional: $situation con $emotion');
+  // === MÉTODOS PRIVADOS ===
 
-      final prompt = '$situation with $emotion emotion';
-      // Crear un AISystemPrompt específico para imágenes situacionales
-      final situationalSystemPrompt = AISystemPrompt(
-        context: {'image_type': 'situational', 'emotion': emotion},
-        dateTime: DateTime.now(),
-        instructions: {'quality': 'high', 'context': 'romantic_relationship'},
-      );
-      return await AI.image(prompt, situationalSystemPrompt);
-    } catch (e) {
-      AILogger.e(
-          '[ImageGenerationService] Error generando imagen situacional: $e');
-      rethrow;
+  AISystemPrompt _createSystemPrompt(ImageType type, ImageQuality quality) {
+    final Map<String, dynamic> context = {'image_type': type.name};
+    final Map<String, dynamic> instructions = {'quality': quality.name};
+
+    // Añadir instrucciones específicas según el tipo
+    switch (type) {
+      case ImageType.avatar:
+        instructions.addAll({'format': 'portrait', 'style': 'character'});
+        break;
+      case ImageType.artistic:
+        instructions.addAll({'style': 'artistic', 'creativity': 'high'});
+        break;
+      case ImageType.photorealistic:
+        instructions.addAll({'style': 'photorealistic', 'detail': 'high'});
+        break;
+      case ImageType.general:
+        // Usar configuración general por defecto
+        break;
     }
-  }
 
-  /// Crea avatar desde perfil completo de novia virtual
-  /// Integra con perfil externo para generar apariencia
-  Future<AIResponse> createAvatarFromProfile(
-      final String profileAppearance) async {
-    try {
-      AILogger.d('[ImageGenerationService] 👩 Creando avatar desde perfil');
-
-      // Crear un AISystemPrompt específico para avatares desde perfiles
-      final profileAvatarSystemPrompt = AISystemPrompt(
-        context: {'image_type': 'profile_avatar', 'source': 'profile'},
-        dateTime: DateTime.now(),
-        instructions: {
-          'quality': 'high',
-          'format': 'portrait',
-          'style': 'detailed_anime'
-        },
-      );
-      return await AI.image(profileAppearance, profileAvatarSystemPrompt);
-    } catch (e) {
-      AILogger.e(
-          '[ImageGenerationService] Error creando avatar desde perfil: $e');
-      rethrow;
-    }
+    return AISystemPrompt(
+      context: context,
+      dateTime: DateTime.now(),
+      instructions: instructions,
+    );
   }
+}
+
+/// Tipos de imagen soportados
+enum ImageType {
+  general,
+  avatar,
+  artistic,
+  photorealistic,
+}
+
+/// Calidades de imagen soportadas
+enum ImageQuality {
+  standard,
+  high,
+  ultra,
 }

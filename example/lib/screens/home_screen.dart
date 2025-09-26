@@ -85,31 +85,28 @@ class HomeScreen extends StatelessWidget {
                 const SizedBox(height: 32),
 
                 // Features Grid
-                GridView.count(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  crossAxisCount: 1,
-                  mainAxisSpacing: 16,
-                  childAspectRatio: 3.5,
+                Column(
                   children: [
                     _buildFeatureCard(
                       context,
                       icon: Icons.chat_bubble_outline_rounded,
                       title: 'Text Generation',
-                      subtitle: 'GPT-4, Claude, Gemini & more',
+                      subtitle: 'Creative writing & intelligent responses',
                       color: Colors.blue,
                       onTap: () => context.go('/text'),
                       delay: 800,
                     ),
+                    const SizedBox(height: 16),
                     _buildFeatureCard(
                       context,
                       icon: Icons.image_outlined,
-                      title: 'Image Generation',
-                      subtitle: 'DALL-E, Midjourney, Stable Diffusion',
+                      title: 'Image Processing',
+                      subtitle: 'Image generation & analysis',
                       color: Colors.purple,
                       onTap: () => context.go('/image'),
                       delay: 900,
                     ),
+                    const SizedBox(height: 16),
                     _buildFeatureCard(
                       context,
                       icon: Icons.audiotrack_outlined,

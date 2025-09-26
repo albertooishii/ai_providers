@@ -11,7 +11,7 @@
 /// final textResponse = await AI.text(history, systemPrompt);
 /// final audioResponse = await AI.speak('¡Hola mundo!');
 /// final imageResponse = await AI.image('Un gato espacial');
-/// final transcription = await AI.transcribe(audioFile);
+/// final transcription = await AI.listen(audioFile);
 /// final chatResponse = await AI.chat(message, profile);
 /// ```
 ///
@@ -80,7 +80,7 @@ export 'src/models/image.dart';
 // ═══════════════════════════════════════════════════════════════════════════════
 
 /// 🚀 New AI class with ultra-clean API - ONLY PUBLIC ACCESS POINT
-/// Use AI.text(), AI.speak(), AI.image(), AI.transcribe(), etc.
+/// Use AI.text(), AI.speak(), AI.image(), AI.listen(), etc.
 export 'src/ai.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -98,7 +98,13 @@ export 'src/ai.dart';
 // Necesario para declarar variables del tipo, se crea con AI.createConversation()
 export 'src/capabilities/hybrid_conversation_service.dart';
 
-// ✅ AudioTranscriptionService - YA NO EXPORTADO (usar AI.transcribe() en su lugar)
+// ✅ AudioTranscriptionService - Para uso avanzado (grabación con streams)
+// Uso básico: AI.listen() | Uso avanzado: AudioTranscriptionService.instance
+export 'src/capabilities/audio_transcription_service.dart';
+
+// ✅ ImageGenerationService - Para uso avanzado (tipos de imagen, análisis)
+// Uso básico: AI.image() | Uso avanzado: ImageGenerationService.instance
+export 'src/capabilities/image_generation_service.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // � INTERNAL REGISTRY (NO LONGER EXPORTED)

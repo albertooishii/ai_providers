@@ -159,48 +159,47 @@ class OpenAIProvider extends BaseProvider {
             text: 'Error: Invalid or missing model for OpenAI provider');
       }
 
-      final input = <Map<String, dynamic>>[];
-      final systemPromptMap = systemPrompt.toJson();
       final enableImageGeneration =
           additionalParams?['enableImageGeneration'] == true;
 
-      // Process system prompt
-      _processAISystemPrompt(
-          systemPromptMap, enableImageGeneration, imageBase64);
-      input.add({'role': 'system', 'content': jsonEncode(systemPromptMap)});
+      // Build input string - combine system prompt and history
+      String inputText = systemPrompt.context;
 
-      // Add history
-      for (int i = 0; i < history.length; i++) {
-        input.add({
-          'role': history[i]['role'] ?? 'user',
-          'content': history[i]['content'] ?? ''
-        });
-
-        // Add image if it's the last message
-        if (imageBase64 != null &&
-            imageBase64.isNotEmpty &&
-            i == history.length - 1) {
-          input.add({
-            'role': history[i]['role'] ?? 'user',
-            'content': createImageDataUri(imageBase64, imageMimeType)
-          });
-        }
+      // Add history messages
+      for (final msg in history) {
+        inputText += '\n${msg['content'] ?? ''}';
       }
 
-      final bodyMap = {
+      final bodyMap = <String, dynamic>{
         'model': selectedModel,
-        'input': input,
-        if (enableImageGeneration)
-          'tools': [
-            {
-              'type': 'image_generation',
-              'input_fidelity': 'low',
-              'moderation': 'low',
-              'background': 'opaque'
-            },
-          ],
       };
 
+      // Different formats based on capability
+      if (enableImageGeneration) {
+        // Image generation format
+        bodyMap['input'] = inputText;
+        bodyMap['tools'] = [
+          {'type': 'image_generation'}
+        ];
+      } else if (imageBase64 != null && imageBase64.isNotEmpty) {
+        // Vision format (as per your example)
+        bodyMap['input'] = [
+          {
+            'role': 'user',
+            'content': [
+              {'type': 'input_text', 'text': inputText},
+              {
+                'type': 'input_image',
+                'image_url':
+                    'data:${imageMimeType ?? 'image/jpeg'};base64,$imageBase64'
+              }
+            ]
+          }
+        ];
+      } else {
+        // Regular text format
+        bodyMap['input'] = inputText;
+      }
       final url = Uri.parse(getEndpointUrl('chat'));
       final response = await http.Client()
           .post(url, headers: buildAuthHeaders(), body: jsonEncode(bodyMap));
@@ -218,46 +217,20 @@ class OpenAIProvider extends BaseProvider {
     }
   }
 
-  void _processAISystemPrompt(
-    final Map<String, dynamic> systemPromptMap,
-    final bool enableImageGeneration,
-    final String? imageBase64,
-  ) {
-    try {
-      // Remove recent messages from system prompt for better context management
-      _removeRecentMessages(systemPromptMap);
-    } on Exception catch (_) {}
-  }
-
-  void _removeRecentMessages(final Map<String, dynamic> map) {
-    try {
-      final keys = List<String>.from(map.keys);
-      for (final k in keys) {
-        if (k == 'recentMessages' || k == 'recent_messages') {
-          map.remove(k);
-          continue;
-        }
-        final v = map[k];
-        if (v is Map<String, dynamic>) {
-          _removeRecentMessages(v);
-        } else if (v is List) {
-          for (final item in v) {
-            if (item is Map<String, dynamic>) {
-              _removeRecentMessages(item);
-            }
-          }
-        }
-      }
-    } on Exception catch (_) {}
-  }
-
   ProviderResponse _processTextResponse(final Map<String, dynamic> data) {
     String text = '';
     String imageBase64Output = '';
     String imageId = '';
     String revisedPrompt = '';
-    final output = data['output'] ?? data['data'];
 
+    // Check for vision response format (output_text)
+    if (data['output_text'] is String) {
+      text = data['output_text'] as String;
+      return ProviderResponse(text: text);
+    }
+
+    // Check for standard output array format
+    final output = data['output'] ?? data['data'];
     if (output is List && output.isNotEmpty) {
       for (final item in output) {
         final type = item['type'];

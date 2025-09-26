@@ -10,7 +10,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### 🎉 Initial Release
 
 #### Added
-- **Unified AI Facade API** with `AI.text()`, `AI.image()`, `AI.speak()`, `AI.transcribe()` methods
+- **Unified AI Facade API** with `AI.text()`, `AI.image()`, `AI.speak()`, `AI.listen()` methods
 - **Multi-Provider Support** for OpenAI, Google AI, XAI, and Android Native providers
 - **Dynamic Provider Registry** with capability-based routing and automatic fallback
 - **Advanced Caching System** with configurable TTL and intelligent cache invalidation

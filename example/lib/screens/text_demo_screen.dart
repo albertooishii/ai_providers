@@ -451,7 +451,7 @@ class _TextDemoScreenState extends State<TextDemoScreen> {
                                 ),
                                 const SizedBox(height: 8),
                                 DropdownButtonFormField<String>(
-                                  value: providersInfo.any(
+                                  initialValue: providersInfo.any(
                                           (p) => p['id'] == _selectedProvider)
                                       ? _selectedProvider
                                       : (providersInfo.isNotEmpty
@@ -554,7 +554,7 @@ class _TextDemoScreenState extends State<TextDemoScreen> {
                               ),
                               const SizedBox(height: 8),
                               DropdownButtonFormField<String>(
-                                value: models.contains(_selectedModel)
+                                initialValue: models.contains(_selectedModel)
                                     ? _selectedModel
                                     : null,
                                 decoration: const InputDecoration(
@@ -625,11 +625,37 @@ class _TextDemoScreenState extends State<TextDemoScreen> {
                   child: const Text('Cancel'),
                 ),
                 FilledButton(
-                  onPressed: () {
-                    setState(() {
-                      // Update main state with dialog selections
-                    });
-                    Navigator.of(context).pop();
+                  onPressed: () async {
+                    final navigator = Navigator.of(context);
+                    final messenger = ScaffoldMessenger.of(context);
+
+                    try {
+                      // Save configuration to SharedPreferences
+                      if (_selectedProvider.isNotEmpty &&
+                          _selectedModel.isNotEmpty) {
+                        await AI.setModel(
+                          _selectedProvider,
+                          _selectedModel,
+                          AICapability.textGeneration,
+                        );
+                      }
+
+                      setState(() {
+                        // Update main state with dialog selections
+                      });
+
+                      navigator.pop();
+
+                      messenger.showSnackBar(
+                        const SnackBar(
+                            content: Text('Configuration saved successfully!')),
+                      );
+                    } catch (e) {
+                      messenger.showSnackBar(
+                        SnackBar(
+                            content: Text('Error saving configuration: $e')),
+                      );
+                    }
                   },
                   child: const Text('Apply'),
                 ),

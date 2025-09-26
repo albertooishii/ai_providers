@@ -9,6 +9,7 @@ import '../models/ai_provider_metadata.dart';
 import '../models/provider_response.dart';
 import '../models/ai_capability.dart';
 import '../models/ai_system_prompt.dart';
+import '../models/audio_models.dart';
 // RealtimeClient removed - replaced by HybridConversationService
 import 'package:flutter/foundation.dart';
 import 'package:flutter_tts/flutter_tts.dart';
@@ -323,6 +324,59 @@ class AndroidNativeProvider {
   bool get supportsRealtime => false;
 
   String? get defaultRealtimeModel => null;
+
+  // Voice management for Android TTS
+  Future<List<VoiceInfo>> getAvailableVoices() async {
+    try {
+      if (!_initialized) await initialize({});
+
+      // Get available voices from Flutter TTS
+      final voices = await _flutterTts.getVoices;
+      if (voices == null) return [];
+
+      return (voices as List).map((voice) {
+        final voiceMap = voice as Map<String, dynamic>;
+        return VoiceInfo(
+          id: voiceMap['name'] ?? 'unknown',
+          name: voiceMap['name'] ?? 'Unknown Voice',
+          language: voiceMap['locale'] ?? 'es-ES',
+          gender: _parseGender(voiceMap['name']),
+        );
+      }).toList();
+    } catch (e) {
+      return [
+        // Default fallback voice
+        const VoiceInfo(
+          id: 'es-ES-default',
+          name: 'Spanish Default',
+          language: 'es-ES',
+          gender: VoiceGender.neutral,
+          isDefault: true,
+        ),
+      ];
+    }
+  }
+
+  VoiceGender _parseGender(String? voiceName) {
+    if (voiceName == null) return VoiceGender.neutral;
+    final name = voiceName.toLowerCase();
+    if (name.contains('female') ||
+        name.contains('woman') ||
+        name.contains('maria')) {
+      return VoiceGender.female;
+    } else if (name.contains('male') ||
+        name.contains('man') ||
+        name.contains('juan')) {
+      return VoiceGender.male;
+    }
+    return VoiceGender.neutral;
+  }
+
+  VoiceGender getVoiceGender(final String voiceName) => _parseGender(voiceName);
+
+  List<String> getVoiceNames() => ['es-ES-default'];
+
+  bool isValidVoice(final String voiceName) => true;
 
   Future<void> dispose() async {
     _initialized = false;

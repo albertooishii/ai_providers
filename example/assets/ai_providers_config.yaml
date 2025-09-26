@@ -79,13 +79,16 @@ ai_providers:
   google:
     enabled: true
     display_name: "Google Gemini"
-    description: "Google Gemini models with multimodal capabilities"
+    description: "Google Gemini models with advanced multimodal capabilities including native TTS/STT"
     
     capabilities:
       - text_generation
       - image_generation
       - image_analysis
+      - audio_generation      # Native TTS
+      - audio_transcription   # Native STT  
       - realtime_conversation
+      - function_calling
     
     api_settings:
       base_url: "https://generativelanguage.googleapis.com"
@@ -98,6 +101,8 @@ ai_providers:
       text_generation: "gemini-2.5-flash"
       image_generation: "gemini-2.5-flash-image-preview"
       image_analysis: "gemini-2.5-flash"
+      audio_generation: "gemini-2.5-flash-tts"       # Native TTS
+      audio_transcription: "gemini-2.5-flash"        # Native STT
       realtime_conversation: "gemini-2.5-flash"
     
     # Model prefixes for automatic registration
@@ -105,25 +110,28 @@ ai_providers:
       - "gemini-"
       - "imagen-"
     
-    # API endpoints
+    # API endpoints - All using Gemini native endpoints
     endpoints:
       chat: "/v1beta/models/{model}:generateContent"
-      models: "/v1beta/models" 
-      tts_voices: "https://texttospeech.googleapis.com/v1/voices"  # Full URL for different domain
+      models: "/v1beta/models"
+      tts_generate: "/v1beta/models/{model}:generateContent"  # Native TTS
+      stt_transcribe: "/v1beta/models/{model}:generateContent" # Native STT
     
+    # Native Gemini voices (30 official voices)
     voices:
-      default: "es-ES-Neural2-A"
+      default: "Puck"  # Optimistic voice
+      tts_default: "Puck"
     
     rate_limits:
       requests_per_minute: 2000
       tokens_per_minute: 1000000
     
     configuration:
-      max_context_tokens: 1000000
+      max_context_tokens: 2000000
       max_output_tokens: 8192
       supports_streaming: true
       supports_function_calling: true
-      supports_tools: false
+      supports_tools: true
 
   xai:
     enabled: true
@@ -212,18 +220,20 @@ capability_preferences:
       - "google"
     
   image_analysis:
-    primary: "openai"
+    primary: "google"
     fallbacks:
-      - "google"
+      - "openai"
     
   audio_generation:
-    primary: "android_native"
+    primary: "google"           # Gemini native TTS
     fallbacks:
+      - "android_native"
       - "openai"
   
   audio_transcription:
-    primary: "android_native"
+    primary: "google"           # Gemini native STT
     fallbacks:
+      - "android_native"
       - "openai"
     
   realtime_conversation:

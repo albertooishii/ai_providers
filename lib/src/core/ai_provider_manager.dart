@@ -87,10 +87,6 @@ class AIProviderManager {
       // Initialize API Key Manager with effective config
       ApiKeyManager.initialize(effectiveConfig);
 
-      // Configure MediaPersistenceService with app directory
-      MediaPersistenceService.instance
-          .configureAppDirectory(effectiveConfig.appDirectoryName);
-
       // Configure internal logger
       AILogger.configure(level: _config!.globalSettings.logLevel);
 
@@ -214,6 +210,7 @@ class AIProviderManager {
     final String? imageBase64,
     final String? imageMimeType,
     final Map<String, dynamic>? additionalParams,
+    final bool saveToCache = false, // Nueva opción para guardar en caché
   }) async {
     // Wait for initialization if needed
     if (!_initialized) {
@@ -823,6 +820,24 @@ class AIProviderManager {
     }
   }
 
+  /// Saves the selected provider and model for a capability to SharedPreferences
+  Future<void> setModel(final String providerId, final String modelId,
+      final AICapability capability) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final modelKey = 'selected_model_${capability.identifier}';
+      final providerKey = 'selected_provider_${capability.identifier}';
+
+      await prefs.setString(modelKey, modelId);
+      await prefs.setString(providerKey, providerId);
+
+      AILogger.i(
+          '[AIProviderManager] setModel: saved provider $providerId and model $modelId for capability ${capability.identifier}');
+    } on Exception catch (e) {
+      AILogger.w('[AIProviderManager] setModel: failed to save prefs: $e');
+    }
+  }
+
   /// Saves the selected voice for a provider to SharedPreferences
   Future<void> setSelectedVoiceForProvider(
       final String audioProviderId, final String voiceId) async {
@@ -834,6 +849,21 @@ class AIProviderManager {
     } on Exception catch (e) {
       AILogger.w(
           '[AIProviderManager] setSelectedVoiceForProvider: failed to save prefs: $e');
+    }
+  }
+
+  /// Gets the saved voice for a provider from SharedPreferences
+  Future<String?> getSavedVoiceForProvider(final String audioProviderId) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedVoice = prefs.getString('selected_voice_$audioProviderId');
+      AILogger.i(
+          '[AIProviderManager] getSavedVoiceForProvider: loaded voice $savedVoice for provider $audioProviderId');
+      return savedVoice;
+    } on Exception catch (e) {
+      AILogger.w(
+          '[AIProviderManager] getSavedVoiceForProvider: failed to read prefs: $e');
+      return null;
     }
   }
 

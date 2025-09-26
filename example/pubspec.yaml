@@ -23,6 +23,10 @@ dependencies:
   # Environment variables
   flutter_dotenv: ^6.0.0
   
+  # File handling & image processing
+  file_picker: ^8.1.5
+  image: ^4.3.0
+  
   # Development
   flutter_lints: ^6.0.0
 

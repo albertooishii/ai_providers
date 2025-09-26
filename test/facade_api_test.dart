@@ -56,7 +56,7 @@ void main() {
   await AI.text(history, systemPrompt);
   await AI.speak('¡Hola!');
   await AI.image('Un gato espacial'); 
-  await AI.transcribe(audioFile);
+  await AI.listen(audioFile);
 
 ❌ PROHIBIDO (YA NO COMPILA):
   
@@ -79,7 +79,7 @@ void main() {
       expect(AI.text, isA<Function>());
       expect(AI.speak, isA<Function>());
       expect(AI.image, isA<Function>());
-      expect(AI.transcribe, isA<Function>());
+      expect(AI.listen, isA<Function>());
       expect(AI.generate, isA<Function>());
 
       print('✅ Todos los métodos AI.* están disponibles');

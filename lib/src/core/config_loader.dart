@@ -874,13 +874,8 @@ class AIProviderConfigLoader {
         }
       }
 
-      // Get app directory name from env or use default
-      final appDirectoryName =
-          _getEnvVar('APP_DIRECTORY_NAME', 'ai_providers_app');
-
       final initConfig = AIInitConfig(
         apiKeys: apiKeys.isNotEmpty ? apiKeys : null,
-        appDirectoryName: appDirectoryName,
       );
 
       AILogger.i(

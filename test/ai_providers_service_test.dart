@@ -16,7 +16,7 @@ void main() {
       expect(AI.text, isA<Function>());
       expect(AI.speak, isA<Function>());
       expect(AI.image, isA<Function>());
-      expect(AI.transcribe, isA<Function>());
+      expect(AI.listen, isA<Function>());
       expect(AI.generate, isA<Function>());
       expect(AI.initialize, isA<Function>());
       expect(AI.isInitialized, isA<bool>());
@@ -70,7 +70,7 @@ void main() {
   - AI.text() - Text generation
   - AI.speak() - Audio generation
   - AI.image() - Image generation  
-  - AI.transcribe() - Audio transcription
+  - AI.listen() - Audio transcription
   - AI.generate() - Universal method
   - AI.initialize() - System initialization
   - AI.isInitialized - Status check

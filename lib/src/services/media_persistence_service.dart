@@ -3,8 +3,8 @@ import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
 import 'package:path/path.dart' as p;
-import 'package:path_provider/path_provider.dart';
 import '../utils/logger.dart';
+import '../infrastructure/cache_service.dart';
 
 /// Servicio consolidado de persistencia para archivos multimedia
 /// Maneja imágenes y audio usando la misma infraestructura
@@ -14,33 +14,21 @@ class MediaPersistenceService {
   static final MediaPersistenceService _instance = MediaPersistenceService._();
   static MediaPersistenceService get instance => _instance;
 
-  // Configuración del directorio base de la aplicación
-  String _appDirectoryName = 'ai_providers_app';
-
-  /// Configura el nombre del directorio base de la aplicación
-  void configureAppDirectory(final String appName) {
-    _appDirectoryName = appName;
-  }
-
-  /// Internal method to get images directory
+  /// Internal method to get images directory (using cache)
   Future<Directory> _getImagesDir() async {
-    final documentsDir = await getApplicationDocumentsDirectory();
-    final imagesDir = Directory(
-      '${documentsDir.path}/$_appDirectoryName/images',
-    );
+    final cacheService = CompleteCacheService.instance;
+    final cacheDir = await cacheService.getCacheDirectory();
+    final imagesDir = Directory('${cacheDir.path}/images');
     if (!imagesDir.existsSync()) {
       imagesDir.createSync(recursive: true);
     }
     return imagesDir;
   }
 
-  /// Internal method to get audio directory
+  /// Internal method to get audio directory (using cache)
   Future<Directory> _getAudioDir() async {
-    final documentsDir = await getApplicationDocumentsDirectory();
-    final audioDir = Directory('${documentsDir.path}/$_appDirectoryName/audio');
-    if (!audioDir.existsSync()) {
-      audioDir.createSync(recursive: true);
-    }
+    final cacheService = CompleteCacheService.instance;
+    final audioDir = await cacheService.getAudioCacheDirectory();
     return audioDir;
   }
 

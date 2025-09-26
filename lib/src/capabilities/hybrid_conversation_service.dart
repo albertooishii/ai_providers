@@ -6,7 +6,7 @@ import '../utils/logger.dart';
 ///
 /// Servicio pragmático que orquesta la nueva API `AI.*` para conversaciones
 /// híbridas con voz (text + TTS + STT):
-/// - Combina `AI.text()` + `AI.speak()` + `AI.transcribe()`
+/// - Combina `AI.text()` + `AI.speak()` + `AI.listen()`
 /// - Maneja el flujo completo de conversación híbrida con voz
 /// - Una sola responsabilidad: conversaciones híbridas (no realtime real)
 ///
@@ -147,8 +147,8 @@ class HybridConversationService {
 
       _stateController.add(HybridConversationState.transcribing);
 
-      // Usar nueva API AI.transcribe()
-      final transcriptionResponse = await AI.transcribe(audioBase64);
+      // Usar nueva API AI.listen()
+      final transcriptionResponse = await AI.listen(audioBase64);
       final transcribedText = transcriptionResponse.text;
 
       if (transcribedText.trim().isEmpty) {

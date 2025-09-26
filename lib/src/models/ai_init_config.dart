@@ -7,30 +7,20 @@ library;
 class AIInitConfig {
   const AIInitConfig({
     this.apiKeys,
-    this.appDirectoryName = 'ai_providers_app',
   });
 
   /// Create empty configuration (useful for testing)
-  const AIInitConfig.empty()
-      : apiKeys = const {},
-        appDirectoryName = 'ai_providers_app';
+  const AIInitConfig.empty() : apiKeys = const {};
 
   /// Create configuration with specific providers
   AIInitConfig.withProviders(
-    final Map<String, List<String>> providers, {
-    final String? appDirectoryName,
-  })  : apiKeys = Map.unmodifiable(providers),
-        appDirectoryName = appDirectoryName ?? 'ai_providers_app';
+    final Map<String, List<String>> providers,
+  ) : apiKeys = Map.unmodifiable(providers);
 
   /// API keys organized by provider ID.
   /// Format: {"openai": ["key1", "key2"], "google": ["key1"]}
   /// If null, the system will try to load API keys from environment variables (.env)
   final Map<String, List<String>>? apiKeys;
-
-  /// Directory name for storing media files (images, audio).
-  /// This allows the ai_providers package to be app-agnostic.
-  /// Files will be stored in: {documents}/{appDirectoryName}/images/ and {documents}/{appDirectoryName}/audio/
-  final String appDirectoryName;
 
   /// Get API keys for a specific provider
   List<String> getApiKeysForProvider(final String providerId) {
@@ -52,19 +42,17 @@ class AIInitConfig {
           (final key, final value) => MapEntry(key, value.length),
         ) ??
         {};
-    return 'AIInitConfig(providers: $providerCounts, appDirectory: $appDirectoryName)';
+    return 'AIInitConfig(providers: $providerCounts)';
   }
 
   @override
   bool operator ==(final Object other) {
     if (identical(this, other)) return true;
-    return other is AIInitConfig &&
-        _mapEquals(other.apiKeys, apiKeys) &&
-        other.appDirectoryName == appDirectoryName;
+    return other is AIInitConfig && _mapEquals(other.apiKeys, apiKeys);
   }
 
   @override
-  int get hashCode => Object.hash(_mapHashCode(apiKeys), appDirectoryName);
+  int get hashCode => _mapHashCode(apiKeys);
 
   // Helper methods for deep map comparison
   static bool _mapEquals<K, V>(final Map<K, V>? a, final Map<K, V>? b) {

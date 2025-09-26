@@ -12,7 +12,7 @@ import 'utils/logger.dart';
 /// 🎯 Clase AI - API Principal Ultra-Directa
 ///
 /// Arquitectura estratificada:
-/// 🎮 Métodos directos: AI.text(), AI.image(), AI.vision(), AI.speak(), AI.transcribe() (capability automático)
+/// 🎮 Métodos directos: AI.text(), AI.image(), AI.vision(), AI.speak(), AI.listen() (capability automático)
 /// 🔧 Método universal: AI.generate() (capability manual)
 class AI {
   // Singleton del manager interno (oculto del usuario)
@@ -34,15 +34,33 @@ class AI {
 
   /// 🖼️ Generación de imágenes
   /// Capability automático: imageGeneration
+  ///
+  /// [systemPrompt] - Opcional. Si no se proporciona, usa configuración por defecto
+  /// [saveToCache] - Si es true, guarda la imagen en caché y devuelve imageFileName.
+  /// Si es false (por defecto), devuelve imageBase64 para uso directo.
   static Future<AIResponse> image(
-      final String prompt, final AISystemPrompt systemPrompt) async {
-    AILogger.d('[AI] 🖼️ image() - generating image: ${prompt.length} chars');
+    final String prompt, [
+    final AISystemPrompt? systemPrompt,
+    final bool saveToCache = false,
+  ]) async {
+    AILogger.d(
+        '[AI] 🖼️ image() - generating image: ${prompt.length} chars, saveToCache: $saveToCache');
     await _manager.initialize();
 
+    // Crear SystemPrompt por defecto si no se proporciona
+    final effectiveSystemPrompt = systemPrompt ??
+        AISystemPrompt(
+          context: {'task': 'image_generation'},
+          dateTime: DateTime.now(),
+          instructions: {'quality': 'high', 'style': 'general'},
+        );
+
     return _manager.sendMessage(
-        message: prompt,
-        systemPrompt: systemPrompt,
-        capability: AICapability.imageGeneration);
+      message: prompt,
+      systemPrompt: effectiveSystemPrompt,
+      capability: AICapability.imageGeneration,
+      saveToCache: saveToCache,
+    );
   }
 
   /// 👁️ Análisis de imagen/visión
@@ -50,8 +68,9 @@ class AI {
   static Future<AIResponse> vision(
     final String imageBase64,
     final String prompt,
-    final AISystemPrompt systemPrompt,
-  ) async {
+    final AISystemPrompt systemPrompt, {
+    final String? imageMimeType,
+  }) async {
     AILogger.d(
         '[AI] 👁️ vision() - analyzing image with prompt: ${prompt.length} chars');
     await _manager.initialize();
@@ -61,7 +80,7 @@ class AI {
       systemPrompt: systemPrompt,
       capability: AICapability.imageAnalysis,
       imageBase64: imageBase64,
-      imageMimeType: 'image/jpeg',
+      imageMimeType: imageMimeType ?? 'image/jpeg',
     );
   }
 
@@ -70,8 +89,13 @@ class AI {
   ///
   /// [text] - Texto a sintetizar
   /// [instructions] - Instrucciones opcionales de síntesis (voz, velocidad, etc.)
-  static Future<AIResponse> speak(final String text,
-      [final SynthesizeInstructions? instructions]) async {
+  /// [saveToCache] - Si es true, guarda el audio en caché y devuelve audioFileName.
+  /// Si es false (por defecto), devuelve audioBase64 para uso directo.
+  static Future<AIResponse> speak(
+    final String text, [
+    final SynthesizeInstructions? instructions,
+    final bool saveToCache = false,
+  ]) async {
     AILogger.d('[AI] 🎤 speak() - generating audio: ${text.length} chars');
     await _manager.initialize();
 
@@ -89,17 +113,18 @@ class AI {
     return _manager.sendMessage(
         message: text,
         systemPrompt: systemPrompt,
-        capability: AICapability.audioGeneration);
+        capability: AICapability.audioGeneration,
+        saveToCache: saveToCache);
   }
 
-  /// 🎧 Transcripción de audio/STT
+  /// 🎧 Escuchar/transcribir audio/STT
   /// Capability automático: audioTranscription
   ///
   /// [audioBase64] - Audio en formato base64 a transcribir
   /// [instructions] - Instrucciones opcionales de transcripción (idioma, formato, etc.)
-  static Future<AIResponse> transcribe(final String audioBase64,
+  static Future<AIResponse> listen(final String audioBase64,
       [final TranscribeInstructions? instructions]) async {
-    AILogger.d('[AI] 🎧 transcribe() - transcribing audio');
+    AILogger.d('[AI] 🎧 listen() - transcribing audio');
     await _manager.initialize();
 
     // Usar instrucciones por defecto si no se proporcionan
@@ -203,42 +228,6 @@ AI API Status:
     );
   }
 
-  /// 📋 Obtiene modelos cacheados por proveedor
-  static Future<List<String>?> getCachedModels({
-    required final String provider,
-    final bool forceRefresh = false,
-  }) async {
-    await _manager.initialize();
-    return _manager.cacheService
-        ?.getCachedModels(provider: provider, forceRefresh: forceRefresh);
-  }
-
-  /// 💾 Guarda modelos en caché
-  static Future<void> saveModelsToCache(
-      {required final List<String> models,
-      required final String provider}) async {
-    await _manager.initialize();
-    await _manager.cacheService
-        ?.saveModelsToCache(models: models, provider: provider);
-  }
-
-  /// 🧹 Limpia todo el caché de modelos
-  static Future<void> clearModelCache() async {
-    await _manager.initialize();
-    await _manager.cacheService?.clearAllModelsCache();
-  }
-
-  /// 📊 Obtiene el tamaño total del caché
-  static Future<int> getCacheSize() async {
-    await _manager.initialize();
-    return await _manager.cacheService?.getCacheSize() ?? 0;
-  }
-
-  /// 📏 Formatea el tamaño del caché a texto legible
-  static String formatCacheSize(final int bytes) {
-    return _manager.cacheService?.formatCacheSize(bytes) ?? '0 B';
-  }
-
   // ═══════════════════════════════════════════════════════════════════════════════
   // ⚙️ CONFIGURATION APIs
   // ═══════════════════════════════════════════════════════════════════════════════
@@ -266,25 +255,16 @@ AI API Status:
     return await _manager.getDefaultModelForProvider(providerId, capability);
   }
 
-  /// 🎯 Obtiene el modelo seleccionado para text generation (reemplaza PrefsUtils.getSelectedModel)
-  /// Este método es específicamente lo que PrefsUtils.getSelectedModel() necesita
-  static Future<String?> getSelectedModel() async {
-    await _manager.initialize();
-    return await _manager
-        .getSavedModelForCapabilityIfSupported(AICapability.textGeneration);
-  }
-
-  /// 💾 Establece el modelo seleccionado (usado desde dialogs de configuración)
+  /// 🎯 Establece proveedor y modelo para una capacidad específica
+  /// API UNIFICADA que reemplaza setSelectedModel() y setSelectedAudioProvider()
   /// Persiste la selección para que se use automáticamente en próximas sesiones
-  static Future<void> setSelectedModel(final String model) async {
+  static Future<void> setModel(
+    final String providerId,
+    final String modelId,
+    final AICapability capability,
+  ) async {
     await _manager.initialize();
-    await _manager.setSelectedModel(model, AICapability.textGeneration);
-  }
-
-  /// 🗣️ Establece el proveedor de audio seleccionado
-  static Future<void> setSelectedAudioProvider(final String provider) async {
-    await _manager.initialize();
-    await _manager.setSelectedAudioProvider(provider);
+    await _manager.setModel(providerId, modelId, capability);
   }
 
   /// 🎤 Establece la voz seleccionada para un proveedor específico
@@ -298,31 +278,6 @@ AI API Status:
   /// Usado por PreferencesManagementService para valores por defecto
   static String getDefaultAudioProvider() {
     return AIProviderConfigLoader.getDefaultAudioProvider();
-  }
-
-  /// 🏷️ Obtiene el nombre de visualización de un proveedor TTS
-  /// Usado para mostrar nombres amigables en las interfaces de usuario
-  static String getTtsProviderDisplayName(final String providerId) {
-    return AIProviderConfigLoader.getTtsProviderDisplayName(providerId);
-  }
-
-  /// 📝 Obtiene la descripción de un proveedor TTS
-  /// Usado para mostrar información detallada en las interfaces de usuario
-  static String getTtsProviderDescription(final String providerId) {
-    return AIProviderConfigLoader.getTtsProviderDescription(providerId);
-  }
-
-  /// 📋 Obtiene la plantilla de subtítulo de un proveedor TTS
-  /// Usado para mostrar información dinámica como conteo de voces
-  static String getTtsProviderSubtitleTemplate(final String providerId) {
-    return AIProviderConfigLoader.getTtsProviderSubtitleTemplate(providerId);
-  }
-
-  /// ⚠️ Obtiene el subtítulo para proveedores TTS no configurados
-  /// Usado para mostrar mensajes de estado cuando un proveedor no está disponible
-  static String getTtsProviderNotConfiguredSubtitle(final String providerId) {
-    return AIProviderConfigLoader.getTtsProviderNotConfiguredSubtitle(
-        providerId);
   }
 
   /// 🎤 Obtiene la voz por defecto para un proveedor específico
@@ -343,34 +298,26 @@ AI API Status:
     }
   }
 
-  /// 🗣️ Obtiene la voz TTS actualmente configurada
-  static Future<String?> getCurrentVoice() async {
+  /// 🎤 Obtiene la voz configurada para un proveedor específico
+  static Future<String?> getCurrentVoiceForProvider(
+      final String providerId) async {
     await _manager.initialize();
-    // TODO: Implementar método para obtener voz actual del provider configurado
-    // Por ahora retornamos la voz por defecto
-    final audioProvider = _manager
-        .getProvidersByCapability(AICapability.audioGeneration)
-        .firstOrNull;
-    if (audioProvider != null) {
-      // Aquí iría la lógica para obtener la voz configurada del provider específico
-      return 'default'; // Placeholder
+    try {
+      // Try to get saved voice from preferences
+      final savedVoice = await _manager.getSavedVoiceForProvider(providerId);
+      if (savedVoice != null && savedVoice.isNotEmpty) {
+        return savedVoice;
+      }
+
+      // Fallback to default voice from configuration
+      return getDefaultVoiceForProvider(providerId);
+    } catch (e) {
+      AILogger.w('Error getting current voice for provider $providerId: $e');
+      return getDefaultVoiceForProvider(providerId);
     }
-    return null;
   }
 
-  /// 🗣️ Obtiene todas las voces disponibles para TTS
-  static Future<List<Map<String, dynamic>>> getAvailableVoices() async {
-    await _manager.initialize();
-    final audioProvider = _manager
-        .getProvidersByCapability(AICapability.audioGeneration)
-        .firstOrNull;
-    if (audioProvider != null) {
-      return await _manager.getAvailableVoices(audioProvider);
-    }
-    return [];
-  }
-
-  /// 🔊 Obtiene todos los proveedores disponibles para TTS
+  ///  Obtiene todos los proveedores disponibles para TTS
   static List<String> getAvailableAudioProviders() {
     if (!_manager.isInitialized) return [];
     return _manager.getProvidersByCapability(AICapability.audioGeneration);
@@ -379,22 +326,6 @@ AI API Status:
   /// 🎤 Obtiene el proveedor de audio actualmente seleccionado
   static Future<String?> getCurrentAudioProvider() async {
     return await getCurrentProvider(AICapability.audioGeneration);
-  }
-
-  /// 🔍 Verifica si un proveedor específico está disponible y saludable
-  static Future<bool> isProviderHealthy(final String providerId) async {
-    await _manager.initialize();
-    final provider = _manager.providers[providerId];
-    if (provider == null) return false;
-    return await provider.isHealthy();
-  }
-
-  /// 🎯 Verifica si un proveedor soporta una capability específica
-  static bool providerSupportsCapability(
-      final String providerId, final AICapability capability) {
-    if (!_manager.isInitialized) return false;
-    final provider = _manager.providers[providerId];
-    return provider?.supportsCapability(capability) ?? false;
   }
 
   /// 🎛️ Obtiene el proveedor actualmente activo para una capability
@@ -434,25 +365,17 @@ AI API Status:
     // No need to sort again as _getProvidersForCapability already returns in fallback order
   }
 
-  /// 🗣️ Obtiene todas las voces por proveedor
-  static Future<Map<String, List<Map<String, dynamic>>>>
-      getAllVoicesByProvider() async {
+  /// 🗣️ Obtiene las voces disponibles para un proveedor específico
+  static Future<List<Map<String, dynamic>>> getVoicesForProvider(
+    final String providerId,
+  ) async {
     await _manager.initialize();
-    final result = <String, List<Map<String, dynamic>>>{};
-    final providers =
-        _manager.getProvidersByCapability(AICapability.audioGeneration);
-
-    for (final provider in providers) {
-      try {
-        final voices = await _manager.getAvailableVoices(provider);
-        if (voices.isNotEmpty) {
-          result[provider] = voices;
-        }
-      } on Exception catch (e) {
-        AILogger.w('Error getting voices for provider $provider: $e');
-      }
+    try {
+      final voices = await _manager.getAvailableVoices(providerId);
+      return voices;
+    } on Exception catch (e) {
+      AILogger.w('Error getting voices for provider $providerId: $e');
+      return [];
     }
-
-    return result;
   }
 }

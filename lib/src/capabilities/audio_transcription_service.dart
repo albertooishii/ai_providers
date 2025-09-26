@@ -12,7 +12,7 @@ import '../utils/waveform_utils.dart';
 /// 🎧 AudioTranscriptionService - Servicio completo de transcripción de audio
 ///
 /// Consolida TODA la funcionalidad de STT/transcripción:
-/// - Transcripción de archivos usando AI.transcribe()
+/// - Transcripción de archivos usando AI.listen()
 /// - Grabación de audio con transcripción en tiempo real
 /// - Gestión de permisos de micrófono
 /// - Detección automática de plataforma (móvil vs desktop)
@@ -40,12 +40,8 @@ class AudioTranscriptionService {
   final StreamController<Duration> _durationController =
       StreamController<Duration>.broadcast();
 
-  // Estado
-  String _liveTranscript = '';
-
   // Getters
   bool get isRecording => _isRecording;
-  String get liveTranscript => _liveTranscript;
   Duration get recordingDuration => _recordingDuration;
 
   // Streams
@@ -53,7 +49,7 @@ class AudioTranscriptionService {
   Stream<String> get transcriptStream => _transcriptController.stream;
   Stream<Duration> get durationStream => _durationController.stream;
 
-  /// Transcribir archivo de audio usando AI.transcribe()
+  /// Transcribir archivo de audio usando AI.listen()
   Future<AIResponse> transcribeAudioFile(final String filePath) async {
     try {
       AILogger.d(
@@ -68,8 +64,8 @@ class AudioTranscriptionService {
       final audioBytes = await File(filePath).readAsBytes();
       final base64Audio = base64Encode(audioBytes);
 
-      // 🚀 Usar nueva API AI.transcribe()
-      final response = await AI.transcribe(base64Audio);
+      // 🚀 Usar nueva API AI.listen()
+      final response = await AI.listen(base64Audio);
 
       AILogger.d(
         '[AudioTranscriptionService] ✅ Transcripción completada: ${response.text.length} chars',
@@ -87,7 +83,7 @@ class AudioTranscriptionService {
   Future<AIResponse> transcribeAudio(final String audioBase64) async {
     try {
       AILogger.d('[AudioTranscriptionService] 🎧 Transcribiendo audio base64');
-      return await AI.transcribe(audioBase64);
+      return await AI.listen(audioBase64);
     } on Exception catch (e) {
       AILogger.e('[AudioTranscriptionService] Error transcribiendo base64: $e');
       rethrow;
@@ -101,7 +97,7 @@ class AudioTranscriptionService {
         '[AudioTranscriptionService] 🎧 Transcribiendo ${audioBytes.length} bytes',
       );
       final base64Audio = base64Encode(audioBytes);
-      return await AI.transcribe(base64Audio);
+      return await AI.listen(base64Audio);
     } on Exception catch (e) {
       AILogger.e('[AudioTranscriptionService] Error transcribiendo bytes: $e');
       rethrow;
@@ -125,6 +121,39 @@ class AudioTranscriptionService {
     } on Exception catch (e) {
       AILogger.e('[AudioTranscriptionService] Error solicitando permisos: $e');
       return false;
+    }
+  }
+
+  /// 🎯 MÉTODO PRINCIPAL: Grabar y transcribir audio con duración específica
+  /// Este es el método principal del servicio para funcionalidad completa STT
+  Future<String?> recordAndTranscribe(
+      {Duration duration = const Duration(seconds: 5)}) async {
+    try {
+      AILogger.d(
+          '[AudioTranscriptionService] 🎯 recordAndTranscribe($duration) iniciado');
+
+      // Verificar permisos
+      if (!await hasPermissions()) {
+        throw Exception('Permisos de micrófono denegados');
+      }
+
+      // Iniciar grabación
+      await startRecording();
+
+      // Esperar la duración especificada
+      await Future.delayed(duration);
+
+      // Detener y transcribir
+      final transcript = await stopRecording();
+
+      AILogger.d(
+          '[AudioTranscriptionService] ✅ recordAndTranscribe completado: $transcript');
+      return transcript;
+    } catch (e) {
+      AILogger.e(
+          '[AudioTranscriptionService] Error en recordAndTranscribe(): $e');
+      await cancelRecording(); // Limpiar en caso de error
+      rethrow;
     }
   }
 
@@ -257,21 +286,15 @@ class AudioTranscriptionService {
 
   void _resetRecordingState() {
     _recordingDuration = Duration.zero;
-    _liveTranscript = '';
     _durationController.add(Duration.zero);
     _transcriptController.add('');
     _waveformController.add(<int>[]);
   }
 
   void _updateLiveTranscript() {
-    // En implementación real, esto vendría del STT en tiempo real
-    // Por ahora es un placeholder que simula palabras apareciendo
-    if (_recordingDuration.inSeconds > 1 &&
-        _recordingDuration.inSeconds % 2 == 0) {
-      _liveTranscript +=
-          _recordingDuration.inSeconds <= 5 ? 'transcribiendo... ' : '';
-      _transcriptController.add(_liveTranscript);
-    }
+    // Actualizar el transcript placeholder durante la grabación
+    // En implementación real, esto vendría del STT en streaming
+    _transcriptController.add('Grabando... ${_recordingDuration.inSeconds}s');
   }
 
   void _cleanupAudioFile(final String filePath) {

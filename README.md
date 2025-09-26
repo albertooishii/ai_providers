@@ -48,7 +48,7 @@ final imageResponse = await AI.image('A beautiful sunset over mountains');
 final audioResponse = await AI.speak('Hello world');
 
 // Speech-to-text  
-final transcription = await AI.transcribe(audioBase64);
+final transcription = await AI.listen(audioBase64);
 ```
 
 ## 🏗️ **Architecture Overview**
@@ -57,10 +57,11 @@ final transcription = await AI.transcribe(audioBase64);
 
 ```dart
 // ✅ Clean API - Only this is exposed
-AI.text()      // Text generation
-AI.image()     // Image generation  
-AI.speak()     // Audio generation
-AI.transcribe() // Speech recognition
+AI.text()    // Text generation & chat
+AI.image()   // DALL-E & Stable Diffusion
+AI.vision()  // Image analysis & OCR
+AI.speak()   // Text to speech
+AI.listen()  // Speech recognition
 AI.generate()  // Universal method
 
 // ❌ Internal complexity hidden
