@@ -31,7 +31,6 @@ ai_providers:
       - audio_generation
       - audio_transcription
       - realtime_conversation
-      - function_calling
     
     api_settings:
       base_url: "https://api.openai.com"
@@ -88,7 +87,6 @@ ai_providers:
       - audio_generation      # Native TTS
       - audio_transcription   # Native STT  
       - realtime_conversation
-      - function_calling
     
     api_settings:
       base_url: "https://generativelanguage.googleapis.com"
@@ -101,7 +99,7 @@ ai_providers:
       text_generation: "gemini-2.5-flash"
       image_generation: "gemini-2.5-flash-image-preview"
       image_analysis: "gemini-2.5-flash"
-      audio_generation: "gemini-2.5-flash-tts"       # Native TTS
+      audio_generation: "gemini-2.5-flash-preview-tts"       # Native TTS
       audio_transcription: "gemini-2.5-flash"        # Native STT
       realtime_conversation: "gemini-2.5-flash"
     
@@ -241,3 +239,4 @@ capability_preferences:
     fallbacks:
       - "google"
       - "xai"
+    

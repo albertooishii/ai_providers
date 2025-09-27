@@ -30,8 +30,10 @@ class _AudioDemoScreenState extends State<AudioDemoScreen>
   // Tab controller to track active tab
   late TabController _tabController;
 
-  // Switch for save mode
-  bool _saveToCache = false;
+  // Generated audio state
+  String? _generatedAudioBase64;
+  String? _generatedAudioFileName;
+  bool _hasAudioGenerated = false;
 
   @override
   void initState() {
@@ -248,266 +250,361 @@ class _AudioDemoScreenState extends State<AudioDemoScreen>
   }
 
   Widget _buildTextToSpeechTab() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        TextField(
-          controller: _textController,
-          maxLines: 4,
-          decoration: InputDecoration(
-            labelText: 'Text to convert to speech',
-            hintText: 'Enter text here...',
-            border: OutlineInputBorder(
-              borderRadius: BorderRadius.circular(16),
-            ),
-            prefixIcon: const Icon(Icons.text_fields_rounded),
-          ),
-        ).animate().fadeIn(delay: 200.ms),
-
-        const SizedBox(height: 20),
-
-        // Switch para modo de guardado
-        Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    _saveToCache
-                        ? 'Guardar en dispositivo'
-                        : 'Vista previa temporal',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          color: Colors.green.shade700,
-                        ),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    _saveToCache
-                        ? 'El audio se guardará como archivo temporal en caché'
-                        : 'Solo reproducir el audio sin guardar',
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                  ),
-                ],
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          TextField(
+            controller: _textController,
+            maxLines: 4,
+            decoration: InputDecoration(
+              labelText: 'Text to convert to speech',
+              hintText: 'Enter text here...',
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(16),
               ),
+              prefixIcon: const Icon(Icons.text_fields_rounded),
             ),
-            Switch(
-              value: _saveToCache,
-              onChanged: (value) {
-                setState(() {
-                  _saveToCache = value;
-                });
-              },
-              activeTrackColor: Colors.green.shade600,
+          ).animate().fadeIn(delay: 200.ms),
+
+          const SizedBox(height: 16),
+
+          const SizedBox(height: 24),
+
+          const SizedBox(height: 24),
+
+          FilledButton.icon(
+            onPressed: _isGenerating || _textController.text.trim().isEmpty
+                ? null
+                : _generateSpeech,
+            icon: _isGenerating
+                ? SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      color: Theme.of(context).colorScheme.onPrimary,
+                    ),
+                  )
+                : const Icon(Icons.volume_up_rounded),
+            label: Text(_isGenerating ? 'Generating...' : 'Generate Speech'),
+            style: FilledButton.styleFrom(
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              backgroundColor: Colors.green.shade600,
+            ),
+          ).animate().fadeIn(delay: 300.ms),
+
+          const SizedBox(height: 32),
+
+          // Audio player area
+          if (_isGenerating) ...[
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(24),
+                child: Column(
+                  children: [
+                    AnimatedBuilder(
+                      animation: _waveController,
+                      builder: (context, child) {
+                        return Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: List.generate(5, (index) {
+                            return Container(
+                              margin: const EdgeInsets.symmetric(horizontal: 2),
+                              height: 20 +
+                                  (20 *
+                                      (0.5 +
+                                          0.5 *
+                                              (1 +
+                                                      (index * 0.3) +
+                                                      _waveController.value)
+                                                  .sin())),
+                              width: 4,
+                              decoration: BoxDecoration(
+                                color: Colors.green.shade400,
+                                borderRadius: BorderRadius.circular(2),
+                              ),
+                            );
+                          }),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Generating audio...',
+                      style: Theme.of(context).textTheme.bodyMedium,
+                    ),
+                  ],
+                ),
+              ),
+            ).animate().fadeIn().scale(),
+          ] else if (_hasAudioGenerated) ...[
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Header
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.audiotrack_rounded,
+                          color: Colors.green.shade600,
+                        ),
+                        const SizedBox(width: 12),
+                        Text(
+                          'Generated Audio',
+                          style:
+                              Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Audio controls
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.green.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              IconButton(
+                                onPressed: _playGeneratedAudio,
+                                icon: const Icon(Icons.play_arrow_rounded),
+                                style: IconButton.styleFrom(
+                                  backgroundColor: Colors.green.shade600,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.all(16),
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              IconButton(
+                                onPressed: _pauseGeneratedAudio,
+                                icon: const Icon(Icons.pause_rounded),
+                                style: IconButton.styleFrom(
+                                  backgroundColor: Colors.orange.shade600,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.all(16),
+                                ),
+                              ),
+                              const SizedBox(width: 16),
+                              IconButton(
+                                onPressed: _stopGeneratedAudio,
+                                icon: const Icon(Icons.stop_rounded),
+                                style: IconButton.styleFrom(
+                                  backgroundColor: Colors.red.shade600,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.all(16),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+                          Text(
+                            'Audio generated and saved • Ready to play',
+                            style:
+                                Theme.of(context).textTheme.bodySmall?.copyWith(
+                                      color: Colors.green.shade700,
+                                    ),
+                          ),
+                          if (_generatedAudioFileName != null)
+                            Text(
+                              'File: ${_generatedAudioFileName!.split('/').last}',
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ).animate().fadeIn().slideY(begin: 0.2),
+          ] else ...[
+            SizedBox(
+              height: 200,
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.audiotrack_outlined,
+                      size: 64,
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onSurfaceVariant
+                          .withValues(alpha: 0.5),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Generated audio will appear here',
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
             ),
           ],
-        ).animate().fadeIn(delay: 250.ms),
 
-        const SizedBox(height: 24),
-
-        FilledButton.icon(
-          onPressed: _isGenerating || _textController.text.trim().isEmpty
-              ? null
-              : _generateSpeech,
-          icon: _isGenerating
-              ? SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Theme.of(context).colorScheme.onPrimary,
-                  ),
-                )
-              : const Icon(Icons.volume_up_rounded),
-          label: Text(_isGenerating ? 'Generating...' : 'Generate Speech'),
-          style: FilledButton.styleFrom(
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            backgroundColor: Colors.green.shade600,
-          ),
-        ).animate().fadeIn(delay: 300.ms),
-
-        const SizedBox(height: 32),
-
-        // Audio player placeholder
-        if (_isGenerating) ...[
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                children: [
-                  AnimatedBuilder(
-                    animation: _waveController,
-                    builder: (context, child) {
-                      return Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: List.generate(5, (index) {
-                          return Container(
-                            margin: const EdgeInsets.symmetric(horizontal: 2),
-                            height: 20 +
-                                (20 *
-                                    (0.5 +
-                                        0.5 *
-                                            (1 +
-                                                    (index * 0.3) +
-                                                    _waveController.value)
-                                                .sin())),
-                            width: 4,
-                            decoration: BoxDecoration(
-                              color: Colors.green.shade400,
-                              borderRadius: BorderRadius.circular(2),
-                            ),
-                          );
-                        }),
-                      );
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Generating audio...',
-                    style: Theme.of(context).textTheme.bodyMedium,
-                  ),
-                ],
-              ),
-            ),
-          ).animate().fadeIn().scale(),
-        ] else ...[
-          Expanded(
-            child: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.audiotrack_outlined,
-                    size: 64,
-                    color: Theme.of(context)
-                        .colorScheme
-                        .onSurfaceVariant
-                        .withValues(alpha: 0.5),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Generated audio will appear here',
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                  ),
-                ],
-              ),
-            ),
-          ),
+          // Add some padding at the bottom for scroll
+          const SizedBox(height: 24),
         ],
-      ],
+      ),
     );
   }
 
   Widget _buildSpeechToTextTab() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        // Recording button
-        Center(
-          child: GestureDetector(
-            onTapDown: (_) => _startRecording(),
-            onTapUp: (_) => _stopRecording(),
-            onTapCancel: () => _stopRecording(),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              width: _isRecording ? 120 : 100,
-              height: _isRecording ? 120 : 100,
-              decoration: BoxDecoration(
-                color: _isRecording ? Colors.red : Colors.green.shade600,
-                shape: BoxShape.circle,
-                boxShadow: _isRecording
-                    ? [
-                        BoxShadow(
-                          color: Colors.red.withValues(alpha: 0.3),
-                          blurRadius: 20,
-                          spreadRadius: 5,
-                        ),
-                      ]
-                    : null,
-              ),
-              child: Icon(
-                _isRecording ? Icons.stop_rounded : Icons.mic_rounded,
-                color: Colors.white,
-                size: _isRecording ? 40 : 36,
-              ),
-            ),
-          ).animate().scale(),
-        ),
-
-        const SizedBox(height: 24),
-
-        Text(
-          _isRecording ? 'Recording... (Release to stop)' : 'Hold to record',
-          textAlign: TextAlign.center,
-          style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                color: _isRecording
-                    ? Colors.red
-                    : Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-        ).animate().fadeIn(delay: 200.ms),
-
-        const SizedBox(height: 32),
-
-        // Transcription results
-        if (_transcribedText != null) ...[
-          Text(
-            'Transcription',
-            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                ),
-          ),
-          const SizedBox(height: 12),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(20),
-              child: Text(
-                _transcribedText!,
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                      height: 1.6,
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // Recording button
+          Center(
+            child: Column(
+              children: [
+                GestureDetector(
+                  onTap: _isRecording ? null : _handleRecordTap,
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    width: _isRecording ? 120 : 100,
+                    height: _isRecording ? 120 : 100,
+                    decoration: BoxDecoration(
+                      color: _isRecording ? Colors.red : Colors.green.shade600,
+                      shape: BoxShape.circle,
+                      boxShadow: _isRecording
+                          ? [
+                              BoxShadow(
+                                color: Colors.red.withValues(alpha: 0.3),
+                                blurRadius: 20,
+                                spreadRadius: 5,
+                              ),
+                            ]
+                          : null,
                     ),
-              ),
-            ),
-          ).animate().fadeIn().slideY(begin: 0.2),
-        ] else ...[
-          Expanded(
-            child: Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(
-                    Icons.mic_none_rounded,
-                    size: 64,
-                    color: Theme.of(context)
-                        .colorScheme
-                        .onSurfaceVariant
-                        .withValues(alpha: 0.5),
+                    child: Icon(
+                      _isRecording ? Icons.mic_rounded : Icons.mic_rounded,
+                      color: Colors.white,
+                      size: _isRecording ? 40 : 36,
+                    ),
                   ),
+                ).animate().scale(),
+
+                // Manual stop button (only visible when recording)
+                if (_isRecording) ...[
                   const SizedBox(height: 16),
-                  Text(
-                    'Transcribed text will appear here',
-                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          color: Theme.of(context).colorScheme.onSurfaceVariant,
-                        ),
-                  ),
+                  ElevatedButton.icon(
+                    onPressed: _stopRecordingManually,
+                    icon: const Icon(Icons.stop_rounded, size: 18),
+                    label: const Text('Stop Recording'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.orange.shade600,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                    ),
+                  ).animate().fadeIn(delay: 300.ms).slideY(begin: 0.3),
                 ],
-              ),
+              ],
             ),
           ),
+
+          const SizedBox(height: 24),
+
+          Text(
+            _isRecording
+                ? 'Recording... speak now, will auto-stop when you finish'
+                : 'Tap to record with automatic stop',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  color: _isRecording
+                      ? Colors.red
+                      : Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+          ).animate().fadeIn(delay: 200.ms),
+
+          const SizedBox(height: 32),
+
+          // Transcription results
+          if (_transcribedText != null) ...[
+            Text(
+              'Transcription',
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+            ),
+            const SizedBox(height: 12),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Text(
+                  _transcribedText!,
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        height: 1.6,
+                      ),
+                ),
+              ),
+            ).animate().fadeIn().slideY(begin: 0.2),
+          ] else ...[
+            SizedBox(
+              height: 200,
+              child: Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.mic_none_rounded,
+                      size: 64,
+                      color: Theme.of(context)
+                          .colorScheme
+                          .onSurfaceVariant
+                          .withValues(alpha: 0.5),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Transcribed text will appear here',
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                            color:
+                                Theme.of(context).colorScheme.onSurfaceVariant,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+
+          // Add some padding at the bottom for scroll
+          const SizedBox(height: 24),
         ],
-      ],
+      ),
     );
   }
 
   Future<void> _generateSpeech() async {
+    if (!mounted) return;
     setState(() {
       _isGenerating = true;
     });
-
     try {
       // Set the selected provider and model if specified
       if (_selectedTTSProvider.isNotEmpty && _selectedTTSModel.isNotEmpty) {
@@ -530,23 +627,38 @@ class _AudioDemoScreenState extends State<AudioDemoScreen>
       final response = await AI.speak(
         _textController.text.trim(),
         instructions,
-        _saveToCache, // Pasar el modo de guardado
       );
 
       if (!mounted) return;
 
-      if (response.audioBase64 != null && response.audioBase64!.isNotEmpty) {
+      // Nueva lógica simplificada: siempre disponible en ambos formatos
+      if (response.audioFileName.isNotEmpty ||
+          (response.audioBase64 != null && response.audioBase64!.isNotEmpty)) {
+        if (!mounted) return;
+        setState(() {
+          // Guardar ambos formatos - el usuario puede elegir cuál usar
+          _generatedAudioFileName =
+              response.audioFileName.isNotEmpty ? response.audioFileName : null;
+          _generatedAudioBase64 = response.audioBase64?.isNotEmpty == true
+              ? response.audioBase64
+              : null;
+          _hasAudioGenerated = true;
+        });
+
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
               content: Text(
-                  '✨ Audio generated by ${_selectedTTSProvider.toUpperCase()}!')),
+                  '🎵 Audio generado y guardado por ${_selectedTTSProvider.toUpperCase()}!')),
         );
-      } else {
+      } else if (response.text.isNotEmpty) {
+        // Fallback: mostrar respuesta de texto si no hay audio
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-              content:
-                  Text('Generated: ${response.text.substring(0, 100)}...')),
+              content: Text(
+                  'Respuesta: ${response.text.length > 100 ? '${response.text.substring(0, 100)}...' : response.text}')),
         );
+      } else {
+        throw Exception('No se recibieron datos de audio del proveedor');
       }
     } catch (e) {
       if (!mounted) return;
@@ -556,27 +668,74 @@ class _AudioDemoScreenState extends State<AudioDemoScreen>
                 Text('❌ Error with ${_selectedTTSProvider.toUpperCase()}: $e')),
       );
     } finally {
-      setState(() {
-        _isGenerating = false;
-      });
+      if (mounted) {
+        setState(() {
+          _isGenerating = false;
+        });
+      }
     }
   }
 
-  void _startRecording() {
+  Future<void> _handleRecordTap() async {
+    if (_isRecording) return;
+
+    if (!mounted) return;
     setState(() {
       _isRecording = true;
+      _transcribedText = null; // Limpiar texto anterior
     });
-  }
 
-  void _stopRecording() {
-    if (!_isRecording) return;
+    await _transcribeAudio();
 
+    if (!mounted) return;
     setState(() {
       _isRecording = false;
     });
+  }
 
-    // Start transcription process
-    _transcribeAudio();
+  /// Parar grabación manualmente usando AI.stopListen()
+  Future<void> _stopRecordingManually() async {
+    try {
+      debugPrint(
+          '[AudioDemo] 🛑 Stopping recording manually with AI.stopListen()');
+
+      // Mostrar estado de procesamiento
+      if (!mounted) return;
+      setState(() {
+        _isRecording = false;
+        _transcribedText = '🎧 Processing recorded audio...';
+      });
+
+      // Usar la nueva API AI.stopListen() para parar la grabación
+      final transcript = await AI.stopListen();
+
+      if (!mounted) return;
+      setState(() {
+        if (transcript != null && transcript.isNotEmpty) {
+          _transcribedText = transcript;
+        } else {
+          _transcribedText = 'No speech detected in recording';
+        }
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+              '🛑 Recording stopped manually by ${_selectedSTTProvider.toUpperCase()}'),
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      setState(() {
+        _isRecording = false;
+        _transcribedText = 'Error stopping recording: $e';
+      });
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('❌ Error stopping recording: $e')),
+      );
+    }
   }
 
   Future<void> _transcribeAudio() async {
@@ -590,29 +749,28 @@ class _AudioDemoScreenState extends State<AudioDemoScreen>
         );
       }
 
-      // Use AI.listen for real STT
-      // Note: In a real app, you would have actual audio data from recording
-      final mockAudioBase64 =
-          'data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABA...'; // Mock audio data
+      // Mostrar estado de procesamiento durante la grabación automática
+      if (!mounted) return;
+      setState(() {
+        _transcribedText =
+            '🎧 Processing audio... speak clearly and wait for silence detection';
+      });
 
-      final instructions = TranscribeInstructions(
-        language: 'es-ES', // Default to Spanish
-        format: 'detailed',
-        accuracy: 'high',
-        includePunctuation: true,
-      );
-
-      final response = await AI.listen(mockAudioBase64, instructions);
+      // 🎤 Usar nueva API AI.listen() completamente automático
+      final response = await AI.listen();
 
       if (!mounted) return;
-
       setState(() {
         if (response.text.isNotEmpty) {
           _transcribedText = response.text;
         } else {
           _transcribedText =
-              'Transcripción de ejemplo con ${_selectedSTTProvider.toUpperCase()}. '
-              'En una aplicación real, aquí aparecería el texto transcrito de tu audio grabado.';
+              '🔇 No se detectó audio claro durante la grabación.\n\n'
+              'Posibles causas:\n'
+              '• El micrófono no captó suficiente audio\n'
+              '• El audio fue demasiado bajo o silencioso\n'
+              '• Se detuvo antes de hablar\n\n'
+              'Intenta hablar más alto y cerca del micrófono.';
         }
       });
 
@@ -624,6 +782,7 @@ class _AudioDemoScreenState extends State<AudioDemoScreen>
     } catch (e) {
       if (!mounted) return;
 
+      if (!mounted) return;
       setState(() {
         _transcribedText =
             'Error en transcripción con ${_selectedSTTProvider.toUpperCase()}: $e\n\n'
@@ -1168,28 +1327,12 @@ class _AudioDemoScreenState extends State<AudioDemoScreen>
         }).toList();
       }
 
-      // Fallback: return mock voices based on provider if SDK method fails
-      switch (providerId.toLowerCase()) {
-        case 'google':
-          return ['Puck', 'Zephyr', 'Charon', 'Kore', 'Fenrir', 'Leda'];
-        case 'openai':
-          return ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'];
-        case 'elevenlabs':
-          return ['Rachel', 'Domi', 'Bella', 'Antoni', 'Elli', 'Josh'];
-        default:
-          return ['default'];
-      }
+      // Return empty list if no voices available
+      return [];
     } catch (e) {
       debugPrint('Error getting voices for provider $providerId: $e');
-      // Return mock voices as fallback
-      switch (providerId.toLowerCase()) {
-        case 'google':
-          return ['Puck', 'Zephyr', 'Charon', 'Kore', 'Fenrir', 'Leda'];
-        case 'openai':
-          return ['alloy', 'echo', 'fable', 'onyx', 'nova', 'shimmer'];
-        default:
-          return ['default'];
-      }
+      // Return empty list on error - let the UI handle the empty state
+      return [];
     }
   }
 
@@ -1218,6 +1361,107 @@ class _AudioDemoScreenState extends State<AudioDemoScreen>
       return sttProviderInfo['displayName'] ?? providerId;
     } catch (e) {
       return providerId.isEmpty ? 'N/A' : providerId;
+    }
+  }
+
+  /// Play the generated audio (file or base64)
+  Future<void> _playGeneratedAudio() async {
+    try {
+      if (_generatedAudioFileName != null) {
+        // Play audio file from cache using AI API
+        try {
+          // Re-synthesize and play the same text with play=true
+          final instructions = SynthesizeInstructions(
+            voiceStyle:
+                _selectedTTSVoice.isNotEmpty ? _selectedTTSVoice : 'neutral',
+            language: 'es-ES',
+            speed: 1.0,
+            pitch: 'medium',
+          );
+
+          await AI.speak(
+            _textController.text.trim(),
+            instructions,
+            true, // play=true para reproducción automática
+          );
+        } catch (e) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('❌ Error playing audio: $e')),
+          );
+        }
+      } else if (_generatedAudioBase64 != null) {
+        // Use AI.transcribe() to process base64 audio if needed
+        // For playback, re-synthesize using AI.speak() with play=true
+        try {
+          final instructions = SynthesizeInstructions(
+            voiceStyle:
+                _selectedTTSVoice.isNotEmpty ? _selectedTTSVoice : 'neutral',
+            language: 'es-ES',
+            speed: 1.0,
+            pitch: 'medium',
+          );
+
+          await AI.speak(
+            _textController.text.trim(),
+            instructions,
+            true, // play=true para reproducción automática
+          );
+        } catch (e) {
+          if (!mounted) return;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('❌ Error playing audio: $e')),
+          );
+        }
+      } else {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('❌ No audio available to play')),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('❌ Error playing audio: $e')),
+      );
+    }
+  }
+
+  /// Stop audio playback
+  Future<void> _stopGeneratedAudio() async {
+    try {
+      final success = await AI.stopSpeak();
+
+      if (!success) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('❌ Error stopping audio')),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('❌ Error stopping audio: $e')),
+      );
+    }
+  }
+
+  /// Pause audio playback
+  Future<void> _pauseGeneratedAudio() async {
+    try {
+      final success = await AI.pauseSpeak();
+
+      if (!success) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('❌ Error pausing audio')),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('❌ Error pausing audio: $e')),
+      );
     }
   }
 

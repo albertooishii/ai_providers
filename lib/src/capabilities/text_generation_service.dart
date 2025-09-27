@@ -16,20 +16,23 @@ class TextGenerationService {
   /// Método de integración principal - usado por AI.text()
   ///
   /// Recibe mismos parámetros que AI.text() y delega a AIProviderManager.
-  /// Esta es la firma EXACTA que necesita AI.text() para evitar circular dependency.
+  /// [systemPrompt] - Opcional. Si no se proporciona, usa configuración por defecto.
   Future<AIResponse> generate(
-    String message,
-    AISystemPrompt systemPrompt,
-  ) async {
+    final String message, [
+    final AISystemPrompt? systemPrompt,
+  ]) async {
     try {
       AILogger.d(
           '[TextGenerationService] 🤖 Generando texto: ${message.substring(0, message.length.clamp(0, 50))}...');
 
+      // Usar system prompt por defecto si no se proporciona
+      final effectiveSystemPrompt =
+          systemPrompt ?? _createDefaultTextSystemPrompt();
+
       // Llamar directamente a AIProviderManager (no a AI.text() para evitar circular dependency)
       return await AIProviderManager.instance.sendMessage(
         message: message,
-        systemPrompt: systemPrompt,
-        capability: AICapability.textGeneration,
+        systemPrompt: effectiveSystemPrompt,
       );
     } catch (e) {
       AILogger.e('[TextGenerationService] ❌ Error generando texto: $e');
@@ -39,9 +42,9 @@ class TextGenerationService {
 
   /// Genera texto con SystemPrompt por defecto - para casos donde se omite
   Future<AIResponse> generateWithDefaults(
-    String message, {
-    Map<String, dynamic>? context,
-    List<Map<String, dynamic>>? conversationHistory,
+    final String message, {
+    final Map<String, dynamic>? context,
+    final List<Map<String, dynamic>>? conversationHistory,
   }) async {
     try {
       AILogger.d('[TextGenerationService] 🔧 Generando con defaults...');
@@ -60,9 +63,9 @@ class TextGenerationService {
 
   /// Genera conversación con historial - para uso avanzado
   Future<AIResponse> generateWithHistory(
-    String message, {
-    AISystemPrompt? systemPrompt,
-    List<Map<String, dynamic>>? conversationHistory,
+    final String message, {
+    final AISystemPrompt? systemPrompt,
+    final List<Map<String, dynamic>>? conversationHistory,
   }) async {
     try {
       AILogger.d('[TextGenerationService] 💬 Generando con historial...');
@@ -85,8 +88,8 @@ class TextGenerationService {
 
   /// Crea SystemPrompt por defecto optimizado para generación de texto
   AISystemPrompt _createDefaultTextSystemPrompt({
-    Map<String, dynamic>? context,
-    List<Map<String, dynamic>>? conversationHistory,
+    final Map<String, dynamic>? context,
+    final List<Map<String, dynamic>>? conversationHistory,
   }) {
     final defaultContext = <String, dynamic>{
       'task': 'text_generation',

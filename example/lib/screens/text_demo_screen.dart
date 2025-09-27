@@ -630,6 +630,10 @@ class _TextDemoScreenState extends State<TextDemoScreen> {
                     final messenger = ScaffoldMessenger.of(context);
 
                     try {
+                      // Debug: Log what we're about to save
+                      debugPrint(
+                          '🔧 SAVING CONFIG: provider=$_selectedProvider, model=$_selectedModel');
+
                       // Save configuration to SharedPreferences
                       if (_selectedProvider.isNotEmpty &&
                           _selectedModel.isNotEmpty) {
@@ -638,6 +642,12 @@ class _TextDemoScreenState extends State<TextDemoScreen> {
                           _selectedModel,
                           AICapability.textGeneration,
                         );
+
+                        debugPrint(
+                            '✅ CONFIG SAVED: provider $_selectedProvider, model $_selectedModel for textGeneration');
+                      } else {
+                        debugPrint(
+                            '❌ CONFIG NOT SAVED: provider isEmpty=${_selectedProvider.isEmpty}, model isEmpty=${_selectedModel.isEmpty}');
                       }
 
                       setState(() {

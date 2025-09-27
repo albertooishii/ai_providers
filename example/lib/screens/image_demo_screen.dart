@@ -23,7 +23,6 @@ class _ImageDemoScreenState extends State<ImageDemoScreen>
   String? _generatedImageFileName;
   bool _hasSelectedImage = false;
   String? _analysisResult;
-  bool _saveToDevice = false; // Switch for save mode
 
   // Image selection for analysis
   File? _selectedImageFile;
@@ -256,67 +255,6 @@ class _ImageDemoScreenState extends State<ImageDemoScreen>
             ),
           ).animate().fadeIn(delay: 200.ms),
 
-          const SizedBox(height: 16),
-
-          // Save mode toggle
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: Colors.purple.withValues(alpha: 0.05),
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: Colors.purple.withValues(alpha: 0.2),
-                width: 1,
-              ),
-            ),
-            child: Row(
-              children: [
-                Icon(
-                  _saveToDevice ? Icons.save_rounded : Icons.preview_rounded,
-                  color: Colors.purple.shade600,
-                  size: 20,
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _saveToDevice
-                            ? 'Guardar en dispositivo'
-                            : 'Vista previa temporal',
-                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                              fontWeight: FontWeight.w600,
-                              color: Colors.purple.shade700,
-                            ),
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        _saveToDevice
-                            ? 'La imagen se guardará como archivo temporal en caché'
-                            : 'Solo mostrar la imagen sin guardar',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .onSurfaceVariant,
-                            ),
-                      ),
-                    ],
-                  ),
-                ),
-                Switch(
-                  value: _saveToDevice,
-                  onChanged: (value) {
-                    setState(() {
-                      _saveToDevice = value;
-                    });
-                  },
-                  activeTrackColor: Colors.purple.shade600,
-                ),
-              ],
-            ),
-          ).animate().fadeIn(delay: 250.ms),
-
           const SizedBox(height: 24),
 
           FilledButton.icon(
@@ -343,7 +281,7 @@ class _ImageDemoScreenState extends State<ImageDemoScreen>
           const SizedBox(height: 32),
 
           // Generated image area - Fixed height for better display
-          Container(
+          SizedBox(
             height: MediaQuery.of(context).size.height *
                 0.6, // 60% of screen height
             child: (_generatedImageBase64 != null ||
@@ -360,7 +298,7 @@ class _ImageDemoScreenState extends State<ImageDemoScreen>
                             ),
                             child: GestureDetector(
                               onTap: () => _showGeneratedImagePreview(context),
-                              child: Container(
+                              child: SizedBox(
                                 width: double.infinity,
                                 height: double.infinity,
                                 child: _generatedImageBase64 != null
@@ -419,15 +357,13 @@ class _ImageDemoScreenState extends State<ImageDemoScreen>
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(
-                                      _saveToDevice
-                                          ? '¡Imagen guardada en dispositivo!'
-                                          : '¡Imagen generada!',
-                                      style: const TextStyle(
+                                    const Text(
+                                      '¡Imagen generada y guardada!',
+                                      style: TextStyle(
                                           fontWeight: FontWeight.w600),
                                     ),
                                     Text(
-                                      'Click para vista completa • Proveedor: ${_selectedGenerationProvider.isNotEmpty ? _formatProviderName(_selectedGenerationProvider) : "Por defecto"}${_saveToDevice ? " • Guardada en caché" : " • Solo vista previa"}',
+                                      'Click para vista completa • Proveedor: ${_selectedGenerationProvider.isNotEmpty ? _formatProviderName(_selectedGenerationProvider) : "Por defecto"} • Disponible en base64 y caché',
                                       style: Theme.of(context)
                                           .textTheme
                                           .bodySmall
@@ -789,64 +725,40 @@ class _ImageDemoScreenState extends State<ImageDemoScreen>
       final response = await AI.image(
         _promptController.text.trim(),
         systemPrompt,
-        _saveToDevice, // Pasar el modo de guardado
       );
 
       if (!mounted) return;
 
-      // Handle response based on save mode
-      if (_saveToDevice) {
-        // File mode: Check for saved file
-        if (response.imageFileName.isNotEmpty) {
-          setState(() {
-            _generatedImageFileName = response.imageFileName;
-            _generatedImageBase64 = null; // Clear base64 when using file
-          });
+      // Nueva lógica simplificada: siempre disponible en ambos formatos
+      if (response.imageFileName.isNotEmpty ||
+          (response.imageBase64 != null && response.imageBase64!.isNotEmpty)) {
+        setState(() {
+          // Guardar ambos formatos - el usuario puede elegir cuál usar
+          _generatedImageFileName =
+              response.imageFileName.isNotEmpty ? response.imageFileName : null;
+          _generatedImageBase64 = response.imageBase64?.isNotEmpty == true
+              ? response.imageBase64
+              : null;
+        });
 
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('¡Imagen guardada en dispositivo!')),
-          );
-        } else if (response.text.isNotEmpty) {
-          // Fallback: no file saved, show text response
-          setState(() {
-            _generatedImageBase64 = null;
-            _generatedImageFileName = null;
-          });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+              content: Text('¡Imagen generada y guardada en caché!')),
+        );
+      } else if (response.text.isNotEmpty) {
+        // Fallback: mostrar respuesta de texto si no hay imagen
+        setState(() {
+          _generatedImageBase64 = null;
+          _generatedImageFileName = null;
+        });
 
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-                content:
-                    Text('Respuesta: ${response.text.substring(0, 100)}...')),
-          );
-        } else {
-          throw Exception('No se pudo guardar la imagen');
-        }
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+              content:
+                  Text('Respuesta: ${response.text.substring(0, 100)}...')),
+        );
       } else {
-        // Preview mode: Use base64 directly
-        if (response.imageBase64 != null && response.imageBase64!.isNotEmpty) {
-          setState(() {
-            _generatedImageBase64 = response.imageBase64!;
-            _generatedImageFileName = null; // Clear filename when using base64
-          });
-
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('¡Imagen generada!')),
-          );
-        } else if (response.text.isNotEmpty) {
-          // Some providers might return text with image URL or description instead
-          setState(() {
-            _generatedImageBase64 = null;
-            _generatedImageFileName = null;
-          });
-
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-                content:
-                    Text('Respuesta: ${response.text.substring(0, 100)}...')),
-          );
-        } else {
-          throw Exception('No se recibieron datos de imagen del proveedor');
-        }
+        throw Exception('No se recibieron datos de imagen del proveedor');
       }
     } catch (e) {
       if (!mounted) return;
@@ -957,7 +869,7 @@ class _ImageDemoScreenState extends State<ImageDemoScreen>
         '- Any interesting details or insights\n\n'
         'Format your response in a clear, structured way with sections and bullet points.',
         systemPrompt,
-        imageMimeType: _selectedImageMimeType,
+        _selectedImageMimeType,
       );
 
       if (!mounted) return;
@@ -1563,11 +1475,9 @@ class _ImageDemoScreenState extends State<ImageDemoScreen>
     );
   }
 
-  Future<File> _loadImageFromCache(String fileName) async {
-    // Try to load from cache directory
-    final cacheDir =
-        Directory('/tmp/ai_providers_cache/images'); // Simplified path
-    return File('${cacheDir.path}/$fileName');
+  Future<File> _loadImageFromCache(String filePath) async {
+    // filePath now comes as complete path from MediaPersistenceService
+    return File(filePath);
   }
 
   @override

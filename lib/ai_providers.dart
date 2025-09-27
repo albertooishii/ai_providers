@@ -110,6 +110,10 @@ export 'src/capabilities/audio_transcription_service.dart';
 // Uso básico: AI.image() | Uso avanzado: ImageGenerationService.instance
 export 'src/capabilities/image_generation_service.dart';
 
+// ✅ ImageAnalysisService - Para uso avanzado (análisis detallado de imágenes)
+// Uso básico: AI.vision() | Uso avanzado: ImageAnalysisService.instance
+export 'src/capabilities/image_analysis_service.dart';
+
 // ✅ HybridConversationService - PÚBLICO para conversación híbrida con streams
 // Necesario para declarar variables del tipo, se crea con AI.createConversation()
 export 'src/capabilities/hybrid_conversation_service.dart';

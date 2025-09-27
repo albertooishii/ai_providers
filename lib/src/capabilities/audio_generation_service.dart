@@ -2,10 +2,10 @@ import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_tts/flutter_tts.dart';
+import 'package:audioplayers/audioplayers.dart';
 
 import '../../ai_providers.dart';
 import '../core/ai_provider_manager.dart';
-import '../services/media_persistence_service.dart';
 import '../utils/logger.dart';
 
 /// 🎤 AudioGenerationService - Servicio completo de generación de audio
@@ -19,11 +19,23 @@ import '../utils/logger.dart';
 ///
 /// Reemplaza audio_service.dart (549 líneas) con funcionalidad consolidada
 class AudioGenerationService {
+  // Constructor privado con inicialización
+  AudioGenerationService._() {
+    _initializeTts();
+    _initializeAudioPlayer();
+  }
   // Sistema de reproducción REAL usando flutter_tts
   late FlutterTts _flutterTts;
   final StreamController<AudioPlaybackState> _playbackStateController =
       StreamController<AudioPlaybackState>.broadcast();
   AudioPlaybackState _currentState = AudioPlaybackState.idle;
+
+  // AudioPlayer para archivos reales
+  AudioPlayer? _audioPlayer;
+  StreamSubscription<PlayerState>? _playerStateSubscription;
+
+  // Rastrear qué tipo de reproducción está activa
+  bool _isPlayingFile = false;
 
   // Streams públicos para estado de reproducción
   Stream<AudioPlaybackState> get playbackStateStream =>
@@ -31,22 +43,17 @@ class AudioGenerationService {
   AudioPlaybackState get playbackState => _currentState;
   bool get isPlaying => _currentState == AudioPlaybackState.playing;
 
-  // Constructor privado con inicialización
-  AudioGenerationService._() {
-    _initializeTts();
-  }
-
   static final AudioGenerationService _instance = AudioGenerationService._();
   static AudioGenerationService get instance => _instance;
 
-  /// 🎯 MÉTODO DE INTEGRACIÓN - usado por AI.speak()
+  /// 🎯 MÉTODO SIMPLE - usado por AI.speak()
   ///
-  /// Recibe mismos parámetros que AI.speak() y delega a AIProviderManager.
+  /// Versión simple que siempre guarda en caché para máxima facilidad de uso.
   /// Esta es la firma EXACTA que necesita AI.speak() para evitar circular dependency.
   Future<AIResponse> synthesize(
-    String text, [
-    SynthesizeInstructions? instructions,
-    bool saveToCache = false,
+    final String text, [
+    final SynthesizeInstructions? instructions,
+    final bool play = false,
   ]) async {
     try {
       AILogger.d(
@@ -55,20 +62,65 @@ class AudioGenerationService {
       // Crear SystemPrompt con instrucciones de síntesis
       final systemPrompt = _createSynthesizeSystemPrompt(instructions);
 
-      // Llamar directamente a AIProviderManager (no a AI.speak() para evitar circular dependency)
-      return await AIProviderManager.instance.sendMessage(
+      // Llamar directamente a AIProviderManager - siempre guarda en caché para máxima flexibilidad
+      final response = await AIProviderManager.instance.sendMessage(
         message: text,
         systemPrompt: systemPrompt,
         capability: AICapability.audioGeneration,
-        saveToCache: saveToCache,
+        saveToCache: true,
       );
+
+      // Si play=true, reproducir automáticamente el audio generado
+      if (play && response.audioFileName.isNotEmpty) {
+        unawaited(playAudioFile(response.audioFileName));
+      }
+
+      return response;
     } catch (e) {
       AILogger.e('[AudioGenerationService] ❌ Error sintetizando audio: $e');
       rethrow;
     }
   }
 
-  /// Genera audio/TTS usando AI.speak() (simplificado)
+  /// 🎨 MÉTODO AVANZADO - Con control completo de configuración
+  ///
+  /// Permite control total sobre instrucciones, caché y reproducción automática.
+  /// Para uso avanzado cuando se necesita control específico.
+  Future<AIResponse> synthesizeAdvanced(
+    final String text, {
+    final SynthesizeInstructions? instructions,
+    final bool saveToCache = true,
+    final bool play = false,
+  }) async {
+    try {
+      AILogger.d(
+          '[AudioGenerationService] 🎨 Sintetizando audio (avanzado): ${text.substring(0, text.length.clamp(0, 50))}... (saveToCache: $saveToCache, play: $play)');
+
+      // Crear SystemPrompt con instrucciones de síntesis
+      final systemPrompt = _createSynthesizeSystemPrompt(instructions);
+
+      // Llamar directamente a AIProviderManager con control completo
+      final response = await AIProviderManager.instance.sendMessage(
+        message: text,
+        systemPrompt: systemPrompt,
+        capability: AICapability.audioGeneration,
+        saveToCache: saveToCache,
+      );
+
+      // Si play=true, reproducir automáticamente el audio generado
+      if (play && response.audioFileName.isNotEmpty) {
+        unawaited(playAudioFile(response.audioFileName));
+      }
+
+      return response;
+    } catch (e) {
+      AILogger.e('[AudioGenerationService] ❌ Error en synthesizeAdvanced: $e');
+      rethrow;
+    }
+  }
+
+  /// Genera audio/TTS simplificado (wrapper para compatibilidad)
+  /// DEPRECATED: Usar synthesize() directamente
   Future<String?> synthesizeTts(
     final String text, {
     final String? languageCode,
@@ -80,32 +132,10 @@ class AudioGenerationService {
         return null;
       }
 
-      AILogger.d(
-          '[AudioGenerationService] 🎤 Generando TTS: ${text.substring(0, text.length.clamp(0, 50))}...');
+      // Usar synthesize() directamente - más eficiente y sin duplicación
+      final response = await synthesize(text);
 
-      // 🚀 Usar nuestro método de integración (no AI.speak() para evitar circular)
-      final response = await synthesize(text, null, true);
-
-      // Si hay archivo de audio, devolverlo
-      if (response.audioFileName.isNotEmpty) {
-        AILogger.d(
-            '[AudioGenerationService] ✅ TTS generado: ${response.audioFileName}');
-        return response.audioFileName;
-      }
-
-      // Si hay audioBase64 (de providers IA), guardarlo con MediaPersistenceService
-      if (response.audioBase64 != null && response.audioBase64!.isNotEmpty) {
-        final savedFileName = await MediaPersistenceService.instance
-            .saveBase64Audio(response.audioBase64!);
-        if (savedFileName != null) {
-          AILogger.d(
-              '[AudioGenerationService] ✅ Audio IA guardado: $savedFileName');
-          return savedFileName;
-        }
-      }
-
-      AILogger.w('[AudioGenerationService] No se pudo generar audio');
-      return null;
+      return response.audioFileName.isNotEmpty ? response.audioFileName : null;
     } on Exception catch (e) {
       AILogger.e('[AudioGenerationService] Error generando TTS: $e');
       return null;
@@ -130,13 +160,14 @@ class AudioGenerationService {
       AILogger.d('[AudioGenerationService] TTS completado');
     });
 
-    _flutterTts.setErrorHandler((msg) {
+    _flutterTts.setErrorHandler((final msg) {
       _updateState(AudioPlaybackState.error);
       AILogger.e('[AudioGenerationService] Error TTS: $msg');
     });
   }
 
-  /// Sintetizar y reproducir inmediatamente - SDK COMPLETO
+  /// Sintetizar y reproducir inmediatamente (wrapper para compatibilidad)
+  /// DEPRECATED: Usar synthesize(text, instructions, play: true) directamente
   Future<bool> synthesizeAndPlay(
     final String text, {
     final String? languageCode,
@@ -145,17 +176,10 @@ class AudioGenerationService {
       AILogger.d(
           '[AudioGenerationService] 🎤🔊 SynthesizeAndPlay: ${text.substring(0, text.length.clamp(0, 50))}...');
 
-      // Generar audio usando AI.speak() (siempre hay providers)
-      final audioFile = await synthesizeTts(text, languageCode: languageCode);
+      // Usar synthesize() con play=true - más eficiente y sin duplicación
+      final response = await synthesize(text, null, true);
 
-      if (audioFile != null) {
-        // Reproducir el archivo generado
-        return await playAudioFile(audioFile);
-      } else {
-        AILogger.w('[AudioGenerationService] No se pudo generar audio');
-        _updateState(AudioPlaybackState.error);
-        return false;
-      }
+      return response.audioFileName.isNotEmpty;
     } on Exception catch (e) {
       AILogger.e('[AudioGenerationService] Error en synthesizeAndPlay: $e');
       _updateState(AudioPlaybackState.error);
@@ -163,36 +187,32 @@ class AudioGenerationService {
     }
   }
 
-  // playTextDirectly() eliminado - siempre usamos providers IA
-
   /// Reproducir archivo de audio (archivos reales de providers IA)
-  Future<bool> playAudioFile(final String filePath) async {
+  Future<bool> playAudioFile(final String fileName) async {
     try {
       AILogger.d(
-          '[AudioGenerationService] 🔊 Reproduciendo archivo: $filePath');
+          '[AudioGenerationService] 🔊 Reproduciendo archivo: $fileName');
 
-      if (!File(filePath).existsSync()) {
-        AILogger.w('[AudioGenerationService] Archivo no existe: $filePath');
+      // Construct full path for audio files
+      String fullPath;
+      if (fileName.startsWith('/')) {
+        // Already a full path
+        fullPath = fileName;
+      } else {
+        // Construct path using MediaPersistenceService - need to get audio directory
+        // For now, use the standard temp cache path
+        fullPath = '/tmp/ai_providers_cache/audio/$fileName';
+      }
+
+      if (!File(fullPath).existsSync()) {
+        AILogger.w('[AudioGenerationService] Archivo no existe: $fullPath');
         return false;
       }
 
       _updateState(AudioPlaybackState.loading);
 
-      // TODO: Para soportar archivos reales necesitamos audioplayers package
-      // Por ahora, notificamos que el archivo está listo y simulamos reproducción
-      _updateState(AudioPlaybackState.playing);
-
-      AILogger.i(
-          '[AudioGenerationService] 📁 Archivo de audio listo para reproducir: $filePath');
-      AILogger.w(
-          '[AudioGenerationService] ⚠️  Necesita audioplayers package para reproducción real de archivos');
-
-      // Simular completado después de un segundo
-      Timer(const Duration(seconds: 1), () {
-        _updateState(AudioPlaybackState.completed);
-      });
-
-      return true;
+      // Use AudioPlayer for real file playback
+      return await _playWithAudioPlayer(fullPath);
     } on Exception catch (e) {
       AILogger.e('[AudioGenerationService] Error reproduciendo archivo: $e');
       _updateState(AudioPlaybackState.error);
@@ -203,10 +223,24 @@ class AudioGenerationService {
   /// Detener reproducción
   Future<bool> stopPlayback() async {
     try {
-      final result = await _flutterTts.stop();
+      bool success = true;
+
+      if (_isPlayingFile) {
+        // Stop AudioPlayer if playing a file
+        if (_audioPlayer != null) {
+          await _audioPlayer!.stop();
+          AILogger.d('[AudioGenerationService] AudioPlayer detenido');
+        }
+      } else {
+        // Stop TTS if playing via flutter_tts
+        final ttsResult = await _flutterTts.stop();
+        if (ttsResult != 1) success = false;
+      }
+
+      _isPlayingFile = false;
       _updateState(AudioPlaybackState.stopped);
       AILogger.d('[AudioGenerationService] Reproducción detenida');
-      return result == 1;
+      return success;
     } on Exception catch (e) {
       AILogger.e('[AudioGenerationService] Error deteniendo: $e');
       return false;
@@ -216,10 +250,23 @@ class AudioGenerationService {
   /// Pausar reproducción
   Future<bool> pausePlayback() async {
     try {
-      final result = await _flutterTts.pause();
+      bool success = true;
+
+      if (_isPlayingFile) {
+        // Pause AudioPlayer if playing a file
+        if (_audioPlayer != null) {
+          await _audioPlayer!.pause();
+          AILogger.d('[AudioGenerationService] AudioPlayer pausado');
+        }
+      } else {
+        // Pause TTS if playing via flutter_tts
+        final result = await _flutterTts.pause();
+        success = result == 1;
+      }
+
       _updateState(AudioPlaybackState.paused);
       AILogger.d('[AudioGenerationService] Reproducción pausada');
-      return result == 1;
+      return success;
     } on Exception catch (e) {
       AILogger.e('[AudioGenerationService] Error pausando: $e');
       return false;
@@ -230,7 +277,7 @@ class AudioGenerationService {
 
   /// Crea SystemPrompt para síntesis de audio con instrucciones
   AISystemPrompt _createSynthesizeSystemPrompt(
-      SynthesizeInstructions? instructions) {
+      final SynthesizeInstructions? instructions) {
     final effectiveInstructions =
         instructions ?? const SynthesizeInstructions();
 
@@ -247,15 +294,89 @@ class AudioGenerationService {
   }
 
   /// Actualizar estado de reproducción
-  void _updateState(AudioPlaybackState newState) {
+  void _updateState(final AudioPlaybackState newState) {
     _currentState = newState;
     _playbackStateController.add(newState);
     AILogger.d('[AudioGenerationService] Estado: $newState');
   }
 
+  /// Inicializar AudioPlayer
+  void _initializeAudioPlayer() {
+    try {
+      _audioPlayer = AudioPlayer();
+      _setupAudioPlayerHandlers();
+      AILogger.i(
+          '[AudioGenerationService] ✅ AudioPlayer inicializado correctamente');
+    } on Exception catch (e) {
+      AILogger.w(
+          '[AudioGenerationService] ⚠️  Error inicializando AudioPlayer: $e');
+    }
+  }
+
+  /// Configurar handlers de AudioPlayer
+  void _setupAudioPlayerHandlers() {
+    if (_audioPlayer == null) return;
+
+    _playerStateSubscription =
+        _audioPlayer!.onPlayerStateChanged.listen((final PlayerState state) {
+      switch (state) {
+        case PlayerState.playing:
+          _updateState(AudioPlaybackState.playing);
+          break;
+        case PlayerState.paused:
+          _updateState(AudioPlaybackState.paused);
+          break;
+        case PlayerState.stopped:
+          _isPlayingFile = false;
+          _updateState(AudioPlaybackState.stopped);
+          break;
+        case PlayerState.completed:
+          _isPlayingFile = false;
+          _updateState(AudioPlaybackState.completed);
+          break;
+        case PlayerState.disposed:
+          _isPlayingFile = false;
+          _updateState(AudioPlaybackState.idle);
+          break;
+      }
+    });
+  }
+
+  /// Reproducir con AudioPlayer real
+  Future<bool> _playWithAudioPlayer(final String fullPath) async {
+    try {
+      if (_audioPlayer == null) {
+        _initializeAudioPlayer();
+      }
+
+      if (_audioPlayer == null) {
+        AILogger.e('[AudioGenerationService] AudioPlayer no disponible');
+        return false;
+      }
+
+      _updateState(AudioPlaybackState.loading);
+
+      // Mark that we're playing a file (not TTS)
+      _isPlayingFile = true;
+
+      // Play the audio file
+      await _audioPlayer!.play(DeviceFileSource(fullPath));
+
+      AILogger.i(
+          '[AudioGenerationService] 🎵 Reproduciendo con AudioPlayer: $fullPath');
+      return true;
+    } on Exception catch (e) {
+      AILogger.e('[AudioGenerationService] Error con AudioPlayer: $e');
+      _updateState(AudioPlaybackState.error);
+      return false;
+    }
+  }
+
   /// Limpiar recursos
   void dispose() {
     _flutterTts.stop();
+    _playerStateSubscription?.cancel();
+    _audioPlayer?.dispose();
     _playbackStateController.close();
     AILogger.d('[AudioGenerationService] Recursos liberados');
   }

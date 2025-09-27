@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 
 import '../core/provider_registry.dart';
 import '../models/provider_response.dart';
@@ -127,9 +128,6 @@ class GoogleProvider extends BaseProvider {
       case AICapability.realtimeConversation:
         return _handleRealtimeRequest(
             history, systemPrompt, model, additionalParams);
-      default:
-        return ProviderResponse(
-            text: 'Capability $capability not supported by Google provider');
     }
   }
 
@@ -196,7 +194,7 @@ class GoogleProvider extends BaseProvider {
       };
 
       final url = Uri.parse(
-          '${getEndpointUrl('chat').replaceAll('{model}', selectedModel)}');
+          getEndpointUrl('chat').replaceAll('{model}', selectedModel));
       final response = await http.Client()
           .post(url, headers: buildAuthHeaders(), body: jsonEncode(bodyMap));
 
@@ -288,7 +286,7 @@ class GoogleProvider extends BaseProvider {
         'contents': [
           {
             'parts': [
-              {'text': '$prompt'}
+              {'text': prompt}
             ]
           }
         ],
@@ -306,7 +304,7 @@ class GoogleProvider extends BaseProvider {
         return ProviderResponse(
             text: 'Error generating image: ${response.statusCode}');
       }
-    } catch (e) {
+    } on Exception catch (e) {
       AILogger.e('[GoogleProvider] Image generation failed: $e');
       return ProviderResponse(text: 'Error generating image: $e');
     }
@@ -352,9 +350,16 @@ Requirements:
       final bodyMap = {
         'contents': contents,
         'generationConfig': {
-          'maxOutputTokens': 8192,
-          'temperature':
-              0.3, // Lower temperature for consistent voice synthesis
+          'response_modalities': [
+            'AUDIO'
+          ], // Configurar para respuesta de audio
+          'speech_config': {
+            'voice_config': {
+              'prebuilt_voice_config': {
+                'voice_name': voice,
+              }
+            }
+          }
         },
       };
 
@@ -364,17 +369,44 @@ Requirements:
           .post(url, headers: buildAuthHeaders(), body: jsonEncode(bodyMap));
 
       if (isSuccessfulResponse(response.statusCode)) {
-        // For now, return success message since Gemini TTS format may vary
+        final responseBody = jsonDecode(response.body);
+
+        // Extraer audio de la respuesta de Gemini
+        String? audioBase64;
+        if (responseBody['candidates'] != null &&
+            responseBody['candidates'].isNotEmpty) {
+          final candidate = responseBody['candidates'][0];
+          if (candidate['content'] != null &&
+              candidate['content']['parts'] != null &&
+              candidate['content']['parts'].isNotEmpty) {
+            final part = candidate['content']['parts'][0];
+            if (part['inlineData'] != null &&
+                part['inlineData']['data'] != null) {
+              audioBase64 = part['inlineData']['data'];
+              AILogger.d(
+                  '[GoogleProvider] Extracted audio base64 data (${audioBase64?.length ?? 0} chars)');
+              // Debug: verify base64 starts correctly
+              if (audioBase64 != null && audioBase64.isNotEmpty) {
+                final first50 = audioBase64.length > 50
+                    ? audioBase64.substring(0, 50)
+                    : audioBase64;
+                AILogger.d('[GoogleProvider] Base64 preview: $first50...');
+              }
+            }
+          }
+        }
+
         return ProviderResponse(
-          text: 'Audio generated successfully with Gemini native TTS',
-          audioBase64:
-              '', // TODO: Extract actual audio data when format is confirmed
+          text: 'Audio generated successfully with Gemini TTS',
+          audioBase64: audioBase64 ?? '',
         );
       } else {
-        return ProviderResponse(
-            text: 'Error generating audio: ${response.statusCode}');
+        AILogger.e(
+            '[GoogleProvider] Audio generation failed with HTTP ${response.statusCode}: ${response.body}');
+        throw HttpException(
+            'HTTP ${response.statusCode}: ${response.reasonPhrase ?? 'Audio generation failed'}');
       }
-    } catch (e) {
+    } on Exception catch (e) {
       AILogger.e('[GoogleProvider] TTS request failed: $e');
       return ProviderResponse(text: 'Error connecting to Gemini TTS: $e');
     }
@@ -436,7 +468,7 @@ Requirements:
         return ProviderResponse(
             text: 'Error transcribing audio: ${response.statusCode}');
       }
-    } catch (e) {
+    } on Exception catch (e) {
       AILogger.e('[GoogleProvider] STT request failed: $e');
       return ProviderResponse(text: 'Error connecting to Gemini STT: $e');
     }

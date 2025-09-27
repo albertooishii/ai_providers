@@ -1,20 +1,17 @@
 /// 🚀 Nueva API Ultra-Limpia para AI Providers
-/// Reemplaza el horrible AIProviderManager.instance con algo elegante y directo
 library;
 
-import 'dart:io';
 import 'package:ai_providers/ai_providers.dart';
 
 import 'core/ai_provider_manager.dart';
 import 'core/config_loader.dart';
-import 'capabilities/text_generation_service.dart';
-import 'capabilities/audio_generation_service.dart';
+import 'models/ai_user_preferences.dart';
 import 'utils/logger.dart';
 
 /// 🎯 Clase AI - API Principal Ultra-Directa
 ///
 /// Arquitectura estratificada:
-/// 🎮 Métodos directos: AI.text(), AI.image(), AI.vision(), AI.speak(), AI.listen() (capability automático)
+/// 🎮 Métodos directos: AI.text(), AI.image(), AI.vision(), AI.speak(), AI.listen() (con detección de silencio), AI.transcribe() (capability automático)
 /// 🔧 Método universal: AI.generate() (capability manual)
 class AI {
   // Singleton del manager interno (oculto del usuario)
@@ -26,8 +23,10 @@ class AI {
 
   /// 💬 Generación de texto/conversación
   /// Capability automático: textGeneration
-  static Future<AIResponse> text(
-      final String message, final AISystemPrompt systemPrompt) async {
+  ///
+  /// [systemPrompt] - Opcional. Si no se proporciona, usa configuración por defecto
+  static Future<AIResponse> text(final String message,
+      [final AISystemPrompt? systemPrompt]) async {
     AILogger.d('[AI] 💬 text() - generating response: ${message.length} chars');
     await _manager.initialize();
 
@@ -38,75 +37,156 @@ class AI {
   /// 🖼️ Generación de imágenes
   /// Capability automático: imageGeneration
   ///
+  /// Siempre devuelve tanto imageBase64 como imageFileName (si se guarda en caché)
+  /// para máxima flexibilidad del usuario.
+  ///
   /// [systemPrompt] - Opcional. Si no se proporciona, usa configuración por defecto
-  /// [saveToCache] - Si es true, guarda la imagen en caché y devuelve imageFileName.
-  /// Si es false (por defecto), devuelve imageBase64 para uso directo.
   static Future<AIResponse> image(
     final String prompt, [
     final AISystemPrompt? systemPrompt,
-    final bool saveToCache = false,
   ]) async {
-    AILogger.d(
-        '[AI] 🖼️ image() - generating image: ${prompt.length} chars, saveToCache: $saveToCache');
+    AILogger.d('[AI] 🖼️ image() - generating image: ${prompt.length} chars');
     await _manager.initialize();
 
-    // Delegar a ImageGenerationService (nueva arquitectura)
-    return ImageGenerationService.instance
-        .generateImage(prompt, systemPrompt, saveToCache);
+    // Delegar a ImageGenerationService - siempre guarda en caché para flexibilidad
+    return ImageGenerationService.instance.generateImage(prompt, systemPrompt);
   }
 
   /// 👁️ Análisis de imagen/visión
   /// Capability automático: imageAnalysis
+  ///
+  /// [prompt] - Opcional. Si no se proporciona, usa 'Describe esta imagen'
+  /// [systemPrompt] - Opcional. Si no se proporciona, usa configuración por defecto
   static Future<AIResponse> vision(
-    final String imageBase64,
-    final String prompt,
-    final AISystemPrompt systemPrompt, {
+    final String imageBase64, [
+    final String? prompt,
+    final AISystemPrompt? systemPrompt,
     final String? imageMimeType,
-  }) async {
-    AILogger.d(
-        '[AI] 👁️ vision() - analyzing image with prompt: ${prompt.length} chars');
+  ]) async {
+    AILogger.d('[AI] 👁️ vision() - analyzing image');
     await _manager.initialize();
 
-    return _manager.sendMessage(
-      message: prompt,
-      systemPrompt: systemPrompt,
-      capability: AICapability.imageAnalysis,
-      imageBase64: imageBase64,
-      imageMimeType: imageMimeType ?? 'image/jpeg',
+    // Delegar a ImageAnalysisService (nueva arquitectura)
+    return ImageAnalysisService.instance.analyze(
+      imageBase64,
+      prompt,
+      systemPrompt,
+      imageMimeType,
     );
   }
 
-  /// 🎤 Síntesis de voz/TTS
+  /// 🎤 Síntesis de voz/TTS/audio
   /// Capability automático: audioGeneration
+  ///
+  /// Siempre devuelve tanto audioBase64 como audioFileName (guardado en caché)
+  /// para máxima flexibilidad del usuario.
   ///
   /// [text] - Texto a sintetizar
   /// [instructions] - Instrucciones opcionales de síntesis (voz, velocidad, etc.)
-  /// [saveToCache] - Si es true, guarda el audio en caché y devuelve audioFileName.
-  /// Si es false (por defecto), devuelve audioBase64 para uso directo.
+  /// [play] - Si es true, reproduce el audio automáticamente después de generarlo.
   static Future<AIResponse> speak(
     final String text, [
     final SynthesizeInstructions? instructions,
-    final bool saveToCache = false,
+    final bool play = false,
   ]) async {
-    AILogger.d('[AI] 🎤 speak() - generating audio: ${text.length} chars');
+    AILogger.d(
+        '[AI] 🎤 speak() - generating audio: ${text.length} chars, play: $play');
     await _manager.initialize();
 
-    // Delegar a AudioGenerationService (nueva arquitectura)
-    return AudioGenerationService.instance.synthesize(text, instructions, saveToCache);
+    // Delegar toda la lógica al AudioGenerationService - siempre guarda en caché
+    return AudioGenerationService.instance.synthesize(text, instructions, play);
   }
 
-  /// 🎧 Escuchar/transcribir audio/STT
+  /// 🎧 Escuchar/grabar y transcribir audio automáticamente
+  /// Capability automático: audioTranscription
+  ///
+  /// CASOS DE USO:
+  /// - Ultra-básico: AI.listen() - detección automática de silencio
+  /// - Tiempo fijo: AI.listen(duration: Duration(seconds: 5))
+  /// - Control fino: AI.listen(silenceTimeout: Duration(seconds: 2), autoStop: true)
+  ///
+  /// [duration] - Duración máxima de grabación (null = ilimitado hasta silencio)
+  /// [silenceTimeout] - Tiempo de silencio para auto-detención (por defecto 2 segundos)
+  /// [autoStop] - Detener automáticamente al detectar silencio (por defecto true)
+  /// [instructions] - Instrucciones opcionales de transcripción
+  static Future<AIResponse> listen({
+    final Duration? duration,
+    final Duration silenceTimeout = const Duration(seconds: 2),
+    final bool autoStop = true,
+    final TranscribeInstructions? instructions,
+  }) async {
+    // Log de configuración inteligente
+    final configLog = duration != null
+        ? 'fixed duration: ${duration.inSeconds}s'
+        : autoStop
+            ? 'auto-stop on silence (${silenceTimeout.inSeconds}s timeout)'
+            : 'manual stop only';
+
+    AILogger.d('[AI] 🎧 listen() - recording with $configLog');
+    await _manager.initialize();
+
+    // Delegar toda la lógica avanzada al AudioTranscriptionService
+    final transcript =
+        await AudioTranscriptionService.instance.recordAndTranscribe(
+      duration: duration,
+      silenceTimeout: silenceTimeout,
+      autoStop: autoStop,
+      instructions: instructions,
+    );
+
+    // Retornar AIResponse con el resultado
+    return AIResponse(
+      text: transcript ?? '',
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════════
+  // 🎛️ CONTROL Y UTILIDADES (Métodos de Control y Funciones Avanzadas)
+  // ═══════════════════════════════════════════════════════════════════════════════
+
+  /// 🛑 Detener reproducción de audio/TTS
+  /// Detiene cualquier audio que esté siendo reproducido actualmente
+  static Future<bool> stopSpeak() async {
+    AILogger.d('[AI] 🛑 stopSpeak() - stopping audio playback');
+    await _manager.initialize();
+
+    // Delegar al AudioGenerationService
+    return AudioGenerationService.instance.stopPlayback();
+  }
+
+  /// ⏸️ Pausar reproducción de audio/TTS
+  /// Pausa el audio que está siendo reproducido actualmente
+  static Future<bool> pauseSpeak() async {
+    AILogger.d('[AI] ⏸️ pauseSpeak() - pausing audio playback');
+    await _manager.initialize();
+
+    // Delegar al AudioGenerationService
+    return AudioGenerationService.instance.pausePlayback();
+  }
+
+  /// 🛑 Detener grabación de audio en curso
+  /// Detiene la grabación actual y retorna la transcripción del audio grabado hasta el momento
+  static Future<String?> stopListen() async {
+    AILogger.d('[AI] 🛑 stopListen() - stopping audio recording');
+    await _manager.initialize();
+
+    // Delegar al AudioTranscriptionService
+    return AudioTranscriptionService.instance.stopRecording();
+  }
+
+  /// 🎧 Transcribir audio existente/STT
   /// Capability automático: audioTranscription
   ///
   /// [audioBase64] - Audio en formato base64 a transcribir
   /// [instructions] - Instrucciones opcionales de transcripción (idioma, formato, etc.)
-  static Future<AIResponse> listen(final String audioBase64,
+  static Future<AIResponse> transcribe(final String audioBase64,
       [final TranscribeInstructions? instructions]) async {
-    AILogger.d('[AI] 🎧 listen() - transcribing audio');
+    AILogger.d('[AI] 🎧 transcribe() - transcribing audio');
     await _manager.initialize();
 
     // Delegar a AudioTranscriptionService (nueva arquitectura)
-    return AudioTranscriptionService.instance.transcribe(audioBase64, instructions);
+    return AudioTranscriptionService.instance
+        .transcribe(audioBase64, instructions);
   }
 
   /// 💬 Crear conversación híbrida con streams TTS/STT/respuesta
@@ -165,32 +245,6 @@ AI API Status:
   }
 
   // ═══════════════════════════════════════════════════════════════════════════════
-  // 💾 CACHE MANAGEMENT APIs
-  // ═══════════════════════════════════════════════════════════════════════════════
-
-  /// 🗂️ Obtiene archivo de audio TTS cacheado
-  static Future<File?> getCachedAudioFile({
-    required final String text,
-    required final String voice,
-    required final String languageCode,
-    required final String provider,
-    final double speakingRate = 1.0,
-    final double pitch = 0.0,
-    final String? extension,
-  }) async {
-    await _manager.initialize();
-    return _manager.cacheService?.getCachedAudioFile(
-      text: text,
-      voice: voice,
-      languageCode: languageCode,
-      provider: provider,
-      speakingRate: speakingRate,
-      pitch: pitch,
-      extension: extension,
-    );
-  }
-
-  // ═══════════════════════════════════════════════════════════════════════════════
   // ⚙️ CONFIGURATION APIs
   // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -212,7 +266,7 @@ AI API Status:
 
   /// Get the default model for a specific provider (text generation)
   static Future<String?> getDefaultModelForProvider(
-      String providerId, AICapability capability) async {
+      final String providerId, final AICapability capability) async {
     await _manager.initialize();
     return await _manager.getDefaultModelForProvider(providerId, capability);
   }
@@ -229,17 +283,35 @@ AI API Status:
     await _manager.setModel(providerId, modelId, capability);
   }
 
+  /// 🧹 Limpia la caché de texto en memoria y devuelve cuántas entradas fueron eliminadas
+  static Future<int> clearTextCache() async {
+    await _manager.initialize();
+    return _manager.clearTextCache();
+  }
+
+  /// 🧹 Limpia la caché de audio en disco y devuelve cuántos archivos fueron eliminados
+  static Future<int> clearAudioCache() async {
+    await _manager.initialize();
+    return _manager.clearAudioCache();
+  }
+
+  /// 🧹 Limpia la caché de imágenes en disco y devuelve cuántos archivos fueron eliminados
+  static Future<int> clearImageCache() async {
+    await _manager.initialize();
+    return _manager.clearImageCache();
+  }
+
+  /// 🧹 Limpia la caché de modelos persistidos y devuelve cuántos archivos fueron eliminados
+  static Future<int> clearModelsCache() async {
+    await _manager.initialize();
+    return _manager.clearModelsCache();
+  }
+
   /// 🎤 Establece la voz seleccionada para un proveedor específico
   static Future<void> setSelectedVoiceForProvider(
       final String provider, final String voice) async {
     await _manager.initialize();
     await _manager.setSelectedVoiceForProvider(provider, voice);
-  }
-
-  /// 🔊 Obtiene el proveedor de audio por defecto desde la configuración YAML
-  /// Usado por PreferencesManagementService para valores por defecto
-  static String getDefaultAudioProvider() {
-    return AIProviderConfigLoader.getDefaultAudioProvider();
   }
 
   /// 🎤 Obtiene la voz por defecto para un proveedor específico
@@ -273,27 +345,31 @@ AI API Status:
 
       // Fallback to default voice from configuration
       return getDefaultVoiceForProvider(providerId);
-    } catch (e) {
+    } on Exception catch (e) {
       AILogger.w('Error getting current voice for provider $providerId: $e');
       return getDefaultVoiceForProvider(providerId);
     }
-  }
-
-  ///  Obtiene todos los proveedores disponibles para TTS
-  static List<String> getAvailableAudioProviders() {
-    if (!_manager.isInitialized) return [];
-    return _manager.getProvidersByCapability(AICapability.audioGeneration);
-  }
-
-  /// 🎤 Obtiene el proveedor de audio actualmente seleccionado
-  static Future<String?> getCurrentAudioProvider() async {
-    return await getCurrentProvider(AICapability.audioGeneration);
   }
 
   /// 🎛️ Obtiene el proveedor actualmente activo para una capability
   static Future<String?> getCurrentProvider(
       final AICapability capability) async {
     await _manager.initialize();
+    try {
+      final savedConfig =
+          await AIUserPreferences.getConfigForCapability(capability);
+      if (savedConfig != null) {
+        final supportedProviders =
+            _manager.getProvidersByCapability(capability);
+        if (supportedProviders.contains(savedConfig.provider)) {
+          return savedConfig.provider;
+        }
+      }
+    } on Exception catch (e) {
+      AILogger.w(
+          '[AI] getCurrentProvider: failed to read user preferences for ${capability.name}: $e');
+    }
+
     return _manager.getPrimaryProvider(capability);
   }
 

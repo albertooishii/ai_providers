@@ -18,20 +18,8 @@ enum AICapability {
   /// Audio transcription capabilities (speech-to-text)
   audioTranscription,
 
-  /// Embedding generation capabilities (text embeddings, image embeddings)
-  embeddingGeneration,
-
-  /// Code generation and analysis capabilities
-  codeGeneration,
-
-  /// Function calling capabilities (structured outputs, tool use)
-  functionCalling,
-
   /// Real-time conversation capabilities
   realtimeConversation,
-
-  /// Document analysis capabilities (PDF, document understanding)
-  documentAnalysis,
 }
 
 /// Extension methods for AICapability enum
@@ -49,16 +37,8 @@ extension AICapabilityExtension on AICapability {
         return 'Audio Generation';
       case AICapability.audioTranscription:
         return 'Audio Transcription';
-      case AICapability.embeddingGeneration:
-        return 'Embedding Generation';
-      case AICapability.codeGeneration:
-        return 'Code Generation';
-      case AICapability.functionCalling:
-        return 'Function Calling';
       case AICapability.realtimeConversation:
         return 'Realtime Conversation';
-      case AICapability.documentAnalysis:
-        return 'Document Analysis';
     }
   }
 
@@ -75,16 +55,8 @@ extension AICapabilityExtension on AICapability {
         return 'audio_generation';
       case AICapability.audioTranscription:
         return 'audio_transcription';
-      case AICapability.embeddingGeneration:
-        return 'embedding_generation';
-      case AICapability.codeGeneration:
-        return 'code_generation';
-      case AICapability.functionCalling:
-        return 'function_calling';
       case AICapability.realtimeConversation:
         return 'realtime_conversation';
-      case AICapability.documentAnalysis:
-        return 'document_analysis';
     }
   }
 

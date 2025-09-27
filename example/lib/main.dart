@@ -8,6 +8,7 @@ import 'screens/home_screen.dart';
 import 'screens/text_demo_screen.dart';
 import 'screens/image_demo_screen.dart';
 import 'screens/audio_demo_screen.dart';
+import 'screens/advanced_demo_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -145,6 +146,11 @@ final _router = GoRouter(
       path: '/audio',
       name: 'audio',
       builder: (context, state) => const AudioDemoScreen(),
+    ),
+    GoRoute(
+      path: '/advanced',
+      name: 'advanced',
+      builder: (context, state) => const AdvancedDemoScreen(),
     ),
   ],
 );

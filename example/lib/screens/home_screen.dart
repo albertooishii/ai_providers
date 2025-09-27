@@ -116,6 +116,16 @@ class HomeScreen extends StatelessWidget {
                       onTap: () => context.go('/audio'),
                       delay: 1000,
                     ),
+                    const SizedBox(height: 16),
+                    _buildFeatureCard(
+                      context,
+                      icon: Icons.settings_applications_outlined,
+                      title: 'Advanced Features',
+                      subtitle: 'Cache management, stats & system utilities',
+                      color: Colors.orange,
+                      onTap: () => context.go('/advanced'),
+                      delay: 1100,
+                    ),
                   ],
                 ),
 

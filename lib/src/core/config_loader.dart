@@ -52,7 +52,7 @@ class AIProviderConfigLoader {
         } else {
           AILogger.w('❌ $key not found in dotenv');
         }
-      } catch (e) {
+      } on Exception catch (e) {
         // If dotenv is not initialized, continue with system env only
         AILogger.w('DotEnv not accessible for $key: $e');
       }
@@ -283,7 +283,7 @@ class AIProviderConfigLoader {
 
   /// Apply manual API key overrides from AIInitConfig
   static Map<String, dynamic> _applyInitConfigOverrides(
-      Map<String, dynamic> configMap, AIInitConfig initConfig) {
+      final Map<String, dynamic> configMap, final AIInitConfig initConfig) {
     final Map<String, dynamic> updatedConfig = Map.from(configMap);
 
     // Update API keys for each configured provider (only if apiKeys is provided)
@@ -881,7 +881,7 @@ class AIProviderConfigLoader {
       AILogger.i(
           '🎉 Created AIInitConfig from .env: ${apiKeys.length} providers configured');
       return initConfig;
-    } catch (e) {
+    } on Exception catch (e) {
       AILogger.w('Failed to create AIInitConfig from .env: $e');
       // Return minimal config on error
       return const AIInitConfig();
@@ -899,8 +899,8 @@ class AIProviderConfigLoader {
         final dynamic parsed = json.decode(envValue);
         if (parsed is List) {
           return parsed
-              .map((e) => e.toString())
-              .where((s) => s.isNotEmpty)
+              .map((final e) => e.toString())
+              .where((final s) => s.isNotEmpty)
               .toList();
         }
       }
@@ -911,7 +911,7 @@ class AIProviderConfigLoader {
       }
 
       return [];
-    } catch (e) {
+    } on Exception catch (e) {
       AILogger.w('Failed to parse API keys from env value "$envValue": $e');
       // Try to return as single key if JSON parsing fails
       return envValue.trim().isNotEmpty ? [envValue.trim()] : [];

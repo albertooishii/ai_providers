@@ -334,7 +334,7 @@ class AndroidNativeProvider {
       final voices = await _flutterTts.getVoices;
       if (voices == null) return [];
 
-      return (voices as List).map((voice) {
+      return (voices as List).map((final voice) {
         final voiceMap = voice as Map<String, dynamic>;
         return VoiceInfo(
           id: voiceMap['name'] ?? 'unknown',
@@ -343,13 +343,12 @@ class AndroidNativeProvider {
           gender: _parseGender(voiceMap['name']),
         );
       }).toList();
-    } catch (e) {
+    } on Exception {
       return [
         // Default fallback voice
         const VoiceInfo(
           id: 'es-ES-default',
           name: 'Spanish Default',
-          language: 'es-ES',
           gender: VoiceGender.neutral,
           isDefault: true,
         ),
@@ -357,7 +356,7 @@ class AndroidNativeProvider {
     }
   }
 
-  VoiceGender _parseGender(String? voiceName) {
+  VoiceGender _parseGender(final String? voiceName) {
     if (voiceName == null) return VoiceGender.neutral;
     final name = voiceName.toLowerCase();
     if (name.contains('female') ||

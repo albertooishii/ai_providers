@@ -16,8 +16,8 @@ class ImageGenerationService {
   static final ImageGenerationService _instance = ImageGenerationService._();
   static ImageGenerationService get instance => _instance;
 
-  /// 🎯 MÉTODO PRINCIPAL: Generar imagen y guardar automáticamente
-  /// Este es el método principal del servicio para funcionalidad completa
+  /// Generar imagen con tipos específicos (wrapper para compatibilidad)
+  /// DEPRECATED: Usar generateImageAdvanced() directamente
   Future<String?> generateAndSave(
     final String prompt, {
     final ImageType type = ImageType.general,
@@ -28,51 +28,34 @@ class ImageGenerationService {
         '[ImageGenerationService] 🎯 generateAndSave() - ${prompt.substring(0, prompt.length.clamp(0, 50))}...',
       );
 
-      // Crear SystemPrompt según el tipo
-      final systemPrompt = _createSystemPrompt(type, quality);
+      // Usar generateImageAdvanced() directamente - sin duplicación
+      final response =
+          await generateImageAdvanced(prompt, type: type, quality: quality);
 
-      // Generar imagen usando nuestro método de integración (saveToCache: true)
-      final response = await generateImage(prompt, systemPrompt, true);
-
-      if (response.imageFileName.isNotEmpty) {
-        AILogger.d(
-          '[ImageGenerationService] ✅ Imagen guardada: ${response.imageFileName}',
-        );
-        return response.imageFileName;
-      } else {
-        AILogger.w('[ImageGenerationService] No se generó archivo de imagen');
-        return null;
-      }
+      return response.imageFileName.isNotEmpty ? response.imageFileName : null;
     } catch (e) {
       AILogger.e('[ImageGenerationService] Error en generateAndSave(): $e');
       rethrow;
     }
   }
 
-  /// 🎯 MÉTODO DE INTEGRACIÓN - usado por AI.image()
+  /// 🎯 MÉTODO SIMPLE - usado por AI.image()
   ///
-  /// Recibe mismos parámetros que AI.image() y delega a AIProviderManager.
+  /// Versión simple que siempre guarda en caché para máxima facilidad de uso.
   /// Esta es la firma EXACTA que necesita AI.image() para evitar circular dependency.
   Future<AIResponse> generateImage(
-    String prompt, [
-    AISystemPrompt? systemPrompt,
-    bool saveToCache = false,
+    final String prompt, [
+    final AISystemPrompt? systemPrompt,
   ]) async {
     try {
       AILogger.d(
-        '[ImageGenerationService] 🖼️ Generando imagen: ${prompt.substring(0, prompt.length.clamp(0, 50))}...',
+        '[ImageGenerationService] 🖼️ Generando imagen (simple): ${prompt.substring(0, prompt.length.clamp(0, 50))}...',
       );
 
-      // Crear SystemPrompt por defecto si no se proporciona
-      final effectiveSystemPrompt =
-          systemPrompt ?? _createDefaultImageSystemPrompt();
-
-      // Llamar directamente a AIProviderManager (no a AI.image() para evitar circular dependency)
-      return await AIProviderManager.instance.sendMessage(
-        message: prompt,
-        systemPrompt: effectiveSystemPrompt,
-        capability: AICapability.imageGeneration,
-        saveToCache: saveToCache,
+      // Usar generateImageAdvanced() con parámetros por defecto - evita duplicación
+      return await generateImageAdvanced(
+        prompt,
+        customSystemPrompt: systemPrompt ?? _createDefaultImageSystemPrompt(),
       );
     } catch (e) {
       AILogger.e('[ImageGenerationService] ❌ Error generando imagen: $e');
@@ -80,41 +63,35 @@ class ImageGenerationService {
     }
   }
 
-  /// Generar imagen con configuración avanzada (tipos y calidades)
+  /// 🎨 MÉTODO AVANZADO - Con control completo de configuración
+  ///
+  /// Permite control total sobre tipos, calidades y si se quiere guardar en caché o no.
+  /// Para uso avanzado cuando se necesita control específico.
   Future<AIResponse> generateImageAdvanced(
     final String prompt, {
     final ImageType type = ImageType.general,
     final ImageQuality quality = ImageQuality.high,
-    final bool saveToCache = false,
+    final bool saveToCache = true,
+    final AISystemPrompt? customSystemPrompt,
   }) async {
     try {
       AILogger.d(
-        '[ImageGenerationService] 🎨 Generación avanzada: ${prompt.substring(0, prompt.length.clamp(0, 50))}...',
+        '[ImageGenerationService] 🎨 Generación avanzada: ${prompt.substring(0, prompt.length.clamp(0, 50))}... (saveToCache: $saveToCache)',
       );
 
-      final systemPrompt = _createSystemPrompt(type, quality);
-      return await generateImage(prompt, systemPrompt, saveToCache);
+      // Usar SystemPrompt personalizado o crear uno según tipo y calidad
+      final systemPrompt =
+          customSystemPrompt ?? _createSystemPrompt(type, quality);
+
+      // Llamar directamente a AIProviderManager con control completo
+      return await AIProviderManager.instance.sendMessage(
+        message: prompt,
+        systemPrompt: systemPrompt,
+        capability: AICapability.imageGeneration,
+        saveToCache: saveToCache,
+      );
     } catch (e) {
       AILogger.e('[ImageGenerationService] Error en generateImageAdvanced: $e');
-      rethrow;
-    }
-  }
-
-  /// Generar imagen desde base64 existente (análisis/modificación)
-  Future<AIResponse> analyzeImage(
-      final String imageBase64, final String prompt) async {
-    try {
-      AILogger.d('[ImageGenerationService] �️ Analizando imagen...');
-
-      final systemPrompt = AISystemPrompt(
-        context: {'image_type': 'analysis'},
-        dateTime: DateTime.now(),
-        instructions: {'task': 'analysis', 'quality': 'detailed'},
-      );
-
-      return await AI.vision(imageBase64, prompt, systemPrompt);
-    } catch (e) {
-      AILogger.e('[ImageGenerationService] Error analizando imagen: $e');
       rethrow;
     }
   }
@@ -141,7 +118,8 @@ class ImageGenerationService {
     );
   }
 
-  AISystemPrompt _createSystemPrompt(ImageType type, ImageQuality quality) {
+  AISystemPrompt _createSystemPrompt(
+      final ImageType type, final ImageQuality quality) {
     final Map<String, dynamic> context = {'image_type': type.name};
     final Map<String, dynamic> instructions = {'quality': quality.name};
 

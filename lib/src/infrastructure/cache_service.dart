@@ -5,7 +5,6 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math';
 import '../utils/logger.dart';
 import '../models/ai_response.dart';
 import 'package:crypto/crypto.dart';
@@ -199,26 +198,6 @@ class CompleteCacheService {
   static String _generateCacheKey(
       {required final String provider, required final String type}) {
     return '${provider}_${type}_cache.json';
-  }
-
-  /// Internal utility for formatting bytes to human-readable format
-  static String _formatBytes(final int bytes) {
-    if (bytes <= 0) return '0 B';
-
-    const suffixes = ['B', 'KB', 'MB', 'GB', 'TB'];
-    final i = (log(bytes) / log(1024)).floor().clamp(0, suffixes.length - 1);
-    final size = bytes / pow(1024, i);
-
-    String sizeStr;
-    if (size >= 100 || size.truncateToDouble() == size) {
-      sizeStr = size.toStringAsFixed(0);
-    } else if (size >= 10) {
-      sizeStr = size.toStringAsFixed(1);
-    } else {
-      sizeStr = size.toStringAsFixed(2);
-    }
-
-    return '$sizeStr ${suffixes[i]}';
   }
 
   // ============================================================
@@ -460,26 +439,59 @@ class CompleteCacheService {
   }
 
   /// Elimina todos los archivos de caché de modelos
-  Future<void> clearAllModelsCache() async {
+  Future<int> clearAllModelsCache() async {
+    int deletedFiles = 0;
     try {
       final cacheDir = await getCacheDirectory();
       final modelsDir =
           Directory('${cacheDir.path}/${_getModelsSubdirectory()}');
-      if (modelsDir.existsSync()) {
-        final entities = modelsDir.listSync();
-        for (final e in entities) {
-          try {
-            if (e is File) await e.delete();
-            if (e is Directory) await e.delete(recursive: true);
-          } on Exception catch (e) {
-            debugPrint('[Cache] Warning clearing models cache entry: $e');
-          }
-        }
-        debugPrint('[Cache] All models cache cleared');
+      if (!modelsDir.existsSync()) {
+        return deletedFiles;
       }
+
+      final entities = modelsDir.listSync();
+      for (final entity in entities) {
+        try {
+          if (entity is File) {
+            await entity.delete();
+            deletedFiles++;
+          } else if (entity is Directory) {
+            deletedFiles += await _clearDirectoryRecursively(entity);
+            await entity.delete(recursive: true);
+          }
+        } on Exception catch (e) {
+          debugPrint('[Cache] Warning clearing models cache entry: $e');
+        }
+      }
+
+      debugPrint(
+          '[Cache] All models cache cleared ($deletedFiles files removed)');
+      return deletedFiles;
     } on Exception catch (e) {
       debugPrint('[Cache] Error clearing all models cache: $e');
+      return deletedFiles;
     }
+  }
+
+  Future<int> _clearDirectoryRecursively(final Directory dir) async {
+    int deletedFiles = 0;
+    if (!dir.existsSync()) return deletedFiles;
+
+    final entities = dir.listSync();
+    for (final entity in entities) {
+      try {
+        if (entity is File) {
+          await entity.delete();
+          deletedFiles++;
+        } else if (entity is Directory) {
+          deletedFiles += await _clearDirectoryRecursively(entity);
+          await entity.delete(recursive: true);
+        }
+      } on Exception catch (e) {
+        debugPrint('[Cache] Warning clearing directory entry: $e');
+      }
+    }
+    return deletedFiles;
   }
 
   // ============================================================
@@ -526,33 +538,6 @@ class CompleteCacheService {
       debugPrint('[Cache] Error leyendo voces desde caché: $e');
       return null;
     }
-  }
-
-  // ============================================================
-  // Cache Size Management
-  // ============================================================
-
-  /// Obtiene el tamaño total del caché en bytes
-  Future<int> getCacheSize() async {
-    int totalSize = 0;
-    try {
-      final cacheDir = await getCacheDirectory();
-      if (cacheDir.existsSync()) {
-        await for (final entity in cacheDir.list(recursive: true)) {
-          if (entity is File) {
-            totalSize += await entity.length();
-          }
-        }
-      }
-    } on Exception catch (e) {
-      debugPrint('[Cache] Error calculando tamaño de caché: $e');
-    }
-    return totalSize;
-  }
-
-  /// Formatea el tamaño en bytes a una cadena legible
-  String formatCacheSize(final int bytes) {
-    return _formatBytes(bytes);
   }
 
   /// Dispose all cache resources

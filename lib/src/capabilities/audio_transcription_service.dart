@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:record/record.dart';
@@ -11,6 +12,7 @@ import '../models/ai_system_prompt.dart';
 import '../core/ai_provider_manager.dart';
 import '../utils/logger.dart';
 import '../utils/waveform_utils.dart';
+import '../infrastructure/cache_service.dart';
 
 /// 🎧 AudioTranscriptionService - Servicio completo de transcripción de audio
 ///
@@ -35,6 +37,16 @@ class AudioTranscriptionService {
   Timer? _recordingTimer;
   Duration _recordingDuration = Duration.zero;
 
+  // Control manual para forzar terminación
+  bool _forceStop = false;
+  bool _isInSilenceDetectionMode = false;
+  Completer<String?>? _manualStopCompleter;
+  StreamSubscription<Uint8List>? _currentStreamSubscription;
+
+  // Calibración de ruido ambiente para detección de silencio adaptativa
+  double _ambientNoiseLevel = 0.0;
+  bool _isNoiseCalibrated = false;
+
   // Streams
   final StreamController<List<int>> _waveformController =
       StreamController<List<int>>.broadcast();
@@ -57,8 +69,8 @@ class AudioTranscriptionService {
   /// Recibe mismos parámetros que AI.listen() y delega a AIProviderManager.
   /// Esta es la firma EXACTA que necesita AI.listen() para evitar circular dependency.
   Future<AIResponse> transcribe(
-    String audioBase64, [
-    TranscribeInstructions? instructions,
+    final String audioBase64, [
+    final TranscribeInstructions? instructions,
   ]) async {
     try {
       AILogger.d('[AudioTranscriptionService] 🎧 Transcribiendo audio...');
@@ -67,9 +79,10 @@ class AudioTranscriptionService {
       final systemPrompt = _createTranscriptionSystemPrompt(instructions);
 
       // Llamar directamente a AIProviderManager (no a AI.listen() para evitar circular dependency)
+      // Nota: El caché está deshabilitado para audioTranscription en AIProviderManager
       return await AIProviderManager.instance.sendMessage(
         message:
-            'Transcribe the provided audio according to the given instructions',
+            'CRITICAL: You are a speech transcription system. ONLY transcribe the actual spoken words in the provided audio. Do NOT create fictional dialogue. Do NOT generate sample conversations about Maria del Carmen, directors, schools, or any invented content. If no clear speech is detected, return empty text. Transcribe ONLY what is actually spoken.',
         systemPrompt: systemPrompt,
         capability: AICapability.audioTranscription,
         imageBase64: audioBase64, // Reutilizamos imageBase64 para audio
@@ -156,13 +169,34 @@ class AudioTranscriptionService {
     }
   }
 
-  /// 🎯 MÉTODO PRINCIPAL: Grabar y transcribir audio con duración específica
+  /// 🎯 MÉTODO PRINCIPAL: Grabar y transcribir audio con funcionalidad avanzada
   /// Este es el método principal del servicio para funcionalidad completa STT
-  Future<String?> recordAndTranscribe(
-      {Duration duration = const Duration(seconds: 5)}) async {
+  ///
+  /// CASOS DE USO:
+  /// - Básico: recordAndTranscribe(duration: Duration(seconds: 5))
+  /// - Auto-detección: recordAndTranscribe(duration: null, autoStop: true)
+  /// - Control fino: recordAndTranscribe(silenceTimeout: Duration(seconds: 2))
+  ///
+  /// [duration] - Duración máxima (null = ilimitado hasta silencio)
+  /// [silenceTimeout] - Tiempo de silencio para auto-detención
+  /// [autoStop] - Detener automáticamente al detectar silencio
+  /// [instructions] - Instrucciones opcionales de transcripción
+  Future<String?> recordAndTranscribe({
+    final Duration? duration,
+    final Duration silenceTimeout = const Duration(seconds: 2),
+    final bool autoStop = true,
+    final TranscribeInstructions? instructions,
+  }) async {
     try {
+      // Log de configuración inteligente
+      final configLog = duration != null
+          ? 'fixed duration: ${duration.inSeconds}s'
+          : autoStop
+              ? 'auto-stop on silence (${silenceTimeout.inSeconds}s timeout)'
+              : 'manual stop only';
+
       AILogger.d(
-          '[AudioTranscriptionService] 🎯 recordAndTranscribe($duration) iniciado');
+          '[AudioTranscriptionService] 🎯 recordAndTranscribe with $configLog');
 
       // Verificar permisos
       if (!await hasPermissions()) {
@@ -172,11 +206,26 @@ class AudioTranscriptionService {
       // Iniciar grabación
       await startRecording();
 
-      // Esperar la duración especificada
-      await Future.delayed(duration);
+      // Lógica de grabación avanzada
+      String? transcript;
+      if (duration != null) {
+        // Modo duración fija - comportamiento original
+        await Future.delayed(duration);
+        transcript = await stopRecording();
+      } else if (autoStop) {
+        // Modo auto-detección de silencio
+        transcript = await _recordWithSilenceDetection(silenceTimeout);
+      } else {
+        // Modo manual - solo iniciar, el usuario debe llamar stopRecording()
+        AILogger.d(
+            '[AudioTranscriptionService] Recording started - manual stop required');
+        return null; // Retorna null para indicar que la grabación está en progreso
+      }
 
-      // Detener y transcribir
-      final transcript = await stopRecording();
+      // Aplicar instrucciones de transcripción si las hay
+      if (transcript != null && instructions != null) {
+        transcript = _applyTranscriptionInstructions(transcript, instructions);
+      }
 
       AILogger.d(
           '[AudioTranscriptionService] ✅ recordAndTranscribe completado: $transcript');
@@ -199,6 +248,9 @@ class AudioTranscriptionService {
         return;
       }
 
+      // Reset completo del estado para evitar problemas entre grabaciones
+      _resetRecordingState();
+
       // Verificar permisos
       if (!await hasPermissions()) {
         throw Exception('Permisos de micrófono denegados');
@@ -209,12 +261,14 @@ class AudioTranscriptionService {
       // Configurar grabación
       const config = RecordConfig(encoder: AudioEncoder.wav, sampleRate: 16000);
 
+      // Obtener directorio de cache para audio
+      final cacheService = CompleteCacheService.instance;
+      final audioDir = await cacheService.getAudioCacheDirectory();
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final recordingPath = '${audioDir.path}/recording_$timestamp.wav';
+
       // Iniciar grabación
-      await _recorder.start(
-        config,
-        path:
-            '${Directory.systemTemp.path}/recording_${DateTime.now().millisecondsSinceEpoch}.wav',
-      );
+      await _recorder.start(config, path: recordingPath);
       _isRecording = true;
       _recordingDuration = Duration.zero;
 
@@ -236,9 +290,37 @@ class AudioTranscriptionService {
         return null;
       }
 
-      AILogger.d('[AudioTranscriptionService] ⏹️ Deteniendo grabación...');
+      AILogger.d('[AudioTranscriptionService] ⏹️ Manual stop requested...');
 
-      // Detener grabación
+      // Si estamos en modo detección de silencio, detener inmediatamente
+      if (_isInSilenceDetectionMode) {
+        AILogger.d(
+            '[AudioTranscriptionService] 🛑 Forcing stop in silence detection mode');
+        _forceStop = true;
+
+        // Detener el stream inmediatamente para cerrar el micrófono
+        if (_currentStreamSubscription != null) {
+          await _currentStreamSubscription!.cancel();
+          _currentStreamSubscription = null;
+          AILogger.d(
+              '[AudioTranscriptionService] 🎤 Microphone stream closed immediately');
+        }
+
+        // Forzar liberación del recorder para asegurar que el micrófono se cierra
+        if (await _recorder.isRecording()) {
+          await _recorder.stop();
+          AILogger.d(
+              '[AudioTranscriptionService] 🎤 Recorder force-stopped to release microphone');
+        }
+
+        // Crear completer para esperar el resultado
+        _manualStopCompleter = Completer<String?>();
+
+        // Esperar hasta que _recordWithSilenceDetection() complete la transcripción
+        return await _manualStopCompleter!.future;
+      }
+
+      // Modo normal: detener grabación directamente
       final audioPath = await _recorder.stop();
       _isRecording = false;
       _stopRecordingTimers();
@@ -254,19 +336,24 @@ class AudioTranscriptionService {
       );
       final response = await transcribeAudioFile(audioPath);
 
-      // Limpiar archivo temporal
-      _cleanupAudioFile(audioPath);
+      // NO limpiar archivo - mantener en caché para reutilización
+      AILogger.d(
+          '[AudioTranscriptionService] 💾 Audio guardado en caché: $audioPath');
 
       final transcript = response.text.trim();
       AILogger.d(
         '[AudioTranscriptionService] ✅ Transcripción completada: $transcript',
       );
 
+      // Reset estado para próxima grabación
+      _resetRecordingState();
+
       return transcript.isNotEmpty ? transcript : null;
     } on Exception catch (e) {
       AILogger.e('[AudioTranscriptionService] Error deteniendo grabación: $e');
       _isRecording = false;
       _stopRecordingTimers();
+      _resetRecordingState(); // Reset también en caso de error
       return null;
     }
   }
@@ -277,6 +364,12 @@ class AudioTranscriptionService {
       if (!_isRecording) return;
 
       AILogger.d('[AudioTranscriptionService] 🚫 Cancelando grabación...');
+
+      // Cancelar stream si existe
+      if (_currentStreamSubscription != null) {
+        await _currentStreamSubscription!.cancel();
+        _currentStreamSubscription = null;
+      }
 
       await _recorder.stop();
       _isRecording = false;
@@ -293,7 +386,7 @@ class AudioTranscriptionService {
 
   /// Crea SystemPrompt para transcripción de audio con instrucciones
   AISystemPrompt _createTranscriptionSystemPrompt(
-      TranscribeInstructions? instructions) {
+      final TranscribeInstructions? instructions) {
     final effectiveInstructions =
         instructions ?? const TranscribeInstructions();
 
@@ -302,11 +395,334 @@ class AudioTranscriptionService {
       'stt': true,
     };
 
+    // Las reglas anti-alucinación ahora vienen directamente de las instrucciones
+    final instructionsMap = effectiveInstructions.toMap();
+
     return AISystemPrompt(
       context: context,
       dateTime: DateTime.now(),
-      instructions: effectiveInstructions.toMap(),
+      instructions: instructionsMap,
     );
+  }
+
+  /// Grabación con detección automática de silencio REAL
+  Future<String?> _recordWithSilenceDetection(
+      final Duration silenceTimeout) async {
+    AILogger.d(
+        '[AudioTranscriptionService] 🔇 Starting REAL silence detection with ${silenceTimeout.inSeconds}s timeout');
+
+    try {
+      // Marcar que estamos en modo detección de silencio
+      _isInSilenceDetectionMode = true;
+      // Configuración para stream - usar PCM ya que guardamos manualmente
+      const config = RecordConfig(
+        encoder: AudioEncoder.pcm16bits,
+        sampleRate: 16000,
+        numChannels: 1,
+      );
+
+      // Variables para detección de silencio mejorada
+      final maxDuration = const Duration(seconds: 60); // Límite máximo
+      final startTime = DateTime.now();
+      DateTime? silenceStartTime;
+
+      // Buffer para análisis de audio y calibración
+      final audioBuffer = <int>[];
+      final calibrationSamples = <double>[];
+      bool calibrationComplete = false;
+      final calibrationDuration =
+          const Duration(milliseconds: 1000); // 1s para calibrar ruido ambiente
+
+      // Variables de detección adaptativa
+      double dynamicSilenceThreshold =
+          0.01; // Umbral inicial básico      // Obtener directorio de cache para audio
+      final cacheService = CompleteCacheService.instance;
+      final audioDir = await cacheService.getAudioCacheDirectory();
+      final timestamp = DateTime.now().millisecondsSinceEpoch;
+      final recordingPath = '${audioDir.path}/recording_silence_$timestamp.wav';
+
+      // Usar SOLO stream - grabamos manualmente los chunks
+      final audioStream = await _recorder.startStream(config);
+      final audioFile = File(recordingPath);
+      final audioSink = audioFile.openWrite();
+
+      // Escuchar stream de audio para análisis Y guardado
+      _currentStreamSubscription = audioStream.listen((final audioChunk) {
+        // Guardar chunk al archivo
+        audioSink.add(audioChunk); // Agregar al buffer para análisis
+        final samples = _convertBytesToSamples(audioChunk);
+        audioBuffer.addAll(samples);
+
+        // Mantener buffer de último segundo para análisis
+        final samplesPerSecond = 16000; // 16kHz
+        if (audioBuffer.length > samplesPerSecond) {
+          audioBuffer.removeRange(0, audioBuffer.length - samplesPerSecond);
+        }
+
+        // Calcular volumen RMS de las últimas muestras
+        final volumeLevel = _calculateRMSVolume(audioBuffer);
+
+        // Calibración continua NO BLOQUEANTE - funciona en paralelo con la detección
+        if (!calibrationComplete &&
+            !_isNoiseCalibrated &&
+            DateTime.now().difference(startTime) < calibrationDuration) {
+          calibrationSamples.add(volumeLevel);
+
+          // Calibración adaptativa instantánea - usa muestras disponibles hasta ahora
+          if (calibrationSamples.length >= 5) {
+            // Con 5+ muestras ya se puede estimar
+            final currentAvg =
+                calibrationSamples.reduce((final a, final b) => a + b) /
+                    calibrationSamples.length;
+            _ambientNoiseLevel = currentAvg;
+            // Usar threshold más inteligente basado en nivel de ruido ambiente
+            if (_ambientNoiseLevel > 0.5) {
+              // Ambiente muy ruidoso - threshold más alto
+              dynamicSilenceThreshold = _ambientNoiseLevel * 0.6;
+            } else if (_ambientNoiseLevel > 0.1) {
+              // Ambiente con algo de ruido - threshold medio
+              dynamicSilenceThreshold = _ambientNoiseLevel * 0.8;
+            } else {
+              // Ambiente silencioso - threshold bajo
+              dynamicSilenceThreshold = 0.05;
+            }
+
+            // Completar calibración al final del período
+            if (DateTime.now().difference(startTime) >= calibrationDuration) {
+              calibrationComplete = true;
+              _isNoiseCalibrated = true;
+              // Ajuste final más preciso y robusto
+              if (_ambientNoiseLevel > 0.5) {
+                dynamicSilenceThreshold =
+                    _ambientNoiseLevel * 0.5; // Muy ruidoso
+              } else if (_ambientNoiseLevel > 0.1) {
+                dynamicSilenceThreshold =
+                    _ambientNoiseLevel * 0.7; // Algo ruidoso
+              } else {
+                dynamicSilenceThreshold = 0.03; // Silencioso
+              }
+
+              AILogger.d(
+                  '[AudioTranscriptionService] 🎯 Adaptive calibration complete - Ambient: ${(_ambientNoiseLevel * 100).toStringAsFixed(2)}%, Final threshold: ${(dynamicSilenceThreshold * 100).toStringAsFixed(2)}%');
+            }
+          }
+        }
+
+        // Detección de silencio inteligente - funciona desde el primer momento
+        // Usa umbral dinámico si está disponible, o usa umbral adaptativo inteligente
+        final currentThreshold = calibrationComplete
+            ? dynamicSilenceThreshold
+            : (_ambientNoiseLevel > 0.1
+                ? _ambientNoiseLevel *
+                    0.8 // Si hay ruido ambiente, usar 80% del nivel
+                : 0.05); // Si no hay datos aún, threshold más alto (5%)
+        final isCurrentlySilent = volumeLevel < currentThreshold;
+
+        // Solo empezar a contar silencio después de 800ms (permite hablar inmediatamente)
+        final recordingTime = DateTime.now().difference(startTime);
+        if (recordingTime.inMilliseconds > 800) {
+          if (isCurrentlySilent) {
+            // Inicio del silencio
+            silenceStartTime ??= DateTime.now();
+
+            // Verificar si hemos estado en silencio por el tiempo requerido
+            final silenceDuration =
+                DateTime.now().difference(silenceStartTime!);
+            if (silenceDuration >= silenceTimeout) {
+              final thresholdType = calibrationComplete ? 'adaptive' : 'basic';
+              AILogger.d(
+                  '[AudioTranscriptionService] 🔇 ${thresholdType.toUpperCase()} silence detected for ${silenceDuration.inMilliseconds}ms (volume: ${(volumeLevel * 100).toStringAsFixed(1)}%, threshold: ${(currentThreshold * 100).toStringAsFixed(1)}%)');
+            }
+          } else {
+            // Resetear contador de silencio si hay sonido por encima del umbral
+            silenceStartTime = null;
+          }
+        }
+
+        // Log de nivel de volumen cada 2 segundos con mejor información
+        if (DateTime.now().difference(startTime).inSeconds % 2 == 0) {
+          final status = calibrationComplete ? 'CALIBRATED' : 'CALIBRATING';
+          final voiceDetected = volumeLevel >
+              (currentThreshold * 1.5); // 50% por encima del threshold
+          final statusIcon = voiceDetected ? '🗣️' : '🔇';
+          AILogger.d(
+              '[AudioTranscriptionService] 📊 [$status] $statusIcon Volume: ${(volumeLevel * 100).toStringAsFixed(1)}% (threshold: ${(currentThreshold * 100).toStringAsFixed(1)}%, ambient: ${(_ambientNoiseLevel * 100).toStringAsFixed(1)}%) ${voiceDetected ? 'VOICE DETECTED' : 'SILENCE'}');
+        }
+      });
+
+      // Esperar hasta que se detecte silencio, se alcance el tiempo máximo, o se fuerce la terminación
+      while (
+          DateTime.now().difference(startTime) < maxDuration && !_forceStop) {
+        await Future.delayed(const Duration(milliseconds: 100));
+
+        // Verificar si detectamos silencio
+        if (silenceStartTime != null) {
+          final silenceDuration = DateTime.now().difference(silenceStartTime!);
+          if (silenceDuration >= silenceTimeout) {
+            AILogger.d(
+                '[AudioTranscriptionService] 🔇 Silence threshold reached, stopping recording');
+            break;
+          }
+        }
+      }
+
+      // Verificar si se detuvo por forzado manual
+      if (_forceStop) {
+        AILogger.d(
+            '[AudioTranscriptionService] 🛑 Manual stop detected, ending recording');
+      }
+
+      // Detener stream si no se ha cancelado ya
+      if (_currentStreamSubscription != null) {
+        await _currentStreamSubscription!.cancel();
+        _currentStreamSubscription = null;
+      }
+      await audioSink.close();
+
+      // CRÍTICO: Detener el recorder explícitamente para liberar el micrófono del SO
+      if (await _recorder.isRecording()) {
+        await _recorder.stop();
+        AILogger.d(
+            '[AudioTranscriptionService] 🎤 Recorder stopped - microphone released');
+      }
+
+      // Convertir PCM a WAV para compatibilidad
+      final pcmBytes = await File(recordingPath).readAsBytes();
+      final wavBytes = _createWavFile(
+        pcmBytes,
+        sampleRate: 16000,
+        channels: 1,
+        bitsPerSample: 16,
+      );
+      await File(recordingPath).writeAsBytes(wavBytes);
+
+      // Transcribir el audio grabado
+      AILogger.d(
+          '[AudioTranscriptionService] 🎧 Transcribing recorded audio...');
+      final response = await transcribeAudioFile(recordingPath);
+
+      // NO limpiar archivo - mantener en caché para reutilización
+      AILogger.d(
+          '[AudioTranscriptionService] 💾 Audio guardado en caché: $recordingPath');
+
+      final transcript = response.text.trim();
+      AILogger.d(
+          '[AudioTranscriptionService] ✅ Real silence detection completed: $transcript');
+
+      final result = transcript.isNotEmpty ? transcript : null;
+
+      // Si hay un completer esperando (manual stop), completarlo
+      if (_manualStopCompleter != null && !_manualStopCompleter!.isCompleted) {
+        _manualStopCompleter!.complete(result);
+      }
+
+      // CRÍTICO: Reset del estado después de completar la transcripción
+      // para que la siguiente grabación funcione correctamente
+      _resetRecordingState();
+
+      return result;
+    } on Exception catch (e) {
+      AILogger.e(
+          '[AudioTranscriptionService] Error in real silence detection: $e');
+
+      // Si hay un completer esperando (manual stop), completarlo con error
+      if (_manualStopCompleter != null && !_manualStopCompleter!.isCompleted) {
+        _manualStopCompleter!.complete(null);
+      }
+
+      // Reset del estado también en caso de error
+      _resetRecordingState();
+
+      return await stopRecording(); // Fallback al método normal
+    }
+  }
+
+  /// Convertir bytes de audio a muestras enteras para análisis
+  List<int> _convertBytesToSamples(final Uint8List audioBytes) {
+    final samples = <int>[];
+
+    // PCM 16-bit: cada muestra son 2 bytes (little-endian)
+    for (int i = 0; i < audioBytes.length - 1; i += 2) {
+      final sample = (audioBytes[i + 1] << 8) | audioBytes[i];
+      // Convertir de unsigned a signed 16-bit
+      final signedSample = sample > 32767 ? sample - 65536 : sample;
+      samples.add(signedSample);
+    }
+
+    return samples;
+  }
+
+  /// Calcular volumen RMS (Root Mean Square) de las muestras de audio
+  double _calculateRMSVolume(final List<int> samples) {
+    if (samples.isEmpty) return 0.0;
+
+    // Calcular la suma de cuadrados
+    double sumOfSquares = 0.0;
+    for (final sample in samples) {
+      sumOfSquares += sample * sample;
+    }
+
+    // Calcular RMS y normalizar (dividir por el valor máximo de 16-bit)
+    final rms = sqrt(sumOfSquares / samples.length);
+    return rms / 32768.0; // Normalizar a rango 0.0 - 1.0
+  }
+
+  /// Aplicar instrucciones de transcripción al resultado
+  String _applyTranscriptionInstructions(
+      final String transcript, final TranscribeInstructions instructions) {
+    AILogger.d(
+        '[AudioTranscriptionService] 📝 Applying transcription instructions');
+
+    // Aplicar formato según las instrucciones
+    var result = transcript;
+
+    // Aplicar puntuación si se solicita
+    if (instructions.includePunctuation) {
+      // En implementación real, esto vendría del provider de transcripción
+      result = _addBasicPunctuation(result);
+    }
+
+    // Aplicar formato específico
+    switch (instructions.format) {
+      case 'detailed':
+        result = _formatDetailed(result);
+        break;
+      case 'simple':
+        result = _formatSimple(result);
+        break;
+      default:
+        // Mantener formato original
+        break;
+    }
+
+    AILogger.d('[AudioTranscriptionService] ✅ Instructions applied');
+    return result;
+  }
+
+  /// Agregar puntuación básica al texto
+  String _addBasicPunctuation(final String text) {
+    // Implementación básica - en producción usar NLP más sofisticado
+    var result = text.trim();
+    if (result.isNotEmpty &&
+        !result.endsWith('.') &&
+        !result.endsWith('!') &&
+        !result.endsWith('?')) {
+      result += '.';
+    }
+    return result;
+  }
+
+  /// Formatear texto en modo detallado
+  String _formatDetailed(final String text) {
+    // Agregar metadata de transcripción
+    final timestamp = DateTime.now().toIso8601String();
+    return '[Transcribed at $timestamp] $text';
+  }
+
+  /// Formatear texto en modo simple
+  String _formatSimple(final String text) {
+    // Solo texto limpio, sin metadata
+    return text.trim().toLowerCase();
   }
 
   void _startRecordingTimers() {
@@ -335,30 +751,30 @@ class AudioTranscriptionService {
   }
 
   void _resetRecordingState() {
+    // Reset variables de grabación básicas
     _recordingDuration = Duration.zero;
     _durationController.add(Duration.zero);
     _transcriptController.add('');
     _waveformController.add(<int>[]);
+
+    // Reset variables de calibración de ruido para nueva grabación
+    _ambientNoiseLevel = 0.0;
+    _isNoiseCalibrated = false;
+
+    // Reset control manual de terminación
+    _forceStop = false;
+    _isInSilenceDetectionMode = false;
+    _manualStopCompleter = null;
+    _currentStreamSubscription = null;
+
+    AILogger.d(
+        '[AudioTranscriptionService] 🔄 Recording state reset - ready for new recording');
   }
 
   void _updateLiveTranscript() {
     // Actualizar el transcript placeholder durante la grabación
     // En implementación real, esto vendría del STT en streaming
     _transcriptController.add('Grabando... ${_recordingDuration.inSeconds}s');
-  }
-
-  void _cleanupAudioFile(final String filePath) {
-    try {
-      final file = File(filePath);
-      if (file.existsSync()) {
-        file.deleteSync();
-        AILogger.d(
-          '[AudioTranscriptionService] Archivo temporal limpiado: $filePath',
-        );
-      }
-    } on Exception catch (e) {
-      AILogger.w('[AudioTranscriptionService] Error limpiando archivo: $e');
-    }
   }
 
   /// Limpiar recursos
@@ -377,5 +793,70 @@ class AudioTranscriptionService {
     _stopRecordingTimers();
 
     AILogger.d('[AudioTranscriptionService] Recursos liberados');
+  }
+
+  /// Convertir datos PCM a formato WAV
+  Uint8List _createWavFile(
+    final Uint8List pcmData, {
+    required final int sampleRate,
+    required final int channels,
+    required final int bitsPerSample,
+  }) {
+    final dataSize = pcmData.length;
+    final fileSize = 36 + dataSize;
+
+    final wavBytes = ByteData(44 + dataSize);
+    var offset = 0;
+
+    // RIFF header
+    wavBytes.setUint8(offset++, 0x52); // 'R'
+    wavBytes.setUint8(offset++, 0x49); // 'I'
+    wavBytes.setUint8(offset++, 0x46); // 'F'
+    wavBytes.setUint8(offset++, 0x46); // 'F'
+    wavBytes.setUint32(offset, fileSize, Endian.little);
+    offset += 4;
+
+    // WAVE format
+    wavBytes.setUint8(offset++, 0x57); // 'W'
+    wavBytes.setUint8(offset++, 0x41); // 'A'
+    wavBytes.setUint8(offset++, 0x56); // 'V'
+    wavBytes.setUint8(offset++, 0x45); // 'E'
+
+    // fmt chunk
+    wavBytes.setUint8(offset++, 0x66); // 'f'
+    wavBytes.setUint8(offset++, 0x6D); // 'm'
+    wavBytes.setUint8(offset++, 0x74); // 't'
+    wavBytes.setUint8(offset++, 0x20); // ' '
+    wavBytes.setUint32(offset, 16, Endian.little); // fmt chunk size
+    offset += 4;
+    wavBytes.setUint16(offset, 1, Endian.little); // audio format (PCM)
+    offset += 2;
+    wavBytes.setUint16(offset, channels, Endian.little);
+    offset += 2;
+    wavBytes.setUint32(offset, sampleRate, Endian.little);
+    offset += 4;
+    wavBytes.setUint32(offset, sampleRate * channels * (bitsPerSample ~/ 8),
+        Endian.little); // byte rate
+    offset += 4;
+    wavBytes.setUint16(
+        offset, channels * (bitsPerSample ~/ 8), Endian.little); // block align
+    offset += 2;
+    wavBytes.setUint16(offset, bitsPerSample, Endian.little);
+    offset += 2;
+
+    // data chunk
+    wavBytes.setUint8(offset++, 0x64); // 'd'
+    wavBytes.setUint8(offset++, 0x61); // 'a'
+    wavBytes.setUint8(offset++, 0x74); // 't'
+    wavBytes.setUint8(offset++, 0x61); // 'a'
+    wavBytes.setUint32(offset, dataSize, Endian.little);
+    offset += 4;
+
+    // PCM data
+    for (int i = 0; i < pcmData.length; i++) {
+      wavBytes.setUint8(offset + i, pcmData[i]);
+    }
+
+    return wavBytes.buffer.asUint8List();
   }
 }

@@ -147,8 +147,8 @@ class HybridConversationService {
 
       _stateController.add(HybridConversationState.transcribing);
 
-      // Usar nueva API AI.listen()
-      final transcriptionResponse = await AI.listen(audioBase64);
+      // Usar nueva API AI.transcribe()
+      final transcriptionResponse = await AI.transcribe(audioBase64);
       final transcribedText = transcriptionResponse.text;
 
       if (transcribedText.trim().isEmpty) {

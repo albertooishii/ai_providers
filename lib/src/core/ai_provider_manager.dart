@@ -9,6 +9,7 @@ import '../core/config_loader.dart';
 import '../core/provider_registry.dart';
 import '../infrastructure/api_key_manager.dart';
 import '../infrastructure/cache_service.dart';
+import '../models/ai_user_preferences.dart';
 import '../models/ai_system_prompt.dart';
 import '../infrastructure/http_connection_pool.dart';
 import '../infrastructure/monitoring_service.dart';
@@ -224,29 +225,21 @@ class AIProviderManager {
     // Ignore deprecated parameters and use automatic selection
     // preferredProviderId and preferredModel are deprecated - we calculate optimal selection here
 
-    // If the user has selected a specific model in preferences, prefer the
-    // provider that supports that model for this capability. This ensures
-    // explicit user selection (e.g. "gpt-4.1-mini") is respected instead
-    // of always using the fallback chain primary provider (e.g. Google).
+    // If the user has explicitly configured a provider/model for this capability,
+    // use that configuration directly without attempting provider auto-discovery.
+    // This ensures user preferences are respected exactly as configured.
     String? preferredProviderId;
     try {
-      final selectedModel = await _getSavedModelForCapability(capability);
-      if (selectedModel != null) {
-        final modelProvider = await getProviderForModel(selectedModel);
-        if (modelProvider != null) {
-          preferredProviderId = modelProvider.providerId;
-          AILogger.d(
-            '[AIProviderManager] Preferring provider $preferredProviderId for user-selected model: $selectedModel',
-          );
-        } else {
-          AILogger.d(
-            '[AIProviderManager] User-selected model not supported by any provider for capability ${capability.name}: $selectedModel',
-          );
-        }
+      final config = await AIUserPreferences.getConfigForCapability(capability);
+      if (config != null) {
+        preferredProviderId = config.provider;
+        AILogger.d(
+          '[AIProviderManager] Using user-configured provider $preferredProviderId for capability ${capability.name}',
+        );
       }
     } on Exception catch (e) {
       AILogger.w(
-          '[AIProviderManager] Failed to read selected model from prefs: $e');
+          '[AIProviderManager] Failed to read user config for provider selection: $e');
     }
 
     // Try deduplication service if available
@@ -282,6 +275,7 @@ class AIProviderManager {
       imageBase64: imageBase64,
       imageMimeType: imageMimeType,
       additionalParams: additionalParams,
+      saveToCache: saveToCache,
     );
   }
 
@@ -294,27 +288,25 @@ class AIProviderManager {
     final String? imageBase64,
     final String? imageMimeType,
     final Map<String, dynamic>? additionalParams,
+    final bool saveToCache = false,
   }) async {
-    // Attempt to respect user-selected model/provider where possible.
+    // Attempt to respect user-selected provider/model configuration
     String? preferredProviderId;
     try {
-      final savedModel = await _getSavedModelForCapability(capability);
-      if (savedModel != null) {
-        final modelProvider = await getProviderForModel(savedModel);
-        if (modelProvider != null) {
-          preferredProviderId = modelProvider.providerId;
-          AILogger.d(
-            '[AIProviderManager] _sendMessage: user-selected model "$savedModel" maps to provider $preferredProviderId',
-          );
-        } else {
-          AILogger.d(
-            '[AIProviderManager] _sendMessage: user-selected model "$savedModel" not supported by any provider for capability ${capability.name}',
-          );
-        }
+      final config = await AIUserPreferences.getConfigForCapability(capability);
+      if (config != null) {
+        preferredProviderId = config.provider;
+        AILogger.d(
+          '[AIProviderManager] _sendMessage: user-selected config: provider=${config.provider}, model=${config.model}${config.voice != null ? ', voice=${config.voice}' : ''}',
+        );
+      } else {
+        AILogger.d(
+          '[AIProviderManager] _sendMessage: no user configuration found for capability ${capability.name}, using default provider order',
+        );
       }
     } on Exception catch (e) {
       AILogger.w(
-          '[AIProviderManager] _sendMessage: failed reading selected model from prefs: $e');
+          '[AIProviderManager] _sendMessage: failed reading user config: $e');
     }
 
     // Use the preferred provider id (if found) so the provider order respects user selection
@@ -329,7 +321,7 @@ class AIProviderManager {
     AILogger.d(
         'Trying ${providersToTry.length} providers for ${capability.name}: ${providersToTry.join(', ')}');
 
-    Exception? lastException;
+    Object? lastException;
 
     for (final providerId in providersToTry) {
       final provider = _providers[providerId];
@@ -338,9 +330,10 @@ class AIProviderManager {
         continue;
       }
 
-      // Check cache first if available
+      // Check cache first if available (skip cache for audio transcription - each audio is unique)
       CacheKey? cacheKey;
-      if (_cacheService != null) {
+      if (_cacheService != null &&
+          capability != AICapability.audioTranscription) {
         // Calculate the model that will actually be used for proper cache key
         String? modelToUseForCache =
             await _getSavedModelForProviderIfSupported(capability, providerId);
@@ -355,7 +348,15 @@ class AIProviderManager {
         final cachedResponse = await _cacheService!.memoryCache?.get(cacheKey);
         if (cachedResponse != null) {
           AILogger.d('Cache hit for provider: $providerId');
-          return cachedResponse;
+          try {
+            return cachedResponse;
+          } on Exception catch (e) {
+            AILogger.e(
+                '[AIProviderManager] Error processing cached response: $e');
+            AILogger.e(
+                '[AIProviderManager] Stack trace: ${StackTrace.current}');
+            rethrow;
+          }
         }
       }
 
@@ -418,13 +419,16 @@ class AIProviderManager {
           String? imageFileName;
           String? audioFileName;
 
-          if (providerResp.imageBase64 != null &&
+          // Only save image to cache if explicitly requested
+          if (saveToCache &&
+              providerResp.imageBase64 != null &&
               providerResp.imageBase64!.isNotEmpty) {
             try {
               final saved = await MediaPersistenceService.instance
                   .saveBase64Image(providerResp.imageBase64!);
               if (saved != null && saved.isNotEmpty) {
                 imageFileName = saved;
+                AILogger.d('[AIProviderManager] Image saved to cache: $saved');
               }
             } on Exception catch (e) {
               AILogger.w(
@@ -438,7 +442,6 @@ class AIProviderManager {
               final saved =
                   await MediaPersistenceService.instance.saveBase64Audio(
                 providerResp.audioBase64!,
-                prefix: 'tts',
               );
               if (saved != null && saved.isNotEmpty) {
                 audioFileName = saved;
@@ -456,6 +459,9 @@ class AIProviderManager {
             prompt: providerResp.prompt,
             imageFileName: imageFileName ?? '',
             audioFileName: audioFileName ?? '',
+            // Preserve imageBase64 when not saving to cache (preview mode)
+            imageBase64: saveToCache ? null : providerResp.imageBase64,
+            audioBase64: providerResp.audioBase64,
           );
 
           return finalResp;
@@ -486,8 +492,11 @@ class AIProviderManager {
         AILogger.i(
             'Successfully received response from provider: $providerId (intelligent selection)');
         return response;
-      } on Exception catch (e) {
-        AILogger.w('Provider $providerId failed: $e');
+      } on Object catch (e, stackTrace) {
+        AILogger.e(
+            '[AIProviderManager] Provider $providerId failed with error: $e');
+        AILogger.e('[AIProviderManager] Error type: ${e.runtimeType}');
+        AILogger.e('[AIProviderManager] Stack trace: $stackTrace');
         lastException = e;
 
         // Record failed performance metrics
@@ -694,15 +703,57 @@ class AIProviderManager {
     return baseStats;
   }
 
+  Future<int> clearTextCache() async {
+    if (_cacheService?.memoryCache == null) {
+      return 0;
+    }
+
+    final count = _cacheService!.memoryCache!.size;
+    _cacheService!.memoryCache!.clear();
+    AILogger.i(
+        '[AIProviderManager] Cleared in-memory text cache: $count entries removed');
+    return count;
+  }
+
+  Future<int> clearAudioCache() async {
+    try {
+      final deleted = await MediaPersistenceService.instance.clearAudioCache();
+      AILogger.i(
+          '[AIProviderManager] Cleared audio cache: $deleted files removed');
+      return deleted;
+    } on Exception catch (e) {
+      AILogger.w('[AIProviderManager] Failed to clear audio cache: $e');
+      return 0;
+    }
+  }
+
+  Future<int> clearImageCache() async {
+    try {
+      final deleted = await MediaPersistenceService.instance.clearImageCache();
+      AILogger.i(
+          '[AIProviderManager] Cleared image cache: $deleted files removed');
+      return deleted;
+    } on Exception catch (e) {
+      AILogger.w('[AIProviderManager] Failed to clear image cache: $e');
+      return 0;
+    }
+  }
+
+  Future<int> clearModelsCache() async {
+    if (_cacheService == null) {
+      return 0;
+    }
+
+    final deleted = await _cacheService!.clearAllModelsCache();
+    ProviderRegistry.instance.clearProviderCache();
+    AILogger.i(
+        '[AIProviderManager] Cleared models cache: $deleted files removed');
+    return deleted;
+  }
+
   /// Get performance metrics for a specific provider
   ProviderMetrics? getProviderPerformanceMetrics(final String providerId) {
     return _monitoringService?.getMetrics(providerId);
-  }
-
-  /// Get provider health rankings based on performance
-  List<MapEntry<String, double>> getProviderHealthRankings() {
-    // Health scores calculation simplified
-    return [];
   }
 
   // ═══════════════════════════════════════════════════════════════════════════════
@@ -716,15 +767,39 @@ class AIProviderManager {
   }
 
   /// Public method to get available voices for a provider
+  /// Currently not implemented as voices are handled automatically by providers
   Future<List<Map<String, dynamic>>> getAvailableVoices(
       final String providerId) async {
     try {
       final provider = _providers[providerId];
       if (provider == null) return [];
 
-      // TODO: Implementar método getAvailableVoices en los providers
-      // Por ahora retornamos una lista vacía
-      return [];
+      // Get voices from the provider directly
+      final voices = await provider.getAvailableVoices();
+
+      AILogger.d(
+          'Raw voices from provider $providerId: ${voices.runtimeType} - $voices');
+
+      // Convert VoiceInfo objects to Map format for API compatibility
+      final List<Map<String, dynamic>> result = [];
+      for (final voice in voices) {
+        if (voice != null) {
+          try {
+            result.add({
+              'id': voice.id ?? '',
+              'name': voice.name ?? '',
+              'language': voice.language ?? '',
+              'gender': voice.gender?.toString().split('.').last ?? 'neutral',
+              'description': voice.description ?? '',
+            });
+          } on Exception catch (e) {
+            AILogger.w('Error processing voice $voice: $e');
+          }
+        }
+      }
+
+      AILogger.d('Converted voices result: $result');
+      return result;
     } on Exception catch (e) {
       AILogger.w('Error getting available voices for $providerId: $e');
       return [];
@@ -780,12 +855,8 @@ class AIProviderManager {
   Future<String?> _getSavedModelForCapability(
       final AICapability capability) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final savedModel = prefs.getString('selected_model');
-      if (savedModel != null && savedModel.trim().isNotEmpty) {
-        return savedModel.trim();
-      }
-      return null;
+      final config = await AIUserPreferences.getConfigForCapability(capability);
+      return config?.model;
     } on Exception catch (e) {
       AILogger.w(
           '[AIProviderManager] _getSavedModelForCapability: failed to read prefs: $e');
@@ -824,12 +895,11 @@ class AIProviderManager {
   Future<void> setModel(final String providerId, final String modelId,
       final AICapability capability) async {
     try {
-      final prefs = await SharedPreferences.getInstance();
-      final modelKey = 'selected_model_${capability.identifier}';
-      final providerKey = 'selected_provider_${capability.identifier}';
-
-      await prefs.setString(modelKey, modelId);
-      await prefs.setString(providerKey, providerId);
+      await AIUserPreferences.setConfigForCapability(
+        capability,
+        providerId,
+        modelId,
+      );
 
       AILogger.i(
           '[AIProviderManager] setModel: saved provider $providerId and model $modelId for capability ${capability.identifier}');

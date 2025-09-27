@@ -137,9 +137,6 @@ class OpenAIProvider extends BaseProvider {
       case AICapability.realtimeConversation:
         return _handleRealtimeRequest(
             history, systemPrompt, model, additionalParams);
-      default:
-        return ProviderResponse(
-            text: 'Capability $capability not supported by OpenAI provider');
     }
   }
 
@@ -154,7 +151,9 @@ class OpenAIProvider extends BaseProvider {
     try {
       final selectedModel =
           model ?? getDefaultModel(AICapability.textGeneration);
+
       if (selectedModel == null || !isValidModelForProvider(selectedModel)) {
+        AILogger.w('[OpenAIProvider] ❌ Invalid model: $selectedModel');
         return ProviderResponse(
             text: 'Error: Invalid or missing model for OpenAI provider');
       }
@@ -163,7 +162,7 @@ class OpenAIProvider extends BaseProvider {
           additionalParams?['enableImageGeneration'] == true;
 
       // Build input string - combine system prompt and history
-      String inputText = systemPrompt.context;
+      String inputText = systemPrompt.context.toString();
 
       // Add history messages
       for (final msg in history) {
@@ -200,9 +199,13 @@ class OpenAIProvider extends BaseProvider {
         // Regular text format
         bodyMap['input'] = inputText;
       }
+
       final url = Uri.parse(getEndpointUrl('chat'));
-      final response = await http.Client()
-          .post(url, headers: buildAuthHeaders(), body: jsonEncode(bodyMap));
+      final headers = buildAuthHeaders();
+      final bodyJson = jsonEncode(bodyMap);
+
+      final response =
+          await http.Client().post(url, headers: headers, body: bodyJson);
 
       if (isSuccessfulResponse(response.statusCode)) {
         return _processTextResponse(jsonDecode(response.body));
