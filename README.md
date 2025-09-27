@@ -1,6 +1,5 @@
 # 🤖 AI Providers para Flutter
 
-> 🇪🇸 **¿No hablas español?** Usa la IA para traducir esta documentación a tu idioma. Después de todo, este es un paquete de IA 😉  
 > 🇬🇧 **Don't speak Spanish?** Use AI to translate this documentation to your language. After all, this is an AI package 😉
 
 [![Flutter](https://img.shields.io/badge/Flutter-02569B?style=for-the-badge&logo=flutter&logoColor=white)](https://flutter.dev)
@@ -732,16 +731,16 @@ Aunque no se aceptan forks ni pull requests, se alientan **issues y discusiones*
 ## 📊 **Roadmap**
 
 ### ✅ Completado (v1.0)
-- [x] API Facade ultra-simple
-- [x] Arquitectura de Services especializados
-- [x] Soporte multi-proveedor (OpenAI, Google, XAI)
-- [x] Sistema de fallbacks automático
-- [x] Caché básico y optimización de rendimiento
+- ✅ API Facade ultra-simple
+- ✅ Arquitectura de Services especializados
+- ✅ Soporte multi-proveedor (OpenAI, Google, XAI)
+- ✅ Sistema de fallbacks automático
+- ✅ Caché básico y optimización de rendimiento
 
 ### 🚧 Próximas Mejoras
-- [ ] Soporte para Anthropic (Claude)
-- [ ] Implementación completa de AI.call()
-- [ ] Mejoras en el manejo de errores
+- 🔲 Soporte para Anthropic (Claude)
+- 🔲 Implementación completa de AI.call()
+- 🔲 Mejoras en el manejo de errores
 
 ---
 

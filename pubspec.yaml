@@ -1,6 +1,6 @@
 name: ai_providers
-description: Professional Flutter AI SDK with unified API for multiple providers (OpenAI, Google AI, XAI). Advanced architecture showcasing enterprise patterns, caching, retry logic, and comprehensive monitoring.
-version: 1.1.2
+description: Professional Flutter AI SDK with unified API for multiple providers (OpenAI, Google AI, XAI). Enterprise patterns with caching and retry logic.
+version: 1.2.0
 homepage: https://github.com/albertooishii/ai_providers
 repository: https://github.com/albertooishii/ai_providers
 issue_tracker: https://github.com/albertooishii/ai_providers/issues
@@ -39,8 +39,7 @@ dependencies:
   crypto: ^3.0.3
   path: ^1.8.3
   
-  # Storage and preferences
-  path_provider: ^2.1.1
+  # Storage and preferences  
   shared_preferences: ^2.2.2
   flutter_secure_storage: ^9.2.2
   
@@ -52,6 +51,9 @@ dependencies:
   
   # Permissions
   permission_handler: ^12.0.1
+  
+  # Storage and preferences
+  path_provider: ^2.1.1
   
   # Configuration
   yaml: ^3.1.2

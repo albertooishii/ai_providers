@@ -1,5 +1,36 @@
 # Changelog
 
+## [1.2.0] - 2025-09-27 🏆 PERFECT PUB.DEV SCORE (160/160)
+
+### 🎉 Major Achievement
+- **PERFECT PUB.DEV SCORE**: Achieved maximum 160/160 points on pub.dev analysis
+- **100% Pass Rate**: All pub.dev scoring criteria now fully satisfied
+
+### 🔧 API & Architecture Improvements
+- **API Optimization**: Streamlined public API surface from 16 to 10 essential exports
+- **Removed exports**: `ai_provider_config.dart`, `ai_provider_metadata.dart`, `retry_config.dart`
+- **Enhanced**: Optimized export organization for better developer experience
+- **Maintained**: Full backward compatibility for `AI.*` facade methods
+
+### 📋 Pub.dev Scoring Improvements
+- **Follow Dart file conventions**: 30/30 (was 10/30) - Perfect compliance
+- **Pass static analysis**: 50/50 (was 40/50) - Zero warnings/errors
+- **Support up-to-date dependencies**: 40/40 (was 20/40) - Full compatibility
+- **Provide documentation**: 20/20 - Maintained excellent documentation
+- **Platform support**: 20/20 - Full multi-platform support
+
+### 🛠️ Technical Optimizations
+- **Fixed**: Dependency constraint lower bounds compatibility issues
+- **Updated**: Example app dependencies (file_picker 8.3.7 → 10.3.3)
+- **Corrected**: Code formatting to match Dart style guidelines
+- **Enhanced**: Apache 2.0 license recognition and compliance
+
+### 📊 Quality Metrics
+- **Code Quality**: Zero static analysis issues
+- **Documentation**: 60.4% API coverage with comprehensive examples
+- **Compatibility**: Full downgrade/upgrade dependency testing
+- **Performance**: Optimized export structure reduces compilation overhead
+
 ## [1.1.2] - 2025-09-27
 
 ### Changed

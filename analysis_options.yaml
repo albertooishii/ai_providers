@@ -89,7 +89,7 @@ linter:
     prefer_const_constructors_in_immutables: true  # 🎨 Const constructors en @immutable
     
     # =================== DOCUMENTATION ===================
-    public_member_api_docs: false  # 📚 Desactivado por ahora, activar cuando esté listo
+    public_member_api_docs: false  # 📚 Desactivado - demasiados archivos internos exportados
     
     # =================== EXPERIMENTAL / ADVANCED ===================
     # Estas reglas están comentadas porque pueden ser muy estrictas para comenzar

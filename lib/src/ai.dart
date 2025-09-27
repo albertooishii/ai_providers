@@ -3,6 +3,11 @@ library;
 
 import 'package:ai_providers/ai_providers.dart';
 
+import 'capabilities/audio_generation_service.dart';
+import 'capabilities/audio_transcription_service.dart';
+import 'capabilities/image_analysis_service.dart';
+import 'capabilities/image_generation_service.dart';
+import 'capabilities/text_generation_service.dart';
 import 'core/ai_provider_manager.dart';
 import 'core/config_loader.dart';
 import 'models/ai_user_preferences.dart';

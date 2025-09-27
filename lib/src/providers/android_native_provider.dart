@@ -219,7 +219,6 @@ class AndroidNativeProvider {
       final result = await _flutterTts.synthesizeToFile(
         text,
         tempFile.path,
-        true, // isFullPath
       );
 
       if (result == 1 && tempFile.existsSync()) {

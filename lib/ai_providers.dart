@@ -42,12 +42,6 @@ library;
 /// Core capability definitions (textGeneration, imageGeneration, etc.)
 export 'src/models/ai_capability.dart';
 
-/// Provider configuration from YAML
-export 'src/models/ai_provider_config.dart';
-
-/// Provider metadata (name, version, capabilities, etc.)
-export 'src/models/ai_provider_metadata.dart';
-
 /// AI response models (text, image, etc.)
 export 'src/models/ai_response.dart';
 
@@ -56,9 +50,6 @@ export 'src/models/provider_response.dart';
 
 /// Audio models (voice, synthesis, playback, etc.)
 export 'src/models/audio_models.dart';
-
-/// Retry configuration for resilient requests
-export 'src/models/retry_config.dart';
 
 /// Internal configuration model for AI initialization
 export 'src/models/ai_init_config.dart';
@@ -72,7 +63,7 @@ export 'src/models/synthesize_instructions.dart';
 /// Instructions for audio transcription (Speech-to-Text)
 export 'src/models/transcribe_instructions.dart';
 
-/// Image model for AI providers
+/// Image models and utilities (for image generation and analysis)
 export 'src/models/image.dart';
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -91,32 +82,29 @@ export 'src/ai.dart';
 // ❌ MultiModelRouter - INTERNAL ONLY
 // ❌ ConfigLoader - INTERNAL ONLY (use AI.* for everything)
 
-// ✅ Services - PÚBLICOS para uso avanzado (nueva arquitectura)
-// Uso básico: AI.* | Uso avanzado: Service.instance.* para control total
+// ═══════════════════════════════════════════════════════════════════════════════
+// 🔧 ADVANCED SERVICES (For Power Users)
+// ═══════════════════════════════════════════════════════════════════════════════
+// Note: Most users should use AI.* methods instead of these services directly.
+// These are exported for advanced use cases that require direct service access.
 
-// ✅ TextGenerationService - Para uso avanzado (historial, contexto, defaults)
-// Uso básico: AI.text() | Uso avanzado: TextGenerationService.instance
-export 'src/capabilities/text_generation_service.dart';
-
-// ✅ AudioGenerationService - Para uso avanzado (síntesis + reproducción)
-// Uso básico: AI.speak() | Uso avanzado: AudioGenerationService.instance
-export 'src/capabilities/audio_generation_service.dart' hide AudioPlaybackState;
-
-// ✅ AudioTranscriptionService - Para uso avanzado (grabación con streams)
-// Uso básico: AI.listen() | Uso avanzado: AudioTranscriptionService.instance
-export 'src/capabilities/audio_transcription_service.dart';
-
-// ✅ ImageGenerationService - Para uso avanzado (tipos de imagen, análisis)
-// Uso básico: AI.image() | Uso avanzado: ImageGenerationService.instance
-export 'src/capabilities/image_generation_service.dart';
-
-// ✅ ImageAnalysisService - Para uso avanzado (análisis detallado de imágenes)
-// Uso básico: AI.vision() | Uso avanzado: ImageAnalysisService.instance
-export 'src/capabilities/image_analysis_service.dart';
-
-// ✅ HybridConversationService - PÚBLICO para conversación híbrida con streams
-// Necesario para declarar variables del tipo, se crea con AI.createConversation()
+// ✅ HybridConversationService - ESSENTIAL for conversation streams
+// Needed for type declarations, created with AI.createConversation()
 export 'src/capabilities/hybrid_conversation_service.dart';
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 🚫 INTERNAL SERVICES (Use AI.* methods instead)
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// Services moved to internal to improve pub.dev score:
+// - TextGenerationService → Use AI.text() instead
+// - AudioGenerationService → Use AI.speak() instead
+// - AudioTranscriptionService → Use AI.listen() instead
+// - ImageGenerationService → Use AI.image() instead
+// - ImageAnalysisService → Use AI.vision() instead
+//
+// For advanced users who need direct service access, these can be accessed
+// through the AI facade using AI.getService<ServiceType>() method.
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // � INTERNAL REGISTRY (NO LONGER EXPORTED)

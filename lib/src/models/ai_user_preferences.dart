@@ -119,7 +119,6 @@ class AIUserPreferences {
 
 /// Configuración de una capability específica
 class CapabilityConfig {
-
   const CapabilityConfig({
     required this.provider,
     required this.model,
