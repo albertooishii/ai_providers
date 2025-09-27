@@ -5,7 +5,7 @@
 
 [![Flutter](https://img.shields.io/badge/Flutter-02569B?style=for-the-badge&logo=flutter&logoColor=white)](https://flutter.dev)
 [![Dart](https://img.shields.io/badge/Dart-0175C2?style=for-the-badge&logo=dart&logoColor=white)](https://dart.dev)
-[![License: CC BY-NC-ND 4.0](https://img.shields.io/badge/License-CC%20BY--NC--ND%204.0-lightgrey.svg?style=for-the-badge)](https://creativecommons.org/licenses/by-nc-nd/4.0/)
+[![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=for-the-badge)](https://opensource.org/licenses/Apache-2.0)
 
 > **SDK Profesional de IA para Flutter** - Una arquitectura unificada y extensible para integrar múltiples proveedores de IA (OpenAI, Google AI, XAI, Android Nativo) con caché avanzado, lógica de reintentos y monitoreo integral.
 
@@ -709,17 +709,18 @@ final response = await AI.text('Hola');
 
 ## 📝 **Licencia**
 
-Este proyecto está licenciado bajo la **Licencia Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 Internacional**.
+Este proyecto está licenciado bajo la **Licencia Apache 2.0**.
 
 ### ⚖️ Resumen de la Licencia:
-- ✅ **Uso Personal** - Utilizar para aprendizaje, proyectos personales
-- ✅ **Atribución** - Se debe dar crédito al autor
-- ❌ **Uso Comercial** - No se permite uso comercial sin permiso
-- ❌ **Trabajos Derivados** - No se permiten modificaciones o trabajos derivados
-- ❌ **Forking** - No se permiten forks del repositorio
+- ✅ **Uso Comercial** - Permitido sin restricciones
+- ✅ **Modificación** - Puedes modificar y distribuir
+- ✅ **Distribución** - Puedes distribuir libremente
+- ✅ **Uso Privado** - Sin restricciones para uso privado
+- 🛡️ **Protección de Patentes** - Protección explícita contra demandas de patentes
+- 📝 **Atribución Requerida** - Debes mantener avisos de copyright
 
 ### 📄 Texto Completo
-Para el texto completo de la licencia, visita: [CC BY-NC-ND 4.0](https://creativecommons.org/licenses/by-nc-nd/4.0/)
+Para el texto completo de la licencia, visita: [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0)
 
 ### 🤝 **Colaboraciones Bienvenidas**
 Aunque no se aceptan forks ni pull requests, se alientan **issues y discusiones** para:
@@ -782,5 +783,5 @@ Si este SDK te ha resultado útil o impresionante, ¡me encantaría saber de ti!
 ---
 
 <div align="center">
-  <sub>© 2025 Alberto Oishii. Licenciado bajo CC BY-NC-ND 4.0</sub>
+  <sub>© 2025 Alberto Oishii. Licenciado bajo Apache License 2.0</sub>
 </div>
