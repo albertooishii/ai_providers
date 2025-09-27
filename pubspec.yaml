@@ -1,11 +1,11 @@
 name: ai_providers
-description: Professional Flutter AI SDK with unified API for multiple providers (OpenAI, Google AI, XAI). Enterprise patterns with caching and retry logic.
-version: 1.2.0
+description: Unified AI provider integration for Flutter - OpenAI, Google AI, xAI, Android native TTS with consistent API.
+version: 1.2.1
 homepage: https://github.com/albertooishii/ai_providers
 repository: https://github.com/albertooishii/ai_providers
 issue_tracker: https://github.com/albertooishii/ai_providers/issues
+license: MPL-2.0
 documentation: https://github.com/albertooishii/ai_providers#readme
-license: Apache-2.0
 
 # Professional metadata for pub.dev
 topics:
