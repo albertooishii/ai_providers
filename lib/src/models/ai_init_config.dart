@@ -18,7 +18,9 @@ class AIInitConfig {
   ) : apiKeys = Map.unmodifiable(providers);
 
   /// API keys organized by provider ID.
-  /// Format: {"openai": ["key1", "key2"], "google": ["key1"]}
+  ///
+  /// Format: `{"openai": ["key1", "key2"], "google": ["key1"]}`
+  ///
   /// If null, the system will try to load API keys from environment variables (.env)
   final Map<String, List<String>>? apiKeys;
 
