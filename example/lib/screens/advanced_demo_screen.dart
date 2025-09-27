@@ -15,7 +15,6 @@ class AdvancedDemoScreen extends StatefulWidget {
 class _AdvancedDemoScreenState extends State<AdvancedDemoScreen> {
   final ScrollController _scrollController = ScrollController();
   Map<String, dynamic>? _systemStats;
-  String? _debugInfo;
   bool _isLoading = false;
 
   @override
@@ -36,68 +35,83 @@ class _AdvancedDemoScreenState extends State<AdvancedDemoScreen> {
     });
 
     try {
-      // Get system information
-      final debug = AI.debugInfo;
+      // Obtener información del sistema usando solo API AI.*
       final isInitialized = AI.isInitialized;
+      final debugInfo = AI.debugInfo;
 
-      // Get all available providers dynamically
+      // Obtener proveedores para cada capability
+      final textProviders =
+          AI.getAvailableProviders(AICapability.textGeneration);
+      final imageProviders =
+          AI.getAvailableProviders(AICapability.imageGeneration);
+      final audioProviders =
+          AI.getAvailableProviders(AICapability.audioGeneration);
+      final transcriptionProviders =
+          AI.getAvailableProviders(AICapability.audioTranscription);
+
+      // Combinar todos los proveedores únicos
       final allProviders = <String, Map<String, dynamic>>{};
-      final capabilities = [
-        AICapability.textGeneration,
-        AICapability.imageGeneration,
-        AICapability.audioGeneration,
-        AICapability.audioTranscription,
-      ];
 
-      for (final capability in capabilities) {
-        try {
-          final providers = AI.getAvailableProviders(capability);
-          for (final provider in providers) {
-            final providerId = provider['id'] as String;
-            final providerName =
-                provider['display_name'] as String? ?? providerId;
-
-            if (!allProviders.containsKey(providerId)) {
-              allProviders[providerId] = {
-                'id': providerId,
-                'name': providerName,
-                'capabilities': <String>[],
-              };
-            }
-
-            (allProviders[providerId]!['capabilities'] as List<String>)
-                .add(capability.name);
+      for (final providerList in [
+        textProviders,
+        imageProviders,
+        audioProviders,
+        transcriptionProviders
+      ]) {
+        for (final provider in providerList) {
+          final providerId = provider['id'] as String;
+          if (!allProviders.containsKey(providerId)) {
+            allProviders[providerId] = {
+              'id': providerId,
+              'displayName': provider['displayName'] ?? providerId,
+              'description': provider['description'] ?? '',
+              'capabilities': <String>[],
+            };
           }
-        } catch (e) {
-          debugPrint('Error getting providers for ${capability.name}: $e');
+
+          // Agregar capabilities
+          final capabilities = provider['capabilities'] as List<dynamic>? ?? [];
+          for (final capability in capabilities) {
+            if (!((allProviders[providerId]!['capabilities'] as List<String>)
+                .contains(capability.toString()))) {
+              (allProviders[providerId]!['capabilities'] as List<String>)
+                  .add(capability.toString());
+            }
+          }
         }
       }
 
-      // Create comprehensive stats from real data
-      final stats = {
-        'initialized': isInitialized,
-        'debug_available': debug.isNotEmpty,
-        'timestamp': DateTime.now().toIso8601String(),
-        'total_providers': allProviders.length,
-        'available_providers': allProviders.keys.toList(),
-        'provider_details': allProviders,
-        'capabilities_count': capabilities.length,
-      };
+      // Obtener modelos actuales para cada capability
+      final currentModels = <String, String?>{};
+      for (final capability in AICapability.values) {
+        try {
+          currentModels[capability.name] = await AI.getCurrentModel(capability);
+        } catch (e) {
+          currentModels[capability.name] = null;
+        }
+      }
 
       setState(() {
-        _systemStats = stats;
-        _debugInfo = debug;
+        _systemStats = {
+          'initialized': isInitialized,
+          'timestamp': DateTime.now().toIso8601String(),
+          'totalProviders': allProviders.length,
+          'providerDetails': allProviders,
+          'currentModels': currentModels,
+          'debugInfo': debugInfo,
+        };
         _isLoading = false;
       });
     } catch (e) {
       setState(() {
         _isLoading = false;
       });
-      _showSnackBar('Error loading system stats: $e', isError: true);
+      _showSnackBar('Error cargando estadísticas: $e', isError: true);
     }
   }
 
   void _showSnackBar(String message, {bool isError = false}) {
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
@@ -113,7 +127,7 @@ class _AdvancedDemoScreenState extends State<AdvancedDemoScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Advanced Features'),
+        title: const Text('Gestión Avanzada'),
         backgroundColor: Colors.orange.withValues(alpha: 0.1),
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded),
@@ -123,7 +137,7 @@ class _AdvancedDemoScreenState extends State<AdvancedDemoScreen> {
           IconButton(
             icon: const Icon(Icons.refresh),
             onPressed: _loadSystemStats,
-            tooltip: 'Refresh Stats',
+            tooltip: 'Actualizar estadísticas',
           ),
         ],
       ),
@@ -151,7 +165,7 @@ class _AdvancedDemoScreenState extends State<AdvancedDemoScreen> {
                 child: Column(
                   children: [
                     Icon(
-                      Icons.settings_applications_outlined,
+                      Icons.admin_panel_settings_outlined,
                       size: 48,
                       color: Colors.orange,
                     )
@@ -160,7 +174,7 @@ class _AdvancedDemoScreenState extends State<AdvancedDemoScreen> {
                         .shimmer(delay: 300.ms, duration: 1000.ms),
                     const SizedBox(height: 16),
                     Text(
-                      'Advanced System Management',
+                      'Gestión del Sistema AI',
                       style:
                           Theme.of(context).textTheme.headlineSmall?.copyWith(
                                 fontWeight: FontWeight.bold,
@@ -170,7 +184,7 @@ class _AdvancedDemoScreenState extends State<AdvancedDemoScreen> {
                     ).animate().fadeIn(delay: 200.ms),
                     const SizedBox(height: 8),
                     Text(
-                      'Cache management, system diagnostics & advanced utilities',
+                      'Administración de caché, modelos y configuración',
                       style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                             color: Colors.orange.shade600,
                           ),
@@ -185,22 +199,13 @@ class _AdvancedDemoScreenState extends State<AdvancedDemoScreen> {
             SliverToBoxAdapter(
               child: _buildSection(
                 context,
-                title: '🗂️ Cache Management',
+                title: '🗂️ Gestión de Caché',
                 icon: Icons.storage_outlined,
                 children: [
                   _buildActionCard(
                     context,
-                    title: 'Clear All Models Cache',
-                    subtitle: 'Remove cached model lists from all providers',
-                    icon: Icons.clear_all_outlined,
-                    color: Colors.red,
-                    onTap: _clearModelsCache,
-                  ),
-                  const SizedBox(height: 12),
-                  _buildActionCard(
-                    context,
-                    title: 'Clear Text Cache',
-                    subtitle: 'Remove cached AI text responses',
+                    title: 'Limpiar Caché de Texto',
+                    subtitle: 'Eliminar respuestas de texto en memoria',
                     icon: Icons.text_fields_outlined,
                     color: Colors.blue,
                     onTap: _clearTextCache,
@@ -208,8 +213,8 @@ class _AdvancedDemoScreenState extends State<AdvancedDemoScreen> {
                   const SizedBox(height: 12),
                   _buildActionCard(
                     context,
-                    title: 'Clear Audio Cache',
-                    subtitle: 'Remove cached audio files and responses',
+                    title: 'Limpiar Caché de Audio',
+                    subtitle: 'Eliminar archivos de audio guardados',
                     icon: Icons.audiotrack_outlined,
                     color: Colors.green,
                     onTap: _clearAudioCache,
@@ -217,78 +222,59 @@ class _AdvancedDemoScreenState extends State<AdvancedDemoScreen> {
                   const SizedBox(height: 12),
                   _buildActionCard(
                     context,
-                    title: 'Clear Image Cache',
-                    subtitle: 'Remove cached images and responses',
+                    title: 'Limpiar Caché de Imágenes',
+                    subtitle: 'Eliminar imágenes generadas guardadas',
                     icon: Icons.image_outlined,
                     color: Colors.purple,
                     onTap: _clearImageCache,
                   ),
+                  const SizedBox(height: 12),
+                  _buildActionCard(
+                    context,
+                    title: 'Limpiar Caché de Modelos',
+                    subtitle: 'Eliminar listas de modelos persistidas',
+                    icon: Icons.model_training_outlined,
+                    color: Colors.red,
+                    onTap: _clearModelsCache,
+                  ),
                 ],
               ),
             ),
 
-            // System Diagnostics Section
+            // System Information Section
             SliverToBoxAdapter(
               child: _buildSection(
                 context,
-                title: '📊 System Diagnostics',
-                icon: Icons.analytics_outlined,
+                title: '📊 Información del Sistema',
+                icon: Icons.info_outline,
                 children: [
-                  _buildStatsCard(context),
+                  _buildSystemInfoCard(context),
                   const SizedBox(height: 12),
-                  _buildDebugInfoCard(context),
+                  _buildProvidersCard(context),
                 ],
               ),
             ),
 
-            // Provider Management Section
+            // Configuration Management Section
             SliverToBoxAdapter(
               child: _buildSection(
                 context,
-                title: '🔧 Provider Management',
-                icon: Icons.psychology_outlined,
+                title: '⚙️ Gestión de Configuración',
+                icon: Icons.settings_outlined,
                 children: [
                   _buildActionCard(
                     context,
-                    title: 'Test Provider Health',
-                    subtitle: 'Check connectivity to all AI providers',
-                    icon: Icons.health_and_safety_outlined,
-                    color: Colors.teal,
-                    onTap: _testProviderHealth,
-                  ),
-                  const SizedBox(height: 12),
-                  _buildActionCard(
-                    context,
-                    title: 'Reset Provider Stats',
-                    subtitle: 'Clear performance statistics and retry counters',
-                    icon: Icons.restore_outlined,
-                    color: Colors.indigo,
-                    onTap: _resetProviderStats,
-                  ),
-                  const SizedBox(height: 12),
-                  _buildActionCard(
-                    context,
-                    title: 'Show Available Models',
-                    subtitle: 'Display all models for each provider',
+                    title: 'Ver Modelos Disponibles',
+                    subtitle: 'Mostrar todos los modelos por proveedor',
                     icon: Icons.list_alt_outlined,
                     color: Colors.cyan,
                     onTap: _showAvailableModels,
                   ),
-                ],
-              ),
-            ),
-
-            // Advanced Utilities Section
-            SliverToBoxAdapter(
-              child: _buildSection(
-                context,
-                title: '⚡ Advanced Utilities',
-                icon: Icons.tune_outlined,
-                children: [
+                  const SizedBox(height: 12),
                   _buildActionCard(
                     context,
-                    title: 'Export System Config',
-                    subtitle: 'Copy current configuration to clipboard',
+                    title: 'Exportar Configuración',
+                    subtitle: 'Copiar configuración actual al portapapeles',
                     icon: Icons.copy_outlined,
                     color: Colors.brown,
                     onTap: _exportSystemConfig,
@@ -296,20 +282,11 @@ class _AdvancedDemoScreenState extends State<AdvancedDemoScreen> {
                   const SizedBox(height: 12),
                   _buildActionCard(
                     context,
-                    title: 'Performance Monitor',
-                    subtitle: 'Show real-time performance metrics',
-                    icon: Icons.speed_outlined,
-                    color: Colors.pink,
-                    onTap: _showPerformanceMonitor,
-                  ),
-                  const SizedBox(height: 12),
-                  _buildActionCard(
-                    context,
-                    title: 'Memory Usage Info',
-                    subtitle: 'Display cache and memory usage statistics',
-                    icon: Icons.memory_outlined,
+                    title: 'Información de Debug',
+                    subtitle: 'Ver información detallada del sistema',
+                    icon: Icons.bug_report_outlined,
                     color: Colors.amber,
-                    onTap: _showMemoryInfo,
+                    onTap: _showDebugInfo,
                   ),
                 ],
               ),
@@ -413,7 +390,7 @@ class _AdvancedDemoScreenState extends State<AdvancedDemoScreen> {
     ).animate().fadeIn().slideY(begin: 0.1);
   }
 
-  Widget _buildStatsCard(BuildContext context) {
+  Widget _buildSystemInfoCard(BuildContext context) {
     if (_isLoading) {
       return const Card(
         child: Padding(
@@ -430,7 +407,7 @@ class _AdvancedDemoScreenState extends State<AdvancedDemoScreen> {
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Text(
-            'No system stats available',
+            'No hay estadísticas disponibles',
             style: Theme.of(context).textTheme.bodyMedium,
           ),
         ),
@@ -451,7 +428,7 @@ class _AdvancedDemoScreenState extends State<AdvancedDemoScreen> {
                 ),
                 const SizedBox(width: 8),
                 Text(
-                  'System Statistics',
+                  'Estado del Sistema',
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.bold,
                       ),
@@ -459,28 +436,26 @@ class _AdvancedDemoScreenState extends State<AdvancedDemoScreen> {
               ],
             ),
             const SizedBox(height: 16),
-            _buildStatRow('Initialized',
-                (_systemStats!['initialized'] ?? 'Unknown').toString()),
-            _buildStatRow('Total Providers',
-                (_systemStats!['total_providers'] ?? 0).toString()),
-            _buildStatRow('Debug Available',
-                (_systemStats!['debug_available'] ?? false).toString()),
-            _buildStatRow('Capabilities',
-                (_systemStats!['capabilities_count'] ?? 0).toString()),
+            _buildStatRow('Inicializado',
+                (_systemStats!['initialized'] ?? false) ? '✅ Sí' : '❌ No'),
+            _buildStatRow('Total Proveedores',
+                (_systemStats!['totalProviders'] ?? 0).toString()),
+            _buildStatRow('Última Actualización',
+                _formatTimestamp(_systemStats!['timestamp'] as String?)),
 
-            // Provider Details Section
-            if (_systemStats!['provider_details'] != null) ...[
+            // Current Models Section
+            if (_systemStats!['currentModels'] != null) ...[
               const SizedBox(height: 16),
               Row(
                 children: [
                   Icon(
-                    Icons.psychology_outlined,
+                    Icons.model_training_outlined,
                     size: 16,
                     color: Theme.of(context).colorScheme.primary,
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    'Provider Details:',
+                    'Modelos Actuales:',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           fontWeight: FontWeight.w600,
                         ),
@@ -488,90 +463,14 @@ class _AdvancedDemoScreenState extends State<AdvancedDemoScreen> {
                 ],
               ),
               const SizedBox(height: 8),
-              ...(_systemStats!['provider_details'] as Map<String, dynamic>)
+              ...(_systemStats!['currentModels'] as Map<String, dynamic>)
                   .entries
                   .map((entry) {
-                final providerId = entry.key;
-                final providerInfo = entry.value as Map<String, dynamic>;
-                final providerName = providerInfo['name'] as String;
-                final capabilities =
-                    providerInfo['capabilities'] as List<String>;
-
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context)
-                        .colorScheme
-                        .surfaceContainerHighest
-                        .withValues(alpha: 0.3),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Text(
-                            providerName,
-                            style: Theme.of(context)
-                                .textTheme
-                                .bodyMedium
-                                ?.copyWith(
-                                  fontWeight: FontWeight.w600,
-                                ),
-                          ),
-                          const SizedBox(width: 8),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .primaryContainer,
-                              borderRadius: BorderRadius.circular(10),
-                            ),
-                            child: Text(
-                              providerId,
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onPrimaryContainer,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 4),
-                      Wrap(
-                        spacing: 4,
-                        children: capabilities
-                            .map(
-                              (cap) => Container(
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .secondaryContainer,
-                                  borderRadius: BorderRadius.circular(8),
-                                ),
-                                child: Text(
-                                  cap,
-                                  style: TextStyle(
-                                    fontSize: 10,
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .onSecondaryContainer,
-                                  ),
-                                ),
-                              ),
-                            )
-                            .toList(),
-                      ),
-                    ],
-                  ),
+                final capability = entry.key;
+                final model = entry.value as String?;
+                return _buildStatRow(
+                  _formatCapabilityName(capability),
+                  model ?? 'No configurado',
                 );
               }),
             ],
@@ -581,65 +480,114 @@ class _AdvancedDemoScreenState extends State<AdvancedDemoScreen> {
     ).animate().fadeIn().slideY(begin: 0.1);
   }
 
-  Widget _buildDebugInfoCard(BuildContext context) {
-    if (_debugInfo == null) return const SizedBox.shrink();
+  Widget _buildProvidersCard(BuildContext context) {
+    if (_systemStats == null || _systemStats!['providerDetails'] == null) {
+      return const SizedBox.shrink();
+    }
+
+    final providers = _systemStats!['providerDetails'] as Map<String, dynamic>;
 
     return Card(
       child: ExpansionTile(
         leading: Icon(
-          Icons.bug_report_outlined,
+          Icons.psychology_outlined,
           color: Theme.of(context).colorScheme.primary,
         ),
         title: Text(
-          'Debug Information',
+          'Proveedores Disponibles (${providers.length})',
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
                 fontWeight: FontWeight.bold,
               ),
         ),
-        children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
+        children: providers.entries.map((entry) {
+          final providerId = entry.key;
+          final providerInfo = entry.value as Map<String, dynamic>;
+          final displayName = providerInfo['displayName'] as String;
+          final description = providerInfo['description'] as String;
+          final capabilities = providerInfo['capabilities'] as List<String>;
+
+          return Container(
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: Theme.of(context)
+                  .colorScheme
+                  .surfaceContainerHighest
+                  .withValues(alpha: 0.3),
+              borderRadius: BorderRadius.circular(8),
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      'Debug Information',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
+                    Expanded(
+                      child: Text(
+                        displayName,
+                        style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                      ),
                     ),
-                    IconButton(
-                      icon: const Icon(Icons.copy, size: 20),
-                      onPressed: () => _copyToClipboard(_debugInfo!),
-                      tooltip: 'Copy to clipboard',
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context).colorScheme.primaryContainer,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Text(
+                        providerId,
+                        style: TextStyle(
+                          fontSize: 10,
+                          color:
+                              Theme.of(context).colorScheme.onPrimaryContainer,
+                        ),
+                      ),
                     ),
                   ],
                 ),
-                const SizedBox(height: 8),
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color:
-                        Theme.of(context).colorScheme.surfaceContainerHighest,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    _debugInfo!,
+                if (description.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    description,
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          fontFamily: 'monospace',
-                          fontSize: 11,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                   ),
+                ],
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 4,
+                  runSpacing: 4,
+                  children: capabilities
+                      .map(
+                        (capability) => Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: Theme.of(context)
+                                .colorScheme
+                                .secondaryContainer,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            _formatCapabilityName(capability),
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Theme.of(context)
+                                  .colorScheme
+                                  .onSecondaryContainer,
+                            ),
+                          ),
+                        ),
+                      )
+                      .toList(),
                 ),
               ],
             ),
-          ),
-        ],
+          );
+        }).toList(),
       ),
     ).animate().fadeIn().slideY(begin: 0.1);
   }
@@ -654,49 +602,75 @@ class _AdvancedDemoScreenState extends State<AdvancedDemoScreen> {
             label,
             style: Theme.of(context).textTheme.bodyMedium,
           ),
-          Text(
-            value,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: Theme.of(context).colorScheme.primary,
-                ),
+          Flexible(
+            child: Text(
+              value,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: Theme.of(context).colorScheme.primary,
+                  ),
+              textAlign: TextAlign.end,
+            ),
           ),
         ],
       ),
     );
   }
 
-  // Action Methods
-  Future<void> _clearModelsCache() async {
-    try {
-      final removed = await AI.clearModelsCache();
-      _showSnackBar(
-          '✅ Models cache cleared ($removed file${removed == 1 ? '' : 's'} removed)');
-      await _loadSystemStats(); // Refresh stats
-    } catch (e) {
-      _showSnackBar('Error clearing models cache: $e', isError: true);
+  String _formatCapabilityName(String capability) {
+    switch (capability) {
+      case 'textGeneration':
+        return 'Texto';
+      case 'imageGeneration':
+        return 'Imagen';
+      case 'audioGeneration':
+        return 'Audio TTS';
+      case 'audioTranscription':
+        return 'Audio STT';
+      default:
+        return capability;
     }
   }
 
+  String _formatTimestamp(String? timestamp) {
+    if (timestamp == null) return 'Desconocido';
+    try {
+      final dateTime = DateTime.parse(timestamp);
+      final now = DateTime.now();
+      final difference = now.difference(dateTime);
+
+      if (difference.inMinutes < 1) {
+        return 'Hace unos segundos';
+      } else if (difference.inHours < 1) {
+        return 'Hace ${difference.inMinutes} min';
+      } else if (difference.inDays < 1) {
+        return 'Hace ${difference.inHours} h';
+      } else {
+        return '${dateTime.day}/${dateTime.month}/${dateTime.year}';
+      }
+    } catch (e) {
+      return 'Formato inválido';
+    }
+  }
+
+  // Action Methods
   Future<void> _clearTextCache() async {
     try {
       final removed = await AI.clearTextCache();
-      _showSnackBar(
-          '✅ Text cache cleared ($removed entr${removed == 1 ? 'y' : 'ies'} removed)');
+      _showSnackBar('✅ Caché de texto limpiado ($removed entradas eliminadas)');
       await _loadSystemStats();
     } catch (e) {
-      _showSnackBar('Error clearing text cache: $e', isError: true);
+      _showSnackBar('Error limpiando caché de texto: $e', isError: true);
     }
   }
 
   Future<void> _clearAudioCache() async {
     try {
       final removed = await AI.clearAudioCache();
-      _showSnackBar(
-          '✅ Audio cache cleared ($removed file${removed == 1 ? '' : 's'} removed)');
+      _showSnackBar('✅ Caché de audio limpiado ($removed archivos eliminados)');
       await _loadSystemStats();
     } catch (e) {
-      _showSnackBar('Error clearing audio cache: $e', isError: true);
+      _showSnackBar('Error limpiando caché de audio: $e', isError: true);
     }
   }
 
@@ -704,87 +678,21 @@ class _AdvancedDemoScreenState extends State<AdvancedDemoScreen> {
     try {
       final removed = await AI.clearImageCache();
       _showSnackBar(
-          '✅ Image cache cleared ($removed file${removed == 1 ? '' : 's'} removed)');
+          '✅ Caché de imágenes limpiado ($removed archivos eliminados)');
       await _loadSystemStats();
     } catch (e) {
-      _showSnackBar('Error clearing image cache: $e', isError: true);
+      _showSnackBar('Error limpiando caché de imágenes: $e', isError: true);
     }
   }
 
-  Future<void> _testProviderHealth() async {
-    setState(() {
-      _isLoading = true;
-    });
-
+  Future<void> _clearModelsCache() async {
     try {
-      // Test different capabilities
-      final capabilities = [
-        AICapability.textGeneration,
-        AICapability.imageGeneration,
-        AICapability.audioGeneration,
-        AICapability.audioTranscription,
-      ];
-
-      final results = <String, bool>{};
-
-      for (final capability in capabilities) {
-        try {
-          final providers = AI.getAvailableProviders(capability);
-          results['${capability.name} providers'] = providers.isNotEmpty;
-        } catch (e) {
-          results['${capability.name} providers'] = false;
-        }
-      }
-
-      // Show results dialog
-      if (mounted) {
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Provider Health Check'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: results.entries
-                  .map(
-                    (entry) => ListTile(
-                      leading: Icon(
-                        entry.value ? Icons.check_circle : Icons.error,
-                        color: entry.value ? Colors.green : Colors.red,
-                      ),
-                      title: Text(entry.key),
-                      subtitle: Text(entry.value ? 'Available' : 'Unavailable'),
-                    ),
-                  )
-                  .toList(),
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Close'),
-              ),
-            ],
-          ),
-        );
-      }
-
-      _showSnackBar('✅ Provider health check completed!');
+      final removed = await AI.clearModelsCache();
+      _showSnackBar(
+          '✅ Caché de modelos limpiado ($removed archivos eliminados)');
+      await _loadSystemStats();
     } catch (e) {
-      _showSnackBar('Error testing provider health: $e', isError: true);
-    } finally {
-      setState(() {
-        _isLoading = false;
-      });
-    }
-  }
-
-  Future<void> _resetProviderStats() async {
-    try {
-      // This would use the retry service's resetStats method
-      // For now, just show success since the functionality exists but isn't directly exposed through AI.*
-      _showSnackBar('✅ Provider stats reset successfully!');
-      await _loadSystemStats(); // Refresh stats
-    } catch (e) {
-      _showSnackBar('Error resetting provider stats: $e', isError: true);
+      _showSnackBar('Error limpiando caché de modelos: $e', isError: true);
     }
   }
 
@@ -794,61 +702,24 @@ class _AdvancedDemoScreenState extends State<AdvancedDemoScreen> {
     });
 
     try {
-      // Get unique providers from all capabilities
-      final uniqueProviders = <String, Map<String, dynamic>>{};
-      final capabilities = [
-        AICapability.textGeneration,
-        AICapability.imageGeneration,
-        AICapability.audioGeneration,
-        AICapability.audioTranscription,
-      ];
-
-      // Collect all unique providers first
-      for (final capability in capabilities) {
-        try {
-          final providers = AI.getAvailableProviders(capability);
-          for (final provider in providers) {
-            final providerId = provider['id'] as String;
-            final providerName =
-                provider['display_name'] as String? ?? providerId;
-
-            if (!uniqueProviders.containsKey(providerId)) {
-              uniqueProviders[providerId] = {
-                'id': providerId,
-                'name': providerName,
-                'capabilities': <String>[],
-              };
-            }
-
-            (uniqueProviders[providerId]!['capabilities'] as List<String>)
-                .add(capability.name);
-          }
-        } catch (e) {
-          debugPrint('Error getting providers for ${capability.name}: $e');
-        }
-      }
-
-      // Now get models for each unique provider
+      final providers =
+          _systemStats!['providerDetails'] as Map<String, dynamic>;
       final providerModels = <String, Map<String, dynamic>>{};
 
-      for (final providerEntry in uniqueProviders.entries) {
-        final providerId = providerEntry.key;
-        final providerInfo = providerEntry.value;
+      for (final entry in providers.entries) {
+        final providerId = entry.key;
+        final providerInfo = entry.value as Map<String, dynamic>;
 
         try {
           final models = await AI.getAvailableModels(providerId);
           providerModels[providerId] = {
-            'name': providerInfo['name'],
-            'capabilities': providerInfo['capabilities'],
+            'displayName': providerInfo['displayName'],
             'models': models,
-            'model_count': models.length,
           };
         } catch (e) {
           providerModels[providerId] = {
-            'name': providerInfo['name'],
-            'capabilities': providerInfo['capabilities'],
-            'models': ['Error loading models: $e'],
-            'model_count': 0,
+            'displayName': providerInfo['displayName'],
+            'models': ['Error: ${e.toString()}'],
           };
         }
       }
@@ -857,122 +728,46 @@ class _AdvancedDemoScreenState extends State<AdvancedDemoScreen> {
         showDialog(
           context: context,
           builder: (context) => AlertDialog(
-            title: const Text('Available Models by Provider'),
+            title: const Text('Modelos Disponibles'),
             content: SizedBox(
               width: double.maxFinite,
+              height: 400,
               child: ListView(
-                shrinkWrap: true,
-                children: providerModels.entries.map(
-                  (entry) {
-                    final providerId = entry.key;
-                    final info = entry.value;
-                    final capabilities = info['capabilities'] as List<String>;
-                    final models = info['models'] as List<String>;
+                children: providerModels.entries.map((entry) {
+                  final providerId = entry.key;
+                  final info = entry.value;
+                  final displayName = info['displayName'] as String;
+                  final models = info['models'] as List<String>;
 
-                    return ExpansionTile(
-                      title: Row(
-                        children: [
-                          Icon(
-                            Icons.psychology_outlined,
-                            size: 20,
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              info['name'] as String,
-                              style:
-                                  const TextStyle(fontWeight: FontWeight.w600),
-                            ),
-                          ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Theme.of(context)
-                                  .colorScheme
-                                  .primaryContainer,
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Text(
-                              '${info['model_count']} models',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: Theme.of(context)
-                                    .colorScheme
-                                    .onPrimaryContainer,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                      subtitle: Padding(
-                        padding: const EdgeInsets.only(top: 4),
-                        child: Wrap(
-                          spacing: 4,
-                          children: capabilities
-                              .map(
-                                (cap) => Container(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: Theme.of(context)
-                                        .colorScheme
-                                        .secondaryContainer,
-                                    borderRadius: BorderRadius.circular(8),
-                                  ),
-                                  child: Text(
-                                    cap,
-                                    style: TextStyle(
-                                      fontSize: 10,
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .onSecondaryContainer,
-                                    ),
-                                  ),
-                                ),
-                              )
-                              .toList(),
-                        ),
-                      ),
-                      children: models
-                          .map(
-                            (model) => ListTile(
+                  return ExpansionTile(
+                    title: Text(displayName),
+                    subtitle: Text('$providerId • ${models.length} modelos'),
+                    children: models
+                        .map((model) => ListTile(
                               dense: true,
-                              leading:
-                                  const Icon(Icons.model_training, size: 16),
                               title: Text(
                                 model,
                                 style: const TextStyle(fontSize: 12),
                               ),
-                              trailing: Text(
-                                providerId,
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  color: Theme.of(context)
-                                      .colorScheme
-                                      .onSurfaceVariant,
-                                ),
-                              ),
-                            ),
-                          )
-                          .toList(),
-                    );
-                  },
-                ).toList(),
+                              leading:
+                                  const Icon(Icons.model_training, size: 16),
+                            ))
+                        .toList(),
+                  );
+                }).toList(),
               ),
             ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(),
-                child: const Text('Close'),
+                child: const Text('Cerrar'),
               ),
             ],
           ),
         );
       }
     } catch (e) {
-      _showSnackBar('Error loading models: $e', isError: true);
+      _showSnackBar('Error cargando modelos: $e', isError: true);
     } finally {
       setState(() {
         _isLoading = false;
@@ -983,92 +778,75 @@ class _AdvancedDemoScreenState extends State<AdvancedDemoScreen> {
   Future<void> _exportSystemConfig() async {
     try {
       final config = {
-        'system_stats': _systemStats,
-        'debug_info': _debugInfo,
+        'systemStats': _systemStats,
         'timestamp': DateTime.now().toIso8601String(),
-        'ai_initialization_status': AI.isInitialized,
+        'aiInitialized': AI.isInitialized,
+        'debugInfo': AI.debugInfo,
       };
 
-      final configJson = const JsonEncoder.withIndent('  ').convert(config);
-      await _copyToClipboard(configJson);
-      _showSnackBar('✅ System configuration copied to clipboard!');
+      final configJson = JsonEncoder.withIndent('  ').convert(config);
+      await Clipboard.setData(ClipboardData(text: configJson));
+      _showSnackBar('✅ Configuración copiada al portapapeles');
     } catch (e) {
-      _showSnackBar('Error exporting config: $e', isError: true);
+      _showSnackBar('Error exportando configuración: $e', isError: true);
     }
   }
 
-  Future<void> _showPerformanceMonitor() async {
-    // Show a simple performance dialog
+  Future<void> _showDebugInfo() async {
+    final debugInfo = AI.debugInfo;
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Performance Monitor'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Text('🚀 Performance Metrics'),
-            const SizedBox(height: 16),
-            Text(
-                'Initialization Status: ${AI.isInitialized ? 'Ready' : 'Not Ready'}'),
-            Text(
-                'Available Providers: ${_systemStats?['total_providers'] ?? 0}'),
-            Text(
-                'Cache Active: ${_systemStats?['has_cache'] ?? false ? 'Yes' : 'No'}'),
-            const SizedBox(height: 16),
-            const Text(
-              'Real-time monitoring features are available through the advanced API.',
-              style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic),
+        title: const Text('Información de Debug'),
+        content: SizedBox(
+          width: double.maxFinite,
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text('Debug Info:'),
+                    IconButton(
+                      icon: const Icon(Icons.copy, size: 20),
+                      onPressed: () async {
+                        await Clipboard.setData(ClipboardData(text: debugInfo));
+                        _showSnackBar('✅ Información copiada');
+                      },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color:
+                        Theme.of(context).colorScheme.surfaceContainerHighest,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: SelectableText(
+                    debugInfo,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          fontFamily: 'monospace',
+                          fontSize: 11,
+                        ),
+                  ),
+                ),
+              ],
             ),
-          ],
+          ),
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
-            child: const Text('Close'),
+            child: const Text('Cerrar'),
           ),
         ],
       ),
     );
-  }
-
-  Future<void> _showMemoryInfo() async {
-    try {
-      // This is a simplified memory info display
-      showDialog(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Memory Usage Info'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Text('💾 Memory & Cache Information'),
-              const SizedBox(height: 16),
-              Text('System Initialized: ${AI.isInitialized ? 'Yes' : 'No'}'),
-              Text(
-                  'Cache Service: ${_systemStats?['has_cache'] ?? false ? 'Active' : 'Inactive'}'),
-              Text(
-                  'Monitoring: ${_systemStats?['has_monitoring'] ?? false ? 'Active' : 'Inactive'}'),
-              const SizedBox(height: 16),
-              const Text(
-                'Detailed memory analysis is available through the advanced monitoring service.',
-                style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(),
-              child: const Text('Close'),
-            ),
-          ],
-        ),
-      );
-    } catch (e) {
-      _showSnackBar('Error loading memory info: $e', isError: true);
-    }
-  }
-
-  Future<void> _copyToClipboard(String text) async {
-    await Clipboard.setData(ClipboardData(text: text));
   }
 }

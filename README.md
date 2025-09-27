@@ -47,11 +47,11 @@ final imagen = await AI.image('Un gato programador escribiendo código');
 // 👁️ Analizar imágenes - ¡Completamente automático!
 final analisis = await AI.vision(imagenBase64);
 
-// 🎤 Texto a voz - ¡Directo!
+// 🎤 Texto a voz - ¡Directo con controles!
 final audio = await AI.speak('¡Hola, soy tu asistente de IA!');
 
-// 🎧 Voz a texto - ¡Simple!
-final transcripcion = await AI.listen(audioBase64);
+// 🎧 Voz a texto - ¡Múltiples opciones!
+final transcripcion = await AI.listen();   // Grabar y transcribir (detección automática de silencio)
 ```
 
 ## 🏗️ **Arquitectura Revolucionaria**
@@ -59,17 +59,53 @@ final transcripcion = await AI.listen(audioBase64);
 ### Patrón Facade con Services Especializados
 
 ```dart
-// ✅ API Súper Limpia - Solo esto necesitas saber
-AI.text()     // Generación de texto y chat
-AI.image()    // DALL-E, Stable Diffusion, etc.
-AI.vision()   // Análisis de imágenes y OCR
-AI.speak()    // Síntesis de voz (TTS)
-AI.listen()   // Reconocimiento de voz (STT)
-AI.generate() // Método universal para casos complejos
+// ═══════════════════════════════════════════════════════════════════════════════
+// 🎮 MÉTODOS DIRECTOS (Capability Automático - Súper Fácil)
+// ═══════════════════════════════════════════════════════════════════════════════
+AI.text()     // 💬 Generación de texto y chat
+AI.image()    // 🖼️ Generación de imágenes (DALL-E, Stable Diffusion, etc.)
+AI.vision()   // 👁️ Análisis de imágenes y OCR
+AI.speak()    // 🎤 Síntesis de voz (TTS)
+AI.listen()   // 🎧 Grabar y transcribir con detección automática de silencio
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 🎛️ CONTROL Y UTILIDADES (Métodos de Control y Funciones Avanzadas)
+// ═══════════════════════════════════════════════════════════════════════════════
+AI.stopSpeak()     // 🛑 Detener reproducción de audio/TTS
+AI.pauseSpeak()    // ⏸️ Pausar reproducción de audio/TTS
+AI.stopListen()    // 🛑 Detener grabación en curso
+AI.transcribe()    // 🎧 Transcribir audio existente/STT
+AI.createConversation() // 💬 Crear conversaciones híbridas con streams
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 🗂️ GESTIÓN DE CACHÉ Y SISTEMA (Administración y Monitoreo)
+// ═══════════════════════════════════════════════════════════════════════════════
+AI.clearTextCache()      // 🧹 Limpiar respuestas de texto en memoria
+AI.clearAudioCache()     // 🧹 Limpiar archivos de audio guardados
+AI.clearImageCache()     // 🧹 Limpiar imágenes generadas guardadas
+AI.clearModelsCache()    // 🧹 Limpiar listas de modelos persistidos
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// ⚙️ CONFIGURACIÓN Y INFORMACIÓN (Gestión de Proveedores y Modelos)
+// ═══════════════════════════════════════════════════════════════════════════════
+AI.getAvailableModels()        // 🎯 Obtener modelos de un proveedor específico
+AI.getAvailableProviders()     // 🎛️ Obtener proveedores para una capability
+AI.getCurrentProvider()        // 🎛️ Proveedor activo para una capability
+AI.getCurrentModel()           // 🎯 Modelo actual para una capability
+AI.setModel()                  // 🎯 Cambiar modelo para proveedor/capability
+AI.getVoicesForProvider()      // 🗣️ Obtener voces disponibles de un proveedor
+AI.getCurrentVoiceForProvider() // 🎤 Voz configurada para un proveedor
+AI.setSelectedVoiceForProvider() // 🎤 Establecer voz para un proveedor
+AI.isInitialized              // ✅ Estado de inicialización del sistema
+AI.debugInfo                  // 🐛 Información técnica detallada del SDK
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 🔧 MÉTODO UNIVERSAL (Capability Manual - Casos Complejos)
+// ═══════════════════════════════════════════════════════════════════════════════
+AI.generate()      // 🔧 Método universal con control total
 
 // ❌ Complejidad interna completamente oculta
 // TextGenerationService, ImageGenerationService, etc. - disponibles para uso avanzado
-// AIProviderManager, ProviderRegistry, CacheService - no accesibles directamente
 ```
 
 ### Arquitectura en Capas
@@ -113,14 +149,32 @@ final respuesta = await AI.text('Tu mensaje');
 ### API Unificada con Múltiples Capacidades
 
 ```dart
-// Método 1: APIs específicas (99% de casos - súper simple)
+// ═══════════════════════════════════════════════════════════════════════════════
+// 🎮 MÉTODOS DIRECTOS (99% de casos - súper simple)
+// ═══════════════════════════════════════════════════════════════════════════════
 await AI.text('¿Cómo está el clima?');
 await AI.image('Un paisaje montañoso');
 await AI.vision(imagenBase64); // prompt opcional como segundo parámetro
 await AI.speak('Bienvenido a la aplicación');
-await AI.listen(audioBase64);
+final transcripcion = await AI.listen(); // Graba automáticamente hasta silencio
 
-// Método 2: API universal (1% de casos - control total)
+// ═══════════════════════════════════════════════════════════════════════════════
+// 🎛️ CONTROL Y UTILIDADES
+// ═══════════════════════════════════════════════════════════════════════════════
+// Control de reproducción de audio
+await AI.pauseSpeak(); // Pausar TTS en cualquier momento
+await AI.stopSpeak();  // Parar TTS completamente
+
+// Control de grabación y transcripción
+final transcrito = await AI.transcribe(audioBase64);   // Transcripción directa
+await AI.stopListen(); // Parar grabación en curso
+
+// Conversaciones avanzadas
+final conversacion = AI.createConversation();
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// 🔧 MÉTODO UNIVERSAL (1% de casos - control total)
+// ═══════════════════════════════════════════════════════════════════════════════
 await AI.generate(
   message: 'Analiza este documento complejo',
   systemPrompt: AISystemPrompt(...),
@@ -277,10 +331,15 @@ await AI.vision(fotoBase64);
 // 🔧 Control Total - Cuando necesites personalización
 await AI.text(
   'Explica como si tuviera 5 años',
-  AISystemPrompt.custom(
-    rol: 'Maestro de primaria experto en explicaciones simples',
-    estilo: 'Usa analogías y ejemplos divertidos',
-    idioma: 'español',
+  AISystemPrompt(
+    context: {'user': 'niño de 5 años', 'nivel': 'principiante'},
+    dateTime: DateTime.now(),
+    instructions: {
+      'rol': 'Maestro de primaria experto en explicaciones simples',
+      'estilo': 'Usa analogías y ejemplos divertidos',
+      'idioma': 'español',
+      'formato': 'Respuestas cortas y claras'
+    },
   )
 );
 ```
@@ -295,7 +354,11 @@ import 'package:ai_providers/ai_providers.dart';
 final servicio = TextGenerationService.instance;
 final respuesta = await servicio.generateWithHistory(
   'Continúa la historia',
-  systemPrompt: AISystemPrompt(...),
+  systemPrompt: AISystemPrompt(
+    context: {'task': 'story_continuation'},
+    dateTime: DateTime.now(),
+    instructions: {'role': 'Narrador creativo'},
+  ),
   conversationHistory: conversacionPrevia,
 );
 
@@ -303,7 +366,7 @@ final respuesta = await servicio.generateWithHistory(
 final servicioImagen = ImageGenerationService.instance;
 final resultado = await servicioImagen.generateAndSave(
   'Logo futurista para empresa tech',
-  type: ImageType.logo,
+  type: ImageType.general,
   quality: ImageQuality.high,
 );
 
@@ -311,7 +374,6 @@ final resultado = await servicioImagen.generateAndSave(
 final servicioAudio = AudioGenerationService.instance;
 await servicioAudio.synthesizeAndPlay(
   'Notificación importante',
-  languageCode: 'es-ES',
 );
 
 // Análisis de imagen con configuración avanzada  
@@ -319,7 +381,12 @@ final servicioAnalisis = ImageAnalysisService.instance;
 final analisis = await servicioAnalisis.analyze(
   imagenBase64,
   'Identifica todos los objetos y sus posiciones',
-  AISystemPrompt(...),
+  AISystemPrompt(
+    context: {'task': 'object_detection'},
+    dateTime: DateTime.now(),
+    instructions: {'style': 'Detallado y preciso'},
+  ),
+  'image/jpeg',
 );
 ```
 
@@ -470,25 +537,10 @@ enum AICapability {
   imageAnalysis,       // Análisis/visión de imágenes  
   audioGeneration,     // Síntesis de voz (TTS)
   audioTranscription,  // Transcripción de voz (STT)
-  realtimeConversation,// Conversaciones en tiempo real
-  functionCalling,     // Llamadas a funciones/tools
+  realtimeConversation,// Conversaciones en tiempo real (ver ROADMAP)
   // ... más capacidades según necesidad
 }
 ```
-
-## 📈 **Rendimiento del SDK**
-
-| Operación | Tiempo Típico | Notas |
-|-----------|---------------|--------|
-| `AI.initialize()` | 100-300ms | Carga configuración YAML |
-| Respuesta en caché | 1-10ms | Dependiendo del tamaño |
-| `AI.text()` primera vez | 2-5s | Dependiente de proveedor/modelo |
-| `AI.image()` | 10-30s | Generación DALL-E/Imagen |
-| `AI.vision()` | 1-3s | Análisis con GPT-4V/Gemini |
-| `AI.speak()` TTS | 500ms-2s | Android nativo vs providers |
-| `AI.listen()` STT | 1-3s | Dependiente de duración del audio |
-
-> **Nota:** Los tiempos varían según el proveedor, modelo, complejidad del prompt y latencia de red.
 
 ## 🎯 **Casos de Uso**
 
@@ -507,6 +559,11 @@ await conversacion.sendTextMessage('Hola, ¿cómo estás?');
 final servicio = TextGenerationService.instance;
 final respuesta = await servicio.generateWithHistory(
   'Continúa nuestra conversación anterior',
+  systemPrompt: AISystemPrompt(
+    context: {'conversation_mode': true},
+    dateTime: DateTime.now(),
+    instructions: {'role': 'Asistente conversacional'},
+  ),
   conversationHistory: historialGuardado,
 );
 ```
@@ -559,6 +616,7 @@ Para ver implementaciones completas y casos de uso reales, revisa la **carpeta `
 - **💬 Chat/Texto** - `text_demo_screen.dart` - Ejemplos de AI.text() con diferentes proveedores
 - **🖼️ Generación de Imágenes** - `image_demo_screen.dart` - AI.image() y AI.vision()
 - **🎤 Audio/TTS/STT** - `audio_demo_screen.dart` - AI.speak() y AI.listen()
+- **🔧 Gestión Avanzada** - `advanced_demo_screen.dart` - Administración del sistema y caché
 - **⚙️ Configuración Real** - `assets/ai_providers_config.yaml` - YAML de configuración completo
 
 ```bash

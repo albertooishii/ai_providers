@@ -1,13 +1,8 @@
 import 'package:ai_providers/ai_providers.dart';
 import 'package:ai_providers/src/core/provider_registry.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'test_setup.dart';
 
 void main() {
-  setUpAll(() async {
-    await initializeTestEnvironment();
-  });
-
   group('Dynamic AI Providers System', () {
     test('ProviderRegistry initializes successfully', () async {
       registerAllProviders();
