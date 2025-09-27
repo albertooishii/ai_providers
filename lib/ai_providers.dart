@@ -66,6 +66,9 @@ export 'src/models/transcribe_instructions.dart';
 /// Image models and utilities (for image generation and analysis)
 export 'src/models/image.dart';
 
+/// Simple AI Provider model for public API (different from internal ProviderConfig)
+export 'src/models/ai_provider.dart';
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // 🎮 MAIN API (AI.* - ÚNICA FORMA DE ACCESO)
 // ═══════════════════════════════════════════════════════════════════════════════

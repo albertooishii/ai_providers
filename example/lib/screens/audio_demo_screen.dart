@@ -1044,8 +1044,7 @@ class _AudioDemoScreenState extends State<AudioDemoScreen>
                   const SizedBox(height: 8),
                   DropdownButtonFormField<String>(
                     initialValue: selectedProvider.isNotEmpty &&
-                            providersInfo
-                                .any((p) => p['id'] == selectedProvider)
+                            providersInfo.any((p) => p.id == selectedProvider)
                         ? selectedProvider
                         : null,
                     decoration: InputDecoration(
@@ -1053,8 +1052,8 @@ class _AudioDemoScreenState extends State<AudioDemoScreen>
                       prefixIcon: Icon(Icons.business_rounded, color: color),
                     ),
                     items: providersInfo.map((providerInfo) {
-                      final providerId = providerInfo['id'] as String;
-                      final displayName = providerInfo['displayName'] as String;
+                      final providerId = providerInfo.id;
+                      final displayName = providerInfo.displayName;
                       return DropdownMenuItem(
                         value: providerId,
                         child: Text(displayName),
@@ -1342,23 +1341,23 @@ class _AudioDemoScreenState extends State<AudioDemoScreen>
       final ttsProviders =
           AI.getAvailableProviders(AICapability.audioGeneration);
       final providerInfo = ttsProviders.firstWhere(
-        (provider) => provider['id'] == providerId,
-        orElse: () => {},
+        (provider) => provider.id == providerId,
+        orElse: () => AIProvider.empty(providerId),
       );
 
-      if (providerInfo.isNotEmpty) {
-        return providerInfo['displayName'] ?? providerId;
+      if (providerInfo.enabled) {
+        return providerInfo.displayName;
       }
 
       // If not found, try STT providers
       final sttProviders =
           AI.getAvailableProviders(AICapability.audioTranscription);
       final sttProviderInfo = sttProviders.firstWhere(
-        (provider) => provider['id'] == providerId,
-        orElse: () => {},
+        (provider) => provider.id == providerId,
+        orElse: () => AIProvider.empty(providerId),
       );
 
-      return sttProviderInfo['displayName'] ?? providerId;
+      return sttProviderInfo.displayName;
     } catch (e) {
       return providerId.isEmpty ? 'N/A' : providerId;
     }

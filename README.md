@@ -13,6 +13,12 @@ AI Providers ofrece un único facade `AI.*` para conectar tu app Flutter con mú
 - Configuración declarativa (YAML + `.env`) con soporte para múltiples claves API por proveedor.
 - Utilidades integradas para depuración (`AI.debugInfo`) y limpieza de caché (`AI.clearTextCache()`, `AI.clearAudioCache()`, `AI.clearImageCache()`).
 
+## 🆕 Novedades en v1.2.2
+- **🎯 Nuevo modelo AIProvider**: `AI.getAvailableProviders()` ahora devuelve `List<AIProvider>` con propiedades estructuradas (`id`, `displayName`, `description`, `capabilities`, `enabled`).
+- **🔧 API más limpia**: Acceso directo a propiedades de proveedores sin necesidad de Maps.
+- **⚡ Mejor intellisense**: Autocompletado y documentación mejorada para propiedades de proveedores.
+- **🚨 Breaking Change**: `AI.getAvailableProviders()` cambió de `List<Map<String, dynamic>>` a `List<AIProvider>`.
+
 ## 🚀 Instalación rápida
 1. **Agregar dependencia**
    ```bash
@@ -70,6 +76,10 @@ flutter run
   ```dart
   await AI.setModel('openai', 'gpt-4.1-mini', AICapability.textGeneration);
   final providers = AI.getAvailableProviders(AICapability.audioGeneration);
+  // providers es ahora List<AIProvider> con propiedades id, displayName, description, etc.
+  for (final provider in providers) {
+    print('${provider.displayName}: ${provider.description}');
+  }
   ```
 - Inspeccionar estado y capacidades:
   ```dart
@@ -113,7 +123,7 @@ flutter run
 |--------|-------------|---------|
 | `AI.createConversation()` | Crea un `HybridConversationService` para conversaciones en streaming. | `HybridConversationService` |
 | `AI.setModel(String providerId, String modelId, AICapability capability)` | Sobrescribe proveedor/modelo preferido para una capability. | `Future<void>` |
-| `AI.getAvailableProviders(AICapability capability)` | Lista proveedores disponibles con metadatos. | `List<Map<String, dynamic>>` |
+| `AI.getAvailableProviders(AICapability capability)` | Lista proveedores disponibles con metadatos. | `List<AIProvider>` |
 | `AI.getAvailableModels(String providerId)` | Obtiene modelos disponibles para un proveedor. | `Future<List<String>>` |
 | `AI.getCurrentModel(AICapability capability)` | Devuelve el modelo activo para una capability. | `Future<String?>` |
 | `AI.clearTextCache()` / `AI.clearAudioCache()` / `AI.clearImageCache()` / `AI.clearModelsCache()` | Limpia las diferentes cachés persistentes. | `Future<int>` |

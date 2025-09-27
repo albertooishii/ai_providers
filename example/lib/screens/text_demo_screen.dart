@@ -419,7 +419,7 @@ class _TextDemoScreenState extends State<TextDemoScreen> {
                                 '🔍 Providers found: ${providersInfo.length}');
                             for (final provider in providersInfo) {
                               debugPrint(
-                                  '🔍 Provider: ${provider['id']} - ${provider['displayName']} - enabled: ${provider['enabled']}');
+                                  '🔍 Provider: ${provider.id} - ${provider.displayName} - enabled: ${provider.enabled}');
                             }
 
                             // Also check text generation specific providers
@@ -429,7 +429,7 @@ class _TextDemoScreenState extends State<TextDemoScreen> {
                                 '🔍 Text generation providers: ${textProviders.length}');
                             for (final provider in textProviders) {
                               debugPrint(
-                                  '🔍 Text Provider: ${provider['id']} - ${provider['displayName']}');
+                                  '🔍 Text Provider: ${provider.id} - ${provider.displayName}');
                             }
 
                             if (providersInfo.isEmpty) {
@@ -451,21 +451,20 @@ class _TextDemoScreenState extends State<TextDemoScreen> {
                                 ),
                                 const SizedBox(height: 8),
                                 DropdownButtonFormField<String>(
-                                  initialValue: providersInfo.any(
-                                          (p) => p['id'] == _selectedProvider)
+                                  initialValue: providersInfo
+                                          .any((p) => p.id == _selectedProvider)
                                       ? _selectedProvider
                                       : (providersInfo.isNotEmpty
-                                          ? providersInfo.first['id'] as String
+                                          ? providersInfo.first.id
                                           : null),
                                   decoration: const InputDecoration(
                                     border: OutlineInputBorder(),
                                     prefixIcon: Icon(Icons.business_rounded),
                                   ),
                                   items: providersInfo.map((providerInfo) {
-                                    final providerId =
-                                        providerInfo['id'] as String;
+                                    final providerId = providerInfo.id;
                                     final displayName =
-                                        providerInfo['displayName'] as String;
+                                        providerInfo.displayName;
                                     return DropdownMenuItem(
                                       value: providerId,
                                       child: Text(displayName),
@@ -700,11 +699,13 @@ class _TextDemoScreenState extends State<TextDemoScreen> {
       final providersInfo =
           AI.getAvailableProviders(AICapability.textGeneration);
       final providerInfo = providersInfo.firstWhere(
-        (provider) => provider['id'] == providerId,
-        orElse: () => {},
+        (provider) => provider.id == providerId,
+        orElse: () => AIProvider.empty(providerId),
       );
 
-      return providerInfo['displayName'] ?? _fallbackProviderName(providerId);
+      return providerInfo.displayName.isNotEmpty
+          ? providerInfo.displayName
+          : _fallbackProviderName(providerId);
     } catch (e) {
       // Fallback to basic formatting if provider info not available
       return _fallbackProviderName(providerId);

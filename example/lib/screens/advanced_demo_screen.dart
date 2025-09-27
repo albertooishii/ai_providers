@@ -50,7 +50,7 @@ class _AdvancedDemoScreenState extends State<AdvancedDemoScreen> {
           AI.getAvailableProviders(AICapability.audioTranscription);
 
       // Combinar todos los proveedores únicos
-      final allProviders = <String, Map<String, dynamic>>{};
+      final allProviders = <String, AIProvider>{};
 
       for (final providerList in [
         textProviders,
@@ -59,25 +59,12 @@ class _AdvancedDemoScreenState extends State<AdvancedDemoScreen> {
         transcriptionProviders
       ]) {
         for (final provider in providerList) {
-          final providerId = provider['id'] as String;
+          final providerId = provider.id;
           if (!allProviders.containsKey(providerId)) {
-            allProviders[providerId] = {
-              'id': providerId,
-              'displayName': provider['displayName'] ?? providerId,
-              'description': provider['description'] ?? '',
-              'capabilities': <String>[],
-            };
+            allProviders[providerId] = provider;
           }
-
-          // Agregar capabilities
-          final capabilities = provider['capabilities'] as List<dynamic>? ?? [];
-          for (final capability in capabilities) {
-            if (!((allProviders[providerId]!['capabilities'] as List<String>)
-                .contains(capability.toString()))) {
-              (allProviders[providerId]!['capabilities'] as List<String>)
-                  .add(capability.toString());
-            }
-          }
+          // Note: AIProvider ya tiene todas las capabilities agregadas automáticamente
+          // No necesitamos combinar capabilities manualmente
         }
       }
 

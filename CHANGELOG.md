@@ -1,5 +1,53 @@
 # Registro de Cambios
 
+## [1.2.2] - 27 de septiembre de 2025 🎯 NUEVO MODELO AIPROVIDER - BREAKING CHANGES
+
+### 🔥 Breaking Changes
+- **API `getAvailableProviders()` actualizada**: Ahora devuelve `List<AIProvider>` en lugar de `List<Map<String, dynamic>>`
+- **Acceso estructurado**: Las propiedades del proveedor ahora son `provider.id`, `provider.displayName`, `provider.description`, etc.
+- **Migración requerida**: Código existente que use `provider['id']` debe cambiar a `provider.id`
+
+### ✨ Nuevas Características
+- **🎯 Modelo AIProvider**: Nueva clase simple con propiedades estructuradas para información de proveedores
+- **🔧 API más limpia**: Acceso directo a propiedades sin Maps, mejor intellisense y autocompletado
+- **⚡ Mejor documentación**: Todos los métodos y propiedades están documentados en el modelo
+- **🛡️ Type Safety**: Mejor seguridad de tipos con el modelo estructurado
+
+### 📋 Detalles Técnicos
+- `AIProvider` class con propiedades: `id`, `displayName`, `description`, `capabilities`, `enabled`
+- Factory method `AIProvider.fromConfig()` para conversión desde configuración YAML
+- Factory method `AIProvider.empty()` para casos de error o fallback
+- Método `supportsCapability()` para verificar soporte de capacidades
+- Compatibilidad mantenida con `ProviderConfig` interno (sin breaking changes en configuración YAML)
+
+### 🔄 Guía de Migración
+**Antes (v1.2.1 y anteriores):**
+```dart
+final providers = AI.getAvailableProviders(AICapability.textGeneration);
+for (final provider in providers) {
+  print('${provider['displayName']}: ${provider['description']}');
+  if (provider['enabled'] == true) {
+    // usar provider['id']
+  }
+}
+```
+
+**Después (v1.2.2+):**
+```dart
+final providers = AI.getAvailableProviders(AICapability.textGeneration);
+for (final provider in providers) {
+  print('${provider.displayName}: ${provider.description}');
+  if (provider.enabled) {
+    // usar provider.id
+  }
+}
+```
+
+### 🧪 Testing
+- Todos los tests actualizados para usar el nuevo modelo AIProvider
+- Ejemplos actualizados en `/example` con la nueva API
+- Zero regressions en funcionalidad existente
+
 ## [1.2.1] - 27 de septiembre de 2025 🔒 CAMBIO DE LICENCIA A MPL-2.0
 
 ### 🎯 Evolución de la Licencia

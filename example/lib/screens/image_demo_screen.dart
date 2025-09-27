@@ -1086,18 +1086,18 @@ class _ImageDemoScreenState extends State<ImageDemoScreen>
                   const SizedBox(height: 8),
                   DropdownButtonFormField<String>(
                     initialValue:
-                        providersInfo.any((p) => p['id'] == selectedProvider)
+                        providersInfo.any((p) => p.id == selectedProvider)
                             ? selectedProvider
                             : (providersInfo.isNotEmpty
-                                ? providersInfo.first['id'] as String
+                                ? providersInfo.first.id
                                 : null),
                     decoration: InputDecoration(
                       border: const OutlineInputBorder(),
                       prefixIcon: Icon(Icons.business_rounded, color: color),
                     ),
                     items: providersInfo.map((providerInfo) {
-                      final providerId = providerInfo['id'] as String;
-                      final displayName = providerInfo['displayName'] as String;
+                      final providerId = providerInfo.id;
+                      final displayName = providerInfo.displayName;
                       return DropdownMenuItem(
                         value: providerId,
                         child: Text(displayName),
@@ -1269,23 +1269,23 @@ class _ImageDemoScreenState extends State<ImageDemoScreen>
       final generationProviders =
           AI.getAvailableProviders(AICapability.imageGeneration);
       final providerInfo = generationProviders.firstWhere(
-        (provider) => provider['id'] == providerId,
-        orElse: () => {},
+        (provider) => provider.id == providerId,
+        orElse: () => AIProvider.empty(providerId),
       );
 
-      if (providerInfo.isNotEmpty) {
-        return providerInfo['displayName'] ?? providerId;
+      if (providerInfo.enabled) {
+        return providerInfo.displayName;
       }
 
       // If not found, try image analysis providers
       final analysisProviders =
           AI.getAvailableProviders(AICapability.imageAnalysis);
       final analysisProviderInfo = analysisProviders.firstWhere(
-        (provider) => provider['id'] == providerId,
-        orElse: () => {},
+        (provider) => provider.id == providerId,
+        orElse: () => AIProvider.empty(providerId),
       );
 
-      return analysisProviderInfo['displayName'] ?? providerId;
+      return analysisProviderInfo.displayName;
     } catch (e) {
       return providerId;
     }

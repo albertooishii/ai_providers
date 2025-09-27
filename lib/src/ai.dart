@@ -379,14 +379,13 @@ AI API Status:
   }
 
   /// 🎛️ Obtiene todos los proveedores disponibles con información rica para una capability
-  static List<Map<String, dynamic>> getAvailableProviders(
-      final AICapability capability) {
+  static List<AIProvider> getAvailableProviders(final AICapability capability) {
     if (!_manager.isInitialized || _manager.config == null) return [];
 
     // Get provider IDs that support the capability in fallback order
     final providerIds = _manager.getProvidersForCapabilityInOrder(capability);
 
-    // Convert provider IDs to rich information from YAML config
+    // Convert provider IDs to AIProvider objects from YAML config
     return providerIds.map((final providerId) {
       final providerConfig = _manager.config!.aiProviders[providerId];
       if (providerConfig == null) {
@@ -396,14 +395,11 @@ AI API Status:
         );
       }
 
-      return {
-        'id': providerId,
-        'displayName': providerConfig.displayName,
-        'description': providerConfig.description,
-        'capabilities':
-            providerConfig.capabilities.map((final c) => c.identifier).toList(),
-        'enabled': providerConfig.enabled,
-      };
+      // Use the new AIProvider.fromConfig factory method
+      return AIProvider.fromConfig(
+        id: providerId,
+        config: providerConfig,
+      );
     }).toList();
     // No need to sort again as _getProvidersForCapability already returns in fallback order
   }
