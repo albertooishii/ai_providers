@@ -13,12 +13,6 @@ AI Providers ofrece un único facade `AI.*` para conectar tu app Flutter con mú
 - Configuración declarativa (YAML + `.env`) con soporte para múltiples claves API por proveedor.
 - Utilidades integradas para depuración (`AI.debugInfo`) y limpieza de caché (`AI.clearTextCache()`, `AI.clearAudioCache()`, `AI.clearImageCache()`).
 
-## 🆕 Novedades en v1.2.2
-- **🎯 Nuevo modelo AIProvider**: `AI.getAvailableProviders()` ahora devuelve `List<AIProvider>` con propiedades estructuradas (`id`, `displayName`, `description`, `capabilities`, `enabled`).
-- **🔧 API más limpia**: Acceso directo a propiedades de proveedores sin necesidad de Maps.
-- **⚡ Mejor intellisense**: Autocompletado y documentación mejorada para propiedades de proveedores.
-- **🚨 Breaking Change**: `AI.getAvailableProviders()` cambió de `List<Map<String, dynamic>>` a `List<AIProvider>`.
-
 ## 🚀 Instalación rápida
 1. **Agregar dependencia**
    ```bash
@@ -105,7 +99,7 @@ flutter run
 | Método | Descripción | Retorno |
 |--------|-------------|---------|
 | `AI.text(String message, [AISystemPrompt? systemPrompt])` | Genera texto o respuestas conversacionales. | `Future<AIResponse>` |
-| `AI.image(String prompt, [AISystemPrompt? systemPrompt])` | Crea imágenes y devuelve base64 + nombre de archivo en caché. | `Future<AIResponse>` |
+| `AI.image(String prompt, [AISystemPrompt? systemPrompt, AiImageParams? imageParams])` | Crea imágenes y devuelve base64 + nombre de archivo en caché. | `Future<AIResponse>` |
 | `AI.vision(String imageBase64, [String? prompt, AISystemPrompt? systemPrompt, String? imageMimeType])` | Analiza imágenes o realiza visión computacional. | `Future<AIResponse>` |
 | `AI.generate({required String message, required AISystemPrompt systemPrompt, required AICapability capability, String? imageBase64, String? imageMimeType})` | Método avanzado para elegir capability manualmente. | `Future<AIResponse>` |
 
@@ -144,6 +138,13 @@ flutter run
 | Windows   | ✅ Completo |
 | Linux     | ✅ Completo |
 | Web       | ✅ Completo |
+
+## 🧑‍💻 Desarrollo
+Para contribuidores al paquete, instala los hooks de Git automáticos:
+```bash
+./scripts/install-hooks.sh
+```
+Los hooks ejecutan automáticamente `dart fix`, `dart format` y `dart doc` en cada commit.
 
 ## 📚 Recursos útiles
 - Ejemplo completo listo para correr: [`example/`](example/)

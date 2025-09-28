@@ -45,8 +45,30 @@ class AI {
   /// Siempre devuelve tanto imageBase64 como imageFileName (si se guarda en caché)
   /// para máxima flexibilidad del usuario.
   ///
+  /// **Ejemplo básico:**
+  /// ```dart
+  /// final image = await AI.image('Robot pintando un mural retro futurista');
+  /// ```
+  ///
+  /// **Ejemplo con parámetros avanzados:**
+  /// ```dart
+  /// final logo = await AI.image(
+  ///   'Mascota robótica con estilo pixel art',
+  ///   null,
+  ///   const AiImageParams(
+  ///     aspectRatio: AiImageAspectRatio.landscape,
+  ///     quality: AiImageQuality.high,
+  ///     format: AiImageFormat.png,
+  ///     background: AiImageBackground.transparent,
+  ///     fidelity: AiImageFidelity.high,
+  ///     seed: 'logo-v1',
+  ///   ),
+  /// );
+  /// ```
+  ///
+  /// [prompt] - Descripción de la imagen a generar
   /// [systemPrompt] - Opcional. Si no se proporciona, usa configuración por defecto
-  /// [imageParams] - Opcional. Parámetros específicos de imagen (formato, calidad, seed, etc.)
+  /// [imageParams] - Opcional. Parámetros específicos de imagen. Ver [AiImageParams] para detalles completos
   static Future<AIResponse> image(
     final String prompt, [
     final AISystemPrompt? systemPrompt,

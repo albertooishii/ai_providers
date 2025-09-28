@@ -231,12 +231,20 @@ class GoogleProvider extends BaseProvider {
               final inlineData =
                   imagePart['inlineData'] as Map<String, dynamic>;
               final imageBase64 = inlineData['data'] as String?;
-              final mimeType = inlineData['mimeType'] as String?;
 
               if (imageBase64 != null && imageBase64.isNotEmpty) {
+                // 🔥 CAPTURAR EL TEXTO REAL DE GEMINI también
+                final textPart = parts.firstWhere(
+                  (final part) => part is Map && part.containsKey('text'),
+                  orElse: () => null,
+                );
+
+                final geminiText = textPart != null
+                    ? textPart['text'] as String
+                    : ''; // ✅ Si no hay texto, dejarlo vacío (más honesto)
+
                 return ProviderResponse(
-                  text:
-                      'Image generated successfully by Google Gemini ($mimeType)',
+                  text: geminiText, // ✅ Usar el texto real de Gemini o vacío
                   imageBase64: imageBase64,
                 );
               }

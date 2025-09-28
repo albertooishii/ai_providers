@@ -1,5 +1,20 @@
 # Registro de Cambios
 
+## [1.3.0] - 28 de septiembre de 2025 🖼️ AI.IMAGE PULIDO
+
+### ✨ Nuevas Características
+- **`AiImageParams` tipado**: `AI.image()` ahora expone un tercer argumento opcional con constantes (`AiImageAspectRatio`, `AiImageFormat`, `AiImageQuality`, etc.) para configurar formato, fondo, fidelidad y seeds sin strings mágicos.
+- **Enriquecimiento automático de prompts**: Los proveedores basados exclusivamente en texto (Gemini) convierten los parámetros en instrucciones legibles, manteniendo un comportamiento consistente.
+
+### 🤖 Proveedores
+- **OpenAI**: El `aspectRatio` se mapea internamente a los tamaños recomendados (`1024x1024`, `1024x1536`, `1536x1024`) y el `seed` reutiliza respuestas anteriores si empieza por `resp_`.
+- **Gemini**: Se preserva el texto original que devuelve el modelo junto con la imagen generada.
+
+### 📚 Documentación
+- README actualizado con el nuevo parámetro de `AI.image()`.
+- Documentación completa de `AiImageParams` añadida en comentarios del código fuente
+- Pre-commit hook actualizado para generar documentación automáticamente
+
 ## [1.2.2] - 27 de septiembre de 2025 🎯 NUEVO MODELO AIPROVIDER - BREAKING CHANGES
 
 ### 🔥 Breaking Changes
