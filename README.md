@@ -106,9 +106,9 @@ flutter run
 ### Audio (TTS/STT)
 | Método | Descripción | Retorno |
 |--------|-------------|---------|
-| `AI.speak(String text, [SynthesizeInstructions? instructions, bool play = false])` | Genera audio TTS y opcionalmente lo reproduce. | `Future<AIResponse>` |
-| `AI.listen({Duration? duration, Duration silenceTimeout = const Duration(seconds: 2), bool autoStop = true, TranscribeInstructions? instructions})` | Graba audio con detección de silencio y devuelve transcripción. | `Future<AIResponse>` |
-| `AI.transcribe(String audioBase64, [TranscribeInstructions? instructions])` | Transcribe audio existente en base64. | `Future<AIResponse>` |
+| `AI.speak(String text, [AiAudioParams? audioParams, bool play = false])` | Genera audio TTS y opcionalmente lo reproduce. | `Future<AIResponse>` |
+| `AI.listen({Duration? duration, Duration silenceTimeout = const Duration(seconds: 2), bool autoStop = true, AISystemPrompt? systemPrompt})` | Graba audio con detección de silencio y devuelve transcripción. | `Future<AIResponse>` |
+| `AI.transcribe(String audioBase64, [AISystemPrompt? systemPrompt])` | Transcribe audio existente en base64. | `Future<AIResponse>` |
 | `AI.stopSpeak()` / `AI.pauseSpeak()` | Controla la reproducción de audio en curso. | `Future<bool>` |
 | `AI.stopListen()` | Detiene la grabación activa y devuelve la transcripción parcial. | `Future<String?>` |
 

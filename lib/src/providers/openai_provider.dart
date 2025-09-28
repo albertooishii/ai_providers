@@ -8,6 +8,7 @@ import '../models/provider_response.dart';
 import '../models/ai_provider_metadata.dart';
 import '../models/ai_system_prompt.dart';
 import '../models/ai_image_params.dart';
+import '../models/ai_audio_params.dart';
 // RealtimeClient removed - replaced by HybridConversationService
 
 import 'package:http/http.dart' as http;
@@ -130,10 +131,8 @@ class OpenAIProvider extends BaseProvider {
       case AICapability.audioTranscription:
         return _sendTranscriptionRequest(
           imageBase64 ?? '',
-          additionalParams?['audioFormat'],
+          systemPrompt,
           model,
-          additionalParams?['language'],
-          additionalParams,
         );
       case AICapability.realtimeConversation:
         return _handleRealtimeRequest(
@@ -289,18 +288,35 @@ class OpenAIProvider extends BaseProvider {
 
     final selectedModel =
         model ?? getDefaultModel(AICapability.audioGeneration);
-    final voice = additionalParams?['voice'] ?? getDefaultVoice();
-    final speed = additionalParams?['speed'] ?? 1.0;
-    final responseFormat =
-        additionalParams?['response_format'] ?? defaults['audio_format'];
 
-    final payload = {
+    // Crear AiAudioParams desde additionalParams si está disponible
+    final audioParams = AiAudioParams.fromMap(additionalParams);
+
+    // Usar parámetros tipados con fallbacks inteligentes
+    final voice = additionalParams?['voice'] ?? getDefaultVoice();
+    final speed = audioParams.speed; // Siempre tiene valor por defecto (1.0)
+    final responseFormat = audioParams.audioFormat ??
+        config.configuration.additionalSettings['audio_format'] ??
+        'pcm'; // ✅ PCM por defecto según recomendación
+
+    final payload = <String, dynamic>{
       'model': selectedModel,
       'input': text,
       'voice': voice,
       'speed': speed,
       'response_format': responseFormat,
     };
+
+    // ✅ Combinar accent + emotion en instructions para OpenAI
+    final instructions = _buildOpenAIInstructions(audioParams);
+    if (instructions.isNotEmpty) {
+      payload['instructions'] = instructions;
+    }
+
+    // Añadir language si está disponible (para algunos modelos de OpenAI)
+    if (audioParams.language != null) {
+      payload['language'] = audioParams.language;
+    }
 
     try {
       final url = Uri.parse(getEndpointUrl('audio_speech'));
@@ -322,16 +338,13 @@ class OpenAIProvider extends BaseProvider {
 
   Future<ProviderResponse> _sendTranscriptionRequest(
     final String audioBase64,
-    final String? audioFormat,
+    final AISystemPrompt systemPrompt,
     final String? model,
-    final String? language,
-    final Map<String, dynamic>? additionalParams,
   ) async {
     try {
       final audioBytes = base64Decode(audioBase64);
-      final format = audioFormat ?? defaults['audio_format'];
       final tempFile = File(
-          '${Directory.systemTemp.path}/whisper_${DateTime.now().millisecondsSinceEpoch}.$format');
+          '${Directory.systemTemp.path}/whisper_${DateTime.now().millisecondsSinceEpoch}.wav');
       await tempFile.writeAsBytes(audioBytes);
 
       try {
@@ -339,16 +352,15 @@ class OpenAIProvider extends BaseProvider {
         final request = http.MultipartRequest('POST', url);
 
         request.headers['Authorization'] = 'Bearer $apiKey';
-        request.fields['model'] =
-            model ?? defaults['transcription_model'] ?? 'whisper-1';
+        request.fields['model'] = model ??
+            getDefaultModel(AICapability.audioTranscription) ??
+            defaults['transcription_model'];
 
-        if (language != null && language.isNotEmpty) {
-          request.fields['language'] = language;
+        // Usar SystemPrompt como prompt para OpenAI
+        final promptText = _buildPromptFromSystemPrompt(systemPrompt);
+        if (promptText.isNotEmpty) {
+          request.fields['prompt'] = promptText;
         }
-
-        additionalParams?.forEach((final k, final v) {
-          if (v != null) request.fields[k] = v.toString();
-        });
 
         request.files
             .add(await http.MultipartFile.fromPath('file', tempFile.path));
@@ -408,13 +420,16 @@ class OpenAIProvider extends BaseProvider {
 
   Future<ProviderResponse> transcribeAudio({
     required final String audioBase64,
-    final String? audioFormat,
     final String? model,
-    final String? language,
-    final Map<String, dynamic>? additionalParams,
+    final AISystemPrompt? systemPrompt,
   }) async {
-    return _sendTranscriptionRequest(
-        audioBase64, audioFormat, model, language, additionalParams);
+    final effectiveSystemPrompt = systemPrompt ??
+        AISystemPrompt(
+          context: {'task': 'audio_transcription'},
+          dateTime: DateTime.now(),
+          instructions: {},
+        );
+    return _sendTranscriptionRequest(audioBase64, effectiveSystemPrompt, model);
   }
 
   /// [REMOVED] createRealtimeClient - Replaced by HybridConversationService
@@ -642,5 +657,46 @@ class OpenAIProvider extends BaseProvider {
       'previousResponseId': previousResponseId,
       'imageGenCall': imageGenCall,
     };
+  }
+
+  /// Construye instructions de OpenAI combinando accent y emotion
+  String _buildOpenAIInstructions(final AiAudioParams audioParams) {
+    final parts = <String>[];
+
+    // Añadir acento si está especificado
+    if (audioParams.accent != null && audioParams.accent!.isNotEmpty) {
+      parts.add(audioParams.accent!);
+    }
+
+    // Añadir emoción si está especificada
+    if (audioParams.emotion != null && audioParams.emotion!.isNotEmpty) {
+      parts.add(audioParams.emotion!);
+    }
+
+    // Combinar con punto y seguido para claridad
+    return parts.join('. ');
+  }
+
+  /// Construye prompt para transcripción desde SystemPrompt
+  String _buildPromptFromSystemPrompt(final AISystemPrompt systemPrompt) {
+    final parts = <String>[];
+
+    // Agregar contexto si hay
+    if (systemPrompt.context.isNotEmpty) {
+      final contextStr = systemPrompt.context.toString();
+      if (contextStr.isNotEmpty && contextStr != '{}') {
+        parts.add(contextStr);
+      }
+    }
+
+    // Agregar instrucciones si hay
+    if (systemPrompt.instructions.isNotEmpty) {
+      final instructionsStr = systemPrompt.instructions.toString();
+      if (instructionsStr.isNotEmpty && instructionsStr != '{}') {
+        parts.add(instructionsStr);
+      }
+    }
+
+    return parts.join(' ');
   }
 }

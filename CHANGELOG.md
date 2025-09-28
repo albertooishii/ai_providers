@@ -1,5 +1,22 @@
 # Registro de Cambios
 
+## [1.3.1] - 28 de septiembre de 2025 🎙️ SIMPLIFICACIÓN AUDIO - TRANSCRIPTION CLEANUP
+
+### 🧹 Simplificación y Mejoras
+- **Eliminado `TranscribeInstructions`**: Simplificamos la arquitectura de audio eliminando la clase `TranscribeInstructions` que tenía características no utilizadas (anti-hallucination). Ahora `AI.listen()` usa directamente `AISystemPrompt`.
+- **`AiAudioParams` clarificado**: La documentación ahora especifica claramente que `AiAudioParams` es exclusivamente para **síntesis de voz (TTS)** con `AI.speak()`, no para transcripción.
+- **Demo actualizado**: El ejemplo `audio_demo_screen.dart` ahora usa `AiAudioParams` en lugar de las obsoletas `SynthesizeInstructions`.
+
+### 🔧 Cambios Técnicos
+- **API transcripción simplificada**: `AI.listen()` y `AI.transcribe()` ahora reciben solo `AISystemPrompt`
+- **Proveedores actualizados**: OpenAI y Google providers ajustados para usar `AISystemPrompt` directamente en transcripción
+- **Documentación mejorada**: `AiAudioParams` ahora documenta correctamente solo parámetros TTS reales soportados por cada proveedor
+
+### 📚 Documentación
+- README actualizado para reflejar el uso correcto de `AiAudioParams` vs `AISystemPrompt`
+- Comentarios de código clarificados para distinguir entre TTS y STT
+- Eliminadas referencias confusas a STT en `AiAudioParams`
+
 ## [1.3.0] - 28 de septiembre de 2025 🖼️ AI.IMAGE PULIDO
 
 ### ✨ Nuevas Características

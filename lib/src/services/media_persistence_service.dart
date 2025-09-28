@@ -157,7 +157,10 @@ class MediaPersistenceService {
     }
   }
 
-  /// Guardar audio desde base64 (Google TTS devuelve PCM, lo convertimos a WAV)
+  /// Guardar audio desde base64
+  /// Maneja automáticamente diferentes formatos:
+  /// - Si detecta cabecera WAV: guarda directo
+  /// - Si es PCM raw: convierte a WAV antes de guardar
   /// Retorna la ruta completa del archivo guardado o null si falló
   Future<String?> saveBase64Audio(
     final String base64, {
@@ -166,7 +169,7 @@ class MediaPersistenceService {
     try {
       if (base64.trim().isEmpty) return null;
 
-      // Decode base64 to PCM data
+      // Decode base64 to audio data
       String normalized = base64.trim();
       if (normalized.startsWith('data:')) {
         final idx = normalized.indexOf('base64,');
@@ -175,11 +178,26 @@ class MediaPersistenceService {
         }
       }
 
-      Uint8List pcmData;
+      Uint8List audioData;
+      bool isWavFile = false;
+
       try {
-        pcmData = base64Decode(normalized);
-        AILogger.d(
-            '[MediaPersistence] Decoded ${pcmData.length} PCM bytes from Google');
+        audioData = base64Decode(normalized);
+
+        // Detectar formato de audio basado en la cabecera
+        isWavFile = audioData.length > 12 &&
+            audioData[0] == 0x52 &&
+            audioData[1] == 0x49 &&
+            audioData[2] == 0x46 &&
+            audioData[3] == 0x46; // "RIFF"
+
+        if (isWavFile) {
+          AILogger.d(
+              '[MediaPersistence] Decoded ${audioData.length} bytes as WAV format');
+        } else {
+          AILogger.d(
+              '[MediaPersistence] Decoded ${audioData.length} bytes as raw PCM format');
+        }
       } on FormatException catch (e) {
         AILogger.w('Invalid base64 format: $e');
         return null;
@@ -190,11 +208,18 @@ class MediaPersistenceService {
       final audioDir = await _getAudioDir();
       final filePath = '${audioDir.path}/$fileName';
 
-      // Convert PCM to WAV format (Google TTS uses 24kHz, mono, 16-bit)
-      final wavData = _createWavFile(pcmData,
-          sampleRate: 24000, channels: 1, bitsPerSample: 16);
+      // Manejar según el formato detectado
+      Uint8List finalAudioData;
+      if (isWavFile) {
+        // Ya es formato WAV completo - guardar directamente
+        finalAudioData = audioData;
+      } else {
+        // Es PCM raw - convertir a formato WAV (24kHz, mono, 16-bit)
+        finalAudioData = _createWavFile(audioData,
+            sampleRate: 24000, channels: 1, bitsPerSample: 16);
+      }
 
-      final file = await File(filePath).writeAsBytes(wavData);
+      final file = await File(filePath).writeAsBytes(finalAudioData);
 
       if (file.existsSync()) {
         AILogger.d('[MediaPersistence] Saved WAV audio as $filePath');

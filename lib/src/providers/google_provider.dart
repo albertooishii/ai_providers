@@ -6,6 +6,7 @@ import '../core/provider_registry.dart';
 import '../models/provider_response.dart';
 import '../models/ai_provider_metadata.dart';
 import '../models/ai_system_prompt.dart';
+import '../models/ai_audio_params.dart';
 
 import 'package:http/http.dart' as http;
 import '../utils/logger.dart';
@@ -120,10 +121,8 @@ class GoogleProvider extends BaseProvider {
       case AICapability.audioTranscription:
         return _sendTranscriptionRequest(
           imageBase64 ?? '',
-          additionalParams?['audioFormat'],
+          systemPrompt,
           model,
-          additionalParams?['language'],
-          additionalParams,
         );
       case AICapability.realtimeConversation:
         return _handleRealtimeRequest(
@@ -335,16 +334,11 @@ class GoogleProvider extends BaseProvider {
       final voice =
           additionalParams?['voice'] ?? config.voices['default'] ?? 'Puck';
 
-      // Native Gemini TTS instruction
-      final ttsPrompt = '''
-Please generate speech audio for the following text using voice "$voice":
-"$text"
+      // Crear AiAudioParams desde additionalParams para usar los nuevos campos
+      final audioParams = AiAudioParams.fromMap(additionalParams);
 
-Requirements:
-- Use natural intonation and pacing
-- Clear pronunciation
-- Appropriate emotional tone for the content
-''';
+      // Construir prompt nativo de TTS con parámetros avanzados
+      final ttsPrompt = _buildAdvancedTtsPrompt(text, voice, audioParams);
 
       final contents = [
         {
@@ -355,24 +349,35 @@ Requirements:
         }
       ];
 
-      final bodyMap = {
-        'contents': contents,
-        'generationConfig': {
-          'response_modalities': [
-            'AUDIO'
-          ], // Configurar para respuesta de audio
-          'speech_config': {
-            'voice_config': {
-              'prebuilt_voice_config': {
-                'voice_name': voice,
-              }
+      final generationConfig = <String, dynamic>{
+        'response_modalities': ['AUDIO'], // Configurar para respuesta de audio
+        'speech_config': {
+          'voice_config': {
+            'prebuilt_voice_config': {
+              'voice_name': voice,
             }
           }
-        },
+        }
       };
 
-      final url = Uri.parse(getEndpointUrl('tts_generate')
-          .replaceAll('{model}', selectedModel ?? 'gemini-2.5-flash'));
+      // Añadir temperature si está especificada
+      if (audioParams.temperature != null) {
+        generationConfig['temperature'] = audioParams.temperature;
+      }
+
+      final bodyMap = {
+        'contents': contents,
+        'generationConfig': generationConfig,
+      };
+
+      // Validation: ensure we have a model
+      if (selectedModel == null || selectedModel.isEmpty) {
+        throw StateError(
+            'No TTS model available in Google provider configuration');
+      }
+
+      final url = Uri.parse(
+          getEndpointUrl('tts_generate').replaceAll('{model}', selectedModel));
       final response = await http.Client()
           .post(url, headers: buildAuthHeaders(), body: jsonEncode(bodyMap));
 
@@ -420,13 +425,60 @@ Requirements:
     }
   }
 
+  /// Construye un prompt TTS avanzado usando los nuevos parámetros de audio
+  String _buildAdvancedTtsPrompt(
+    final String text,
+    final String voice,
+    final AiAudioParams audioParams,
+  ) {
+    final promptBuilder = StringBuffer();
+
+    promptBuilder.write('''
+Please generate speech audio for the following text using voice "$voice":
+"$text"
+
+Requirements:
+- Use natural intonation and pacing
+- Clear pronunciation''');
+
+    // Añadir idioma si está especificado
+    if (audioParams.language != null) {
+      promptBuilder.write('\n- Speak in ${audioParams.language} language');
+    }
+
+    // Añadir acento personalizado si está especificado
+    if (audioParams.accent != null) {
+      promptBuilder
+          .write('\n- Use accent/pronunciation style: ${audioParams.accent}');
+    }
+
+    // Añadir emoción personalizada si está especificada
+    if (audioParams.emotion != null) {
+      promptBuilder.write('\n- Emotional expression: ${audioParams.emotion}');
+    }
+
+    // Añadir velocidad si no es la por defecto
+    if (audioParams.speed != 1.0) {
+      final speedDescription = audioParams.speed > 1.0
+          ? 'faster than normal (${audioParams.speed}x speed)'
+          : 'slower than normal (${audioParams.speed}x speed)';
+      promptBuilder.write('\n- Speaking pace: $speedDescription');
+    }
+
+    // Añadir formato de audio si está especificado (Google siempre genera PCM internamente)
+    if (audioParams.audioFormat != null) {
+      promptBuilder
+          .write('\n- Audio format preference: ${audioParams.audioFormat}');
+    }
+
+    return promptBuilder.toString();
+  }
+
   /// Native Gemini STT using generateContent
   Future<ProviderResponse> _sendTranscriptionRequest(
     final String audioBase64,
-    final String? audioFormat,
+    final AISystemPrompt systemPrompt,
     final String? model,
-    final String? language,
-    final Map<String, dynamic>? additionalParams,
   ) async {
     if (audioBase64.isEmpty) {
       return ProviderResponse(
@@ -436,20 +488,22 @@ Requirements:
     try {
       final selectedModel =
           model ?? getDefaultModel(AICapability.audioTranscription);
-      final targetLanguage = language ?? 'es-ES';
+
+      // Construir prompt desde SystemPrompt
+      final promptText = _buildPromptFromSystemPrompt(systemPrompt);
+      final transcriptionPrompt = promptText.isNotEmpty
+          ? promptText
+          : 'Please transcribe this audio file to text. Provide only the transcribed text without additional comments.';
 
       // Native Gemini STT with multimodal input
       final contents = [
         {
           'role': 'user',
           'parts': [
-            {
-              'text':
-                  'Please transcribe this audio file to text in $targetLanguage language. Provide only the transcribed text without additional comments.'
-            },
+            {'text': transcriptionPrompt},
             {
               'inline_data': {
-                'mime_type': audioFormat ?? 'audio/wav',
+                'mime_type': 'audio/wav',
                 'data': audioBase64,
               }
             }
@@ -465,8 +519,14 @@ Requirements:
         },
       };
 
+      // Validation: ensure we have a model
+      if (selectedModel == null || selectedModel.isEmpty) {
+        throw StateError(
+            'No STT model available in Google provider configuration');
+      }
+
       final url = Uri.parse(getEndpointUrl('stt_transcribe')
-          .replaceAll('{model}', selectedModel ?? 'gemini-2.5-flash'));
+          .replaceAll('{model}', selectedModel));
       final response = await http.Client()
           .post(url, headers: buildAuthHeaders(), body: jsonEncode(bodyMap));
 
@@ -520,13 +580,16 @@ Requirements:
 
   Future<ProviderResponse> transcribeAudio({
     required final String audioBase64,
-    final String? audioFormat,
     final String? model,
-    final String? language,
-    final Map<String, dynamic>? additionalParams,
+    final AISystemPrompt? systemPrompt,
   }) async {
-    return _sendTranscriptionRequest(
-        audioBase64, audioFormat, model, language, additionalParams);
+    final effectiveSystemPrompt = systemPrompt ??
+        AISystemPrompt(
+          context: {'task': 'audio_transcription'},
+          dateTime: DateTime.now(),
+          instructions: {},
+        );
+    return _sendTranscriptionRequest(audioBase64, effectiveSystemPrompt, model);
   }
 
   /// [REMOVED] createRealtimeClient - Replaced by HybridConversationService
@@ -777,4 +840,27 @@ Requirements:
 
   bool isValidVoice(final String voiceName) => _availableVoices
       .any((final v) => v.name.toLowerCase() == voiceName.toLowerCase());
+
+  /// Construye prompt para transcripción desde SystemPrompt
+  String _buildPromptFromSystemPrompt(final AISystemPrompt systemPrompt) {
+    final parts = <String>[];
+
+    // Agregar contexto si hay
+    if (systemPrompt.context.isNotEmpty) {
+      final contextStr = systemPrompt.context.toString();
+      if (contextStr.isNotEmpty && contextStr != '{}') {
+        parts.add(contextStr);
+      }
+    }
+
+    // Agregar instrucciones si hay
+    if (systemPrompt.instructions.isNotEmpty) {
+      final instructionsStr = systemPrompt.instructions.toString();
+      if (instructionsStr.isNotEmpty && instructionsStr != '{}') {
+        parts.add(instructionsStr);
+      }
+    }
+
+    return parts.join(' ');
+  }
 }

@@ -301,6 +301,18 @@ class ProviderConfiguration {
       supportsFunctionCalling:
           map['supports_function_calling'] as bool? ?? false,
       supportsTools: map['supports_tools'] as bool? ?? false,
+      // Store all additional fields for custom provider configurations
+      additionalSettings: Map<String, dynamic>.from(map)
+        ..removeWhere((final key, final value) {
+          // Remove known fields to keep only custom ones
+          return [
+            'max_context_tokens',
+            'max_output_tokens',
+            'supports_streaming',
+            'supports_function_calling',
+            'supports_tools'
+          ].contains(key);
+        }),
     );
   }
   const ProviderConfiguration({
@@ -309,6 +321,7 @@ class ProviderConfiguration {
     required this.supportsStreaming,
     required this.supportsFunctionCalling,
     required this.supportsTools,
+    this.additionalSettings = const {},
   });
 
   final int maxContextTokens;
@@ -316,6 +329,7 @@ class ProviderConfiguration {
   final bool supportsStreaming;
   final bool supportsFunctionCalling;
   final bool supportsTools;
+  final Map<String, dynamic> additionalSettings;
 
   Map<String, dynamic> toMap() {
     return {
@@ -324,6 +338,7 @@ class ProviderConfiguration {
       'supports_streaming': supportsStreaming,
       'supports_function_calling': supportsFunctionCalling,
       'supports_tools': supportsTools,
+      ...additionalSettings, // Include additional custom settings
     };
   }
 }

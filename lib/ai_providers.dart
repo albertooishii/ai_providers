@@ -57,17 +57,16 @@ export 'src/models/ai_init_config.dart';
 /// Generic system prompt model for AI providers
 export 'src/models/ai_system_prompt.dart';
 
-/// Instructions for voice synthesis (Text-to-Speech)
-export 'src/models/synthesize_instructions.dart';
-
 /// Instructions for audio transcription (Speech-to-Text)
-export 'src/models/transcribe_instructions.dart';
 
 /// Image models and utilities (for image generation and analysis)
 export 'src/models/image.dart';
 
 /// Enhanced image generation parameters (format, size, fidelity, seed, etc.)
 export 'src/models/ai_image_params.dart';
+
+/// Enhanced audio generation/transcription parameters (speed, format, language, temperature)
+export 'src/models/ai_audio_params.dart';
 
 /// Simple AI Provider model for public API (different from internal ProviderConfig)
 export 'src/models/ai_provider.dart';

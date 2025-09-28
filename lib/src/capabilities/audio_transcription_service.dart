@@ -6,7 +6,7 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:record/record.dart';
 import '../models/ai_response.dart';
-import '../models/transcribe_instructions.dart';
+
 import '../models/ai_capability.dart';
 import '../models/ai_system_prompt.dart';
 import '../core/ai_provider_manager.dart';
@@ -70,20 +70,21 @@ class AudioTranscriptionService {
   /// Esta es la firma EXACTA que necesita AI.listen() para evitar circular dependency.
   Future<AIResponse> transcribe(
     final String audioBase64, [
-    final TranscribeInstructions? instructions,
+    final AISystemPrompt? systemPrompt,
   ]) async {
     try {
       AILogger.d('[AudioTranscriptionService] 🎧 Transcribiendo audio...');
 
-      // Crear SystemPrompt con las instrucciones de transcripción
-      final systemPrompt = _createTranscriptionSystemPrompt(instructions);
+      // Usar el SystemPrompt proporcionado o crear uno por defecto
+      final effectiveSystemPrompt =
+          systemPrompt ?? _createDefaultTranscriptionSystemPrompt();
 
       // Llamar directamente a AIProviderManager (no a AI.listen() para evitar circular dependency)
       // Nota: El caché está deshabilitado para audioTranscription en AIProviderManager
       return await AIProviderManager.instance.sendMessage(
         message:
             'CRITICAL: You are a speech transcription system. ONLY transcribe the actual spoken words in the provided audio. Do NOT create fictional dialogue. Do NOT generate sample conversations about Maria del Carmen, directors, schools, or any invented content. If no clear speech is detected, return empty text. Transcribe ONLY what is actually spoken.',
-        systemPrompt: systemPrompt,
+        systemPrompt: effectiveSystemPrompt,
         capability: AICapability.audioTranscription,
         imageBase64: audioBase64, // Reutilizamos imageBase64 para audio
       );
@@ -180,12 +181,12 @@ class AudioTranscriptionService {
   /// [duration] - Duración máxima (null = ilimitado hasta silencio)
   /// [silenceTimeout] - Tiempo de silencio para auto-detención
   /// [autoStop] - Detener automáticamente al detectar silencio
-  /// [instructions] - Instrucciones opcionales de transcripción
+  /// [systemPrompt] - Instrucciones del sistema para transcripción
   Future<String?> recordAndTranscribe({
     final Duration? duration,
     final Duration silenceTimeout = const Duration(seconds: 2),
     final bool autoStop = true,
-    final TranscribeInstructions? instructions,
+    final AISystemPrompt? systemPrompt,
   }) async {
     try {
       // Log de configuración inteligente
@@ -222,10 +223,7 @@ class AudioTranscriptionService {
         return null; // Retorna null para indicar que la grabación está en progreso
       }
 
-      // Aplicar instrucciones de transcripción si las hay
-      if (transcript != null && instructions != null) {
-        transcript = _applyTranscriptionInstructions(transcript, instructions);
-      }
+      // Las instrucciones de transcripción se pasan directamente al provider via SystemPrompt
 
       AILogger.d(
           '[AudioTranscriptionService] ✅ recordAndTranscribe completado: $transcript');
@@ -384,24 +382,27 @@ class AudioTranscriptionService {
 
   // === MÉTODOS PRIVADOS ===
 
-  /// Crea SystemPrompt para transcripción de audio con instrucciones
-  AISystemPrompt _createTranscriptionSystemPrompt(
-      final TranscribeInstructions? instructions) {
-    final effectiveInstructions =
-        instructions ?? const TranscribeInstructions();
-
+  /// Crea SystemPrompt por defecto para transcripción de audio
+  AISystemPrompt _createDefaultTranscriptionSystemPrompt() {
     final context = <String, dynamic>{
       'task': 'audio_transcription',
       'stt': true,
+      'prevent_hallucinations': true,
     };
 
-    // Las reglas anti-alucinación ahora vienen directamente de las instrucciones
-    final instructionsMap = effectiveInstructions.toMap();
+    final instructions = <String, dynamic>{
+      'language': 'auto',
+      'format': 'simple',
+      'includePunctuation': true,
+      'includeTimestamps': false,
+      'preventHallucinations': true,
+      'context': 'general',
+    };
 
     return AISystemPrompt(
       context: context,
       dateTime: DateTime.now(),
-      instructions: instructionsMap,
+      instructions: instructions,
     );
   }
 
@@ -667,63 +668,8 @@ class AudioTranscriptionService {
     return rms / 32768.0; // Normalizar a rango 0.0 - 1.0
   }
 
-  /// Aplicar instrucciones de transcripción al resultado
-  String _applyTranscriptionInstructions(
-      final String transcript, final TranscribeInstructions instructions) {
-    AILogger.d(
-        '[AudioTranscriptionService] 📝 Applying transcription instructions');
-
-    // Aplicar formato según las instrucciones
-    var result = transcript;
-
-    // Aplicar puntuación si se solicita
-    if (instructions.includePunctuation) {
-      // En implementación real, esto vendría del provider de transcripción
-      result = _addBasicPunctuation(result);
-    }
-
-    // Aplicar formato específico
-    switch (instructions.format) {
-      case 'detailed':
-        result = _formatDetailed(result);
-        break;
-      case 'simple':
-        result = _formatSimple(result);
-        break;
-      default:
-        // Mantener formato original
-        break;
-    }
-
-    AILogger.d('[AudioTranscriptionService] ✅ Instructions applied');
-    return result;
-  }
-
-  /// Agregar puntuación básica al texto
-  String _addBasicPunctuation(final String text) {
-    // Implementación básica - en producción usar NLP más sofisticado
-    var result = text.trim();
-    if (result.isNotEmpty &&
-        !result.endsWith('.') &&
-        !result.endsWith('!') &&
-        !result.endsWith('?')) {
-      result += '.';
-    }
-    return result;
-  }
-
-  /// Formatear texto en modo detallado
-  String _formatDetailed(final String text) {
-    // Agregar metadata de transcripción
-    final timestamp = DateTime.now().toIso8601String();
-    return '[Transcribed at $timestamp] $text';
-  }
-
-  /// Formatear texto en modo simple
-  String _formatSimple(final String text) {
-    // Solo texto limpio, sin metadata
-    return text.trim().toLowerCase();
-  }
+  // === MÉTODOS SIMPLIFICADOS DE FORMATO ===
+  // Nota: El formato real ahora se maneja directamente en los providers via SystemPrompt
 
   void _startRecordingTimers() {
     _recordingTimer = Timer.periodic(const Duration(milliseconds: 100), (

@@ -616,17 +616,15 @@ class _AudioDemoScreenState extends State<AudioDemoScreen>
       }
 
       // Use AI.speak for real TTS
-      final instructions = SynthesizeInstructions(
-        voiceStyle:
-            _selectedTTSVoice.isNotEmpty ? _selectedTTSVoice : 'neutral',
+      final audioParams = AiAudioParams(
         language: 'es-ES', // Default language
         speed: 1.0,
-        pitch: 'medium',
+        audioFormat: 'pcm',
       );
 
       final response = await AI.speak(
         _textController.text.trim(),
-        instructions,
+        audioParams,
       );
 
       if (!mounted) return;
@@ -1370,17 +1368,15 @@ class _AudioDemoScreenState extends State<AudioDemoScreen>
         // Play audio file from cache using AI API
         try {
           // Re-synthesize and play the same text with play=true
-          final instructions = SynthesizeInstructions(
-            voiceStyle:
-                _selectedTTSVoice.isNotEmpty ? _selectedTTSVoice : 'neutral',
+          final audioParams = AiAudioParams(
             language: 'es-ES',
             speed: 1.0,
-            pitch: 'medium',
+            audioFormat: 'pcm',
           );
 
           await AI.speak(
             _textController.text.trim(),
-            instructions,
+            audioParams,
             true, // play=true para reproducción automática
           );
         } catch (e) {
@@ -1393,17 +1389,15 @@ class _AudioDemoScreenState extends State<AudioDemoScreen>
         // Use AI.transcribe() to process base64 audio if needed
         // For playback, re-synthesize using AI.speak() with play=true
         try {
-          final instructions = SynthesizeInstructions(
-            voiceStyle:
-                _selectedTTSVoice.isNotEmpty ? _selectedTTSVoice : 'neutral',
+          final audioParams = AiAudioParams(
             language: 'es-ES',
             speed: 1.0,
-            pitch: 'medium',
+            audioFormat: 'pcm',
           );
 
           await AI.speak(
             _textController.text.trim(),
-            instructions,
+            audioParams,
             true, // play=true para reproducción automática
           );
         } catch (e) {

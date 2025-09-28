@@ -130,20 +130,40 @@ class AI {
   /// Siempre devuelve tanto audioBase64 como audioFileName (guardado en caché)
   /// para máxima flexibilidad del usuario.
   ///
+  /// **Ejemplo básico:**
+  /// ```dart
+  /// final audio = await AI.speak('Hola mundo');
+  /// ```
+  ///
+  /// **Ejemplo con parámetros avanzados:**
+  /// ```dart
+  /// final audio = await AI.speak(
+  ///   'Buenos días, ¿cómo estás?',
+  ///   AiAudioParams(
+  ///     speed: 1.2,
+  ///     audioFormat: AiAudioFormat.wav,
+  ///     language: 'es',
+  ///     accent: 'español con acento japonés',
+  ///     emotion: 'susurrando pero asustada como si acabaras de despertar',
+  ///   ),
+  ///   play: true,  // Reproduce automáticamente
+  /// );
+  /// ```
+  ///
   /// [text] - Texto a sintetizar
-  /// [instructions] - Instrucciones opcionales de síntesis (voz, velocidad, etc.)
-  /// [play] - Si es true, reproduce el audio automáticamente después de generarlo.
+  /// [audioParams] - Parámetros tipados de audio (velocidad, formato, idioma, acento, emoción)
+  /// [play] - Si es true, reproduce el audio automáticamente después de generarlo
   static Future<AIResponse> speak(
     final String text, [
-    final SynthesizeInstructions? instructions,
+    final AiAudioParams? audioParams,
     final bool play = false,
   ]) async {
     AILogger.d(
-        '[AI] 🎤 speak() - generating audio: ${text.length} chars, play: $play');
+        '[AI] 🎤 speak() - generating audio: ${text.length} chars, play: $play${audioParams != null ? ', params: $audioParams' : ''}');
     await _manager.initialize();
 
     // Delegar toda la lógica al AudioGenerationService - siempre guarda en caché
-    return AudioGenerationService.instance.synthesize(text, instructions, play);
+    return AudioGenerationService.instance.synthesize(text, audioParams, play);
   }
 
   /// 🎧 Escuchar/grabar y transcribir audio automáticamente
@@ -157,12 +177,12 @@ class AI {
   /// [duration] - Duración máxima de grabación (null = ilimitado hasta silencio)
   /// [silenceTimeout] - Tiempo de silencio para auto-detención (por defecto 2 segundos)
   /// [autoStop] - Detener automáticamente al detectar silencio (por defecto true)
-  /// [instructions] - Instrucciones opcionales de transcripción
+  /// [systemPrompt] - Instrucciones del sistema para la transcripción
   static Future<AIResponse> listen({
     final Duration? duration,
     final Duration silenceTimeout = const Duration(seconds: 2),
     final bool autoStop = true,
-    final TranscribeInstructions? instructions,
+    final AISystemPrompt? systemPrompt,
   }) async {
     // Log de configuración inteligente
     final configLog = duration != null
@@ -180,7 +200,7 @@ class AI {
       duration: duration,
       silenceTimeout: silenceTimeout,
       autoStop: autoStop,
-      instructions: instructions,
+      systemPrompt: systemPrompt,
     );
 
     // Retornar AIResponse con el resultado
@@ -227,15 +247,15 @@ class AI {
   /// Capability automático: audioTranscription
   ///
   /// [audioBase64] - Audio en formato base64 a transcribir
-  /// [instructions] - Instrucciones opcionales de transcripción (idioma, formato, etc.)
+  /// [systemPrompt] - Instrucciones del sistema para la transcripción
   static Future<AIResponse> transcribe(final String audioBase64,
-      [final TranscribeInstructions? instructions]) async {
+      [final AISystemPrompt? systemPrompt]) async {
     AILogger.d('[AI] 🎧 transcribe() - transcribing audio');
     await _manager.initialize();
 
     // Delegar a AudioTranscriptionService (nueva arquitectura)
     return AudioTranscriptionService.instance
-        .transcribe(audioBase64, instructions);
+        .transcribe(audioBase64, systemPrompt);
   }
 
   /// 💬 Crear conversación híbrida con streams TTS/STT/respuesta

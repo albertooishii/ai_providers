@@ -52,21 +52,22 @@ class AudioGenerationService {
   /// Esta es la firma EXACTA que necesita AI.speak() para evitar circular dependency.
   Future<AIResponse> synthesize(
     final String text, [
-    final SynthesizeInstructions? instructions,
+    final AiAudioParams? audioParams,
     final bool play = false,
   ]) async {
     try {
       AILogger.d(
           '[AudioGenerationService] 🎤 Sintetizando audio: ${text.substring(0, text.length.clamp(0, 50))}...');
 
-      // Crear SystemPrompt con instrucciones de síntesis
-      final systemPrompt = _createSynthesizeSystemPrompt(instructions);
+      // Crear SystemPrompt con parámetros de audio
+      final systemPrompt = _createSynthesizeSystemPrompt(audioParams);
 
       // Llamar directamente a AIProviderManager - siempre guarda en caché para máxima flexibilidad
       final response = await AIProviderManager.instance.sendMessage(
         message: text,
         systemPrompt: systemPrompt,
         capability: AICapability.audioGeneration,
+        additionalParams: audioParams?.toMap(),
         saveToCache: true,
       );
 
@@ -84,11 +85,11 @@ class AudioGenerationService {
 
   /// 🎨 MÉTODO AVANZADO - Con control completo de configuración
   ///
-  /// Permite control total sobre instrucciones, caché y reproducción automática.
+  /// Permite control total sobre parámetros de audio, caché y reproducción automática.
   /// Para uso avanzado cuando se necesita control específico.
   Future<AIResponse> synthesizeAdvanced(
     final String text, {
-    final SynthesizeInstructions? instructions,
+    final AiAudioParams? audioParams,
     final bool saveToCache = true,
     final bool play = false,
   }) async {
@@ -96,14 +97,15 @@ class AudioGenerationService {
       AILogger.d(
           '[AudioGenerationService] 🎨 Sintetizando audio (avanzado): ${text.substring(0, text.length.clamp(0, 50))}... (saveToCache: $saveToCache, play: $play)');
 
-      // Crear SystemPrompt con instrucciones de síntesis
-      final systemPrompt = _createSynthesizeSystemPrompt(instructions);
+      // Crear SystemPrompt con parámetros de audio
+      final systemPrompt = _createSynthesizeSystemPrompt(audioParams);
 
       // Llamar directamente a AIProviderManager con control completo
       final response = await AIProviderManager.instance.sendMessage(
         message: text,
         systemPrompt: systemPrompt,
         capability: AICapability.audioGeneration,
+        additionalParams: audioParams?.toMap(),
         saveToCache: saveToCache,
       );
 
@@ -167,7 +169,7 @@ class AudioGenerationService {
   }
 
   /// Sintetizar y reproducir inmediatamente (wrapper para compatibilidad)
-  /// DEPRECATED: Usar synthesize(text, instructions, play: true) directamente
+  /// DEPRECATED: Usar synthesize(text, audioParams, play: true) directamente
   Future<bool> synthesizeAndPlay(
     final String text, {
     final String? languageCode,
@@ -176,8 +178,12 @@ class AudioGenerationService {
       AILogger.d(
           '[AudioGenerationService] 🎤🔊 SynthesizeAndPlay: ${text.substring(0, text.length.clamp(0, 50))}...');
 
+      // Crear parámetros básicos si se especifica idioma (compatibilidad)
+      final audioParams =
+          languageCode != null ? AiAudioParams(language: languageCode) : null;
+
       // Usar synthesize() con play=true - más eficiente y sin duplicación
-      final response = await synthesize(text, null, true);
+      final response = await synthesize(text, audioParams, true);
 
       return response.audioFileName.isNotEmpty;
     } on Exception catch (e) {
@@ -275,21 +281,26 @@ class AudioGenerationService {
 
   // === MÉTODOS PRIVADOS ===
 
-  /// Crea SystemPrompt para síntesis de audio con instrucciones
+  /// Crea SystemPrompt para síntesis de audio con parámetros tipados
   AISystemPrompt _createSynthesizeSystemPrompt(
-      final SynthesizeInstructions? instructions) {
-    final effectiveInstructions =
-        instructions ?? const SynthesizeInstructions();
+      final AiAudioParams? audioParams) {
+    final effectiveParams = audioParams ?? const AiAudioParams();
 
     final context = <String, dynamic>{
       'task': 'audio_generation',
       'tts': true,
     };
 
+    // Combinar contexto con parámetros de audio para máxima información
+    final instructions = <String, dynamic>{
+      ...context,
+      ...effectiveParams.toMap(),
+    };
+
     return AISystemPrompt(
       context: context,
       dateTime: DateTime.now(),
-      instructions: effectiveInstructions.toMap(),
+      instructions: instructions,
     );
   }
 

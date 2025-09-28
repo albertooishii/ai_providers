@@ -10,6 +10,7 @@ import '../models/provider_response.dart';
 import '../models/ai_capability.dart';
 import '../models/ai_system_prompt.dart';
 import '../models/audio_models.dart';
+import '../models/ai_audio_params.dart';
 // RealtimeClient removed - replaced by HybridConversationService
 import 'package:flutter/foundation.dart';
 import 'package:flutter_tts/flutter_tts.dart';
@@ -200,14 +201,25 @@ class AndroidNativeProvider {
     }
 
     try {
-      // Configurar voz si se especifica
-      if (voice != null) {
-        await _flutterTts.setVoice({'name': voice, 'locale': 'es-ES'});
+      // Crear AiAudioParams desde additionalParams para usar parámetros tipados
+      final audioParams = AiAudioParams.fromMap(additionalParams);
+
+      // Configurar idioma si se especifica (filtrado ISO para Android Native)
+      if (audioParams.language != null) {
+        await _flutterTts.setLanguage(audioParams.language!);
       }
 
-      // Configurar velocidad si se especifica
-      final speed = additionalParams?['speed'] as double? ?? 0.5;
-      await _flutterTts.setSpeechRate(speed);
+      // Configurar voz si se especifica
+      if (voice != null) {
+        final locale = audioParams.language ?? 'es-ES';
+        await _flutterTts.setVoice({'name': voice, 'locale': locale});
+      }
+
+      // Configurar velocidad usando parámetros tipados
+      await _flutterTts.setSpeechRate(audioParams.speed);
+
+      // Nota: Android Native no soporta accent, emotion, temperature, audioFormat
+      // Solo usa language (ISO) y speed como documentado en AiAudioParams
 
       // Crear archivo temporal
       final tempDir = Directory.systemTemp;
