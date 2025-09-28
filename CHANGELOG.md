@@ -1,5 +1,20 @@
 # Registro de Cambios
 
+## [1.3.2] - 28 de septiembre de 2025 ✨ AIAUDIOPARAMS MEJORADO - PCM POR DEFECTO
+
+### 🔧 Mejoras en API
+- **`AiAudioParams.audioFormat` con valor por defecto**: Ahora es `String` (no nullable) con valor por defecto `'pcm'`
+- **Uso simplificado**: `AiAudioParams()` sin parámetros funciona perfectamente para casos comunes
+- **PCM universal**: Formato recomendado compatible con todos los proveedores
+
+### ⚡ Breaking Changes Menores
+- `audioFormat` cambió de `String?` a `String` con valor por defecto `'pcm'`
+- Eliminadas verificaciones de null innecesarias en providers
+
+### 📚 Documentación
+- Comentarios actualizados para reflejar el comportamiento por defecto
+- Ejemplos simplificados sin especificar formato cuando no es necesario
+
 ## [1.3.1] - 28 de septiembre de 2025 🎙️ SIMPLIFICACIÓN AUDIO - TRANSCRIPTION CLEANUP
 
 ### 🧹 Simplificación y Mejoras
