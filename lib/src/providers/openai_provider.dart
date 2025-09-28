@@ -602,12 +602,14 @@ class OpenAIProvider extends BaseProvider {
   /// Mapea aspectRatio a size específico de la API
   String _mapAspectRatioToSize(final String? aspectRatio) {
     switch (aspectRatio) {
-      case 'square':
+      case AiImageAspectRatio.square:
         return '1024x1024';
-      case 'portrait':
+      case AiImageAspectRatio.portrait:
         return '1024x1536';
-      case 'landscape':
+      case AiImageAspectRatio.landscape:
         return '1536x1024';
+      case AiImageAspectRatio.auto:
+        return '1024x1024'; // Auto defaults to square
       default:
         return '1024x1024'; // Default square
     }

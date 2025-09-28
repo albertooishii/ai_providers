@@ -11,7 +11,6 @@ import './ai_capability.dart';
 /// containing only the essential information that users need when working with providers.
 /// It's different from [ProviderConfig] which is used for internal YAML configuration management.
 class AIProvider {
-
   /// Creates an AIProvider from a Map (for deserialization)
   factory AIProvider.fromMap(final Map<String, dynamic> map) {
     return AIProvider(
@@ -24,6 +23,7 @@ class AIProvider {
       enabled: map['enabled'] as bool? ?? true,
     );
   }
+
   /// Creates an AIProvider instance.
   const AIProvider({
     required this.id,
@@ -51,7 +51,8 @@ class AIProvider {
   /// This factory method bridges the internal configuration model with the public API model.
   factory AIProvider.fromConfig({
     required final String id,
-    required final dynamic config, // ProviderConfig from ai_provider_config.dart
+    required final dynamic
+        config, // ProviderConfig from ai_provider_config.dart
   }) {
     try {
       return AIProvider(

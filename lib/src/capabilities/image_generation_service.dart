@@ -31,9 +31,9 @@ class ImageGenerationService {
         '[ImageGenerationService] 🖼️ Generando imagen: ${prompt.substring(0, prompt.length.clamp(0, 50))}... (saveToCache: $saveToCache)',
       );
 
-      // Crear SystemPrompt usando imageParams o valores por defecto
+      // Crear SystemPrompt respetando el original y fusionando parámetros de imagen
       final finalSystemPrompt =
-          systemPrompt ?? _createSystemPromptFromParams(imageParams);
+          _buildFinalSystemPrompt(systemPrompt, imageParams);
 
       // Llamar directamente a AIProviderManager con todos los parámetros
       return await AIProviderManager.instance.sendMessage(
@@ -51,7 +51,55 @@ class ImageGenerationService {
 
   // === MÉTODOS PRIVADOS ===
 
+  /// 🔄 Construye SystemPrompt final respetando el original y fusionando parámetros de imagen
+  AISystemPrompt _buildFinalSystemPrompt(
+    final AISystemPrompt? originalSystemPrompt,
+    final AiImageParams? imageParams,
+  ) {
+    // Si no hay systemPrompt original, crear uno desde parámetros
+    if (originalSystemPrompt == null) {
+      return _createSystemPromptFromParams(imageParams);
+    }
+
+    // Si no hay parámetros de imagen, usar el original sin cambios
+    if (imageParams == null) {
+      return originalSystemPrompt;
+    }
+
+    // 🔥 FUSIONAR: Respetar original + añadir parámetros de imagen
+    final mergedInstructions = <String, dynamic>{
+      ...originalSystemPrompt.instructions,
+    };
+
+    // Agregar descripción textual de parámetros de imagen
+    final imageRequirements = _buildImageRequirementsText(imageParams);
+    if (imageRequirements.isNotEmpty) {
+      mergedInstructions['image_parameters'] = imageRequirements;
+    }
+
+    // Mantener parámetros estructurados para compatibilidad con providers nativos
+    if (imageParams.format != null) {
+      mergedInstructions['image_format'] = imageParams.format;
+    }
+    if (imageParams.background != null) {
+      mergedInstructions['background'] = imageParams.background;
+    }
+    if (imageParams.fidelity != null) {
+      mergedInstructions['fidelity'] = imageParams.fidelity;
+    }
+    if (imageParams.seed != null) {
+      mergedInstructions['seed'] = imageParams.seed;
+    }
+
+    return AISystemPrompt(
+      context: originalSystemPrompt.context,
+      dateTime: originalSystemPrompt.dateTime,
+      instructions: mergedInstructions,
+    );
+  }
+
   /// Crea SystemPrompt desde AiImageParams o valores por defecto
+  /// Respeta el systemPrompt original y concatena parámetros de imagen
   AISystemPrompt _createSystemPromptFromParams(final AiImageParams? params) {
     final context = <String, dynamic>{
       'task': 'image_generation',
@@ -63,8 +111,14 @@ class ImageGenerationService {
       'format': 'Create visually appealing and accurate representations.',
     };
 
-    // Añadir parámetros específicos si están disponibles
+    // ✨ Convertir AiImageParams a descripción textual para providers basados en prompt
     if (params != null) {
+      final imageRequirements = _buildImageRequirementsText(params);
+      if (imageRequirements.isNotEmpty) {
+        instructions['image_parameters'] = imageRequirements;
+      }
+
+      // Mantener parámetros estructurados para compatibilidad
       if (params.format != null) instructions['image_format'] = params.format;
       if (params.background != null) {
         instructions['background'] = params.background;
@@ -78,6 +132,101 @@ class ImageGenerationService {
       dateTime: DateTime.now(),
       instructions: instructions,
     );
+  }
+
+  /// 🖼️ Convierte AiImageParams a descripción textual para providers basados en prompt
+  String _buildImageRequirementsText(final AiImageParams params) {
+    final requirements = <String>[];
+
+    // Aspect Ratio -> Descripción natural
+    if (params.aspectRatio != null) {
+      final aspectRatioDesc = _getAspectRatioDescription(params.aspectRatio!);
+      if (aspectRatioDesc.isNotEmpty) {
+        requirements.add('Generate with $aspectRatioDesc aspect ratio');
+      }
+    }
+
+    // Format -> Descripción de calidad de output
+    if (params.format != null) {
+      requirements
+          .add('Output format should be ${params.format!.toUpperCase()}');
+    }
+
+    // Quality -> Descripción de nivel de detalle
+    if (params.quality != null) {
+      final qualityDesc = _getQualityDescription(params.quality!);
+      if (qualityDesc.isNotEmpty) {
+        requirements.add(qualityDesc);
+      }
+    }
+
+    // Background -> Descripción de fondo
+    if (params.background != null) {
+      requirements.add('Background should be ${params.background}');
+    }
+
+    // Fidelity -> Descripción de adherencia al prompt
+    if (params.fidelity != null) {
+      final fidelityDesc = _getFidelityDescription(params.fidelity!);
+      if (fidelityDesc.isNotEmpty) {
+        requirements.add(fidelityDesc);
+      }
+    }
+
+    // Seed -> Descripción de consistencia
+    if (params.seed != null) {
+      requirements.add(
+          'Ensure consistent generation using reference seed ${params.seed}');
+    }
+
+    return requirements.isEmpty ? '' : '${requirements.join('. ')}.';
+  }
+
+  /// Convierte aspectRatio a descripción legible
+  String _getAspectRatioDescription(final String aspectRatio) {
+    switch (aspectRatio) {
+      case AiImageAspectRatio.square:
+        return 'square (1:1)';
+      case AiImageAspectRatio.portrait:
+        return 'portrait (3:4)';
+      case AiImageAspectRatio.landscape:
+        return 'landscape (4:3)';
+      case AiImageAspectRatio.auto:
+        return 'automatic aspect ratio';
+      default:
+        return aspectRatio;
+    }
+  }
+
+  /// Convierte quality a descripción de detalle
+  String _getQualityDescription(final String quality) {
+    switch (quality) {
+      case AiImageQuality.standard:
+        return 'Generate with standard quality and good detail';
+      case AiImageQuality.high:
+        return 'Generate with high quality, rich detail, and professional appearance';
+      case AiImageQuality.ultra:
+        return 'Generate with ultra-high quality, maximum detail, and photorealistic precision';
+      // Compatibilidad con valores no estándar
+      case 'low':
+        return 'Generate with basic quality and moderate detail';
+      default:
+        return 'Generate with $quality quality';
+    }
+  }
+
+  /// Convierte fidelity a descripción de adherencia
+  String _getFidelityDescription(final String fidelity) {
+    switch (fidelity) {
+      case AiImageFidelity.low:
+        return 'Allow creative interpretation with loose adherence to the prompt';
+      case AiImageFidelity.medium:
+        return 'Balance creative interpretation with moderate prompt adherence';
+      case AiImageFidelity.high:
+        return 'Maintain strict adherence to the prompt with minimal creative deviation';
+      default:
+        return 'Maintain $fidelity fidelity to the prompt';
+    }
   }
 }
 
