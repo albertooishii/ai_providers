@@ -16,46 +16,32 @@ class ImageGenerationService {
   static final ImageGenerationService _instance = ImageGenerationService._();
   static ImageGenerationService get instance => _instance;
 
-  /// Generar imagen con tipos específicos (wrapper para compatibilidad)
-  /// DEPRECATED: Usar generateImageAdvanced() directamente
-  Future<String?> generateAndSave(
-    final String prompt, {
-    final ImageType type = ImageType.general,
-    final ImageQuality quality = ImageQuality.high,
-  }) async {
-    try {
-      AILogger.d(
-        '[ImageGenerationService] 🎯 generateAndSave() - ${prompt.substring(0, prompt.length.clamp(0, 50))}...',
-      );
-
-      // Usar generateImageAdvanced() directamente - sin duplicación
-      final response =
-          await generateImageAdvanced(prompt, type: type, quality: quality);
-
-      return response.imageFileName.isNotEmpty ? response.imageFileName : null;
-    } catch (e) {
-      AILogger.e('[ImageGenerationService] Error en generateAndSave(): $e');
-      rethrow;
-    }
-  }
-
-  /// 🎯 MÉTODO SIMPLE - usado por AI.image()
+  /// 🎯 MÉTODO UNIFICADO - usado por AI.image() y casos avanzados
   ///
-  /// Versión simple que siempre guarda en caché para máxima facilidad de uso.
-  /// Esta es la firma EXACTA que necesita AI.image() para evitar circular dependency.
+  /// Versión unificada que combina simplicidad y funcionalidad avanzada.
+  /// Acepta parámetros opcionales para casos avanzados pero mantiene simplicidad.
   Future<AIResponse> generateImage(
     final String prompt, [
     final AISystemPrompt? systemPrompt,
+    final bool saveToCache = true,
+    final AiImageParams? imageParams,
   ]) async {
     try {
       AILogger.d(
-        '[ImageGenerationService] 🖼️ Generando imagen (simple): ${prompt.substring(0, prompt.length.clamp(0, 50))}...',
+        '[ImageGenerationService] 🖼️ Generando imagen: ${prompt.substring(0, prompt.length.clamp(0, 50))}... (saveToCache: $saveToCache)',
       );
 
-      // Usar generateImageAdvanced() con parámetros por defecto - evita duplicación
-      return await generateImageAdvanced(
-        prompt,
-        customSystemPrompt: systemPrompt ?? _createDefaultImageSystemPrompt(),
+      // Crear SystemPrompt usando imageParams o valores por defecto
+      final finalSystemPrompt =
+          systemPrompt ?? _createSystemPromptFromParams(imageParams);
+
+      // Llamar directamente a AIProviderManager con todos los parámetros
+      return await AIProviderManager.instance.sendMessage(
+        message: prompt,
+        systemPrompt: finalSystemPrompt,
+        capability: AICapability.imageGeneration,
+        saveToCache: saveToCache,
+        additionalParams: imageParams?.toMap(),
       );
     } catch (e) {
       AILogger.e('[ImageGenerationService] ❌ Error generando imagen: $e');
@@ -63,80 +49,28 @@ class ImageGenerationService {
     }
   }
 
-  /// 🎨 MÉTODO AVANZADO - Con control completo de configuración
-  ///
-  /// Permite control total sobre tipos, calidades y si se quiere guardar en caché o no.
-  /// Para uso avanzado cuando se necesita control específico.
-  Future<AIResponse> generateImageAdvanced(
-    final String prompt, {
-    final ImageType type = ImageType.general,
-    final ImageQuality quality = ImageQuality.high,
-    final bool saveToCache = true,
-    final AISystemPrompt? customSystemPrompt,
-  }) async {
-    try {
-      AILogger.d(
-        '[ImageGenerationService] 🎨 Generación avanzada: ${prompt.substring(0, prompt.length.clamp(0, 50))}... (saveToCache: $saveToCache)',
-      );
-
-      // Usar SystemPrompt personalizado o crear uno según tipo y calidad
-      final systemPrompt =
-          customSystemPrompt ?? _createSystemPrompt(type, quality);
-
-      // Llamar directamente a AIProviderManager con control completo
-      return await AIProviderManager.instance.sendMessage(
-        message: prompt,
-        systemPrompt: systemPrompt,
-        capability: AICapability.imageGeneration,
-        saveToCache: saveToCache,
-      );
-    } catch (e) {
-      AILogger.e('[ImageGenerationService] Error en generateImageAdvanced: $e');
-      rethrow;
-    }
-  }
-
   // === MÉTODOS PRIVADOS ===
 
-  /// Crea SystemPrompt por defecto para generación de imágenes
-  AISystemPrompt _createDefaultImageSystemPrompt() {
+  /// Crea SystemPrompt desde AiImageParams o valores por defecto
+  AISystemPrompt _createSystemPromptFromParams(final AiImageParams? params) {
     final context = <String, dynamic>{
       'task': 'image_generation',
-      'image_type': 'general',
     };
 
     final instructions = <String, dynamic>{
-      'quality': 'high',
+      'quality': params?.quality ?? 'high',
       'style': 'Generate high-quality images based on the provided prompt.',
       'format': 'Create visually appealing and accurate representations.',
     };
 
-    return AISystemPrompt(
-      context: context,
-      dateTime: DateTime.now(),
-      instructions: instructions,
-    );
-  }
-
-  AISystemPrompt _createSystemPrompt(
-      final ImageType type, final ImageQuality quality) {
-    final Map<String, dynamic> context = {'image_type': type.name};
-    final Map<String, dynamic> instructions = {'quality': quality.name};
-
-    // Añadir instrucciones específicas según el tipo
-    switch (type) {
-      case ImageType.avatar:
-        instructions.addAll({'format': 'portrait', 'style': 'character'});
-        break;
-      case ImageType.artistic:
-        instructions.addAll({'style': 'artistic', 'creativity': 'high'});
-        break;
-      case ImageType.photorealistic:
-        instructions.addAll({'style': 'photorealistic', 'detail': 'high'});
-        break;
-      case ImageType.general:
-        // Usar configuración general por defecto
-        break;
+    // Añadir parámetros específicos si están disponibles
+    if (params != null) {
+      if (params.format != null) instructions['image_format'] = params.format;
+      if (params.background != null) {
+        instructions['background'] = params.background;
+      }
+      if (params.fidelity != null) instructions['fidelity'] = params.fidelity;
+      if (params.seed != null) instructions['seed'] = params.seed;
     }
 
     return AISystemPrompt(
@@ -147,7 +81,7 @@ class ImageGenerationService {
   }
 }
 
-/// Tipos de imagen soportados
+/// Tipos de imagen soportados (mantenidos para compatibilidad futura)
 enum ImageType {
   general,
   avatar,
@@ -155,7 +89,7 @@ enum ImageType {
   photorealistic,
 }
 
-/// Calidades de imagen soportadas
+/// Calidades de imagen soportadas (mantenidos para compatibilidad futura)
 enum ImageQuality {
   standard,
   high,

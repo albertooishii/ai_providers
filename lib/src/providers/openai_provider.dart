@@ -7,6 +7,7 @@ import '../core/provider_registry.dart';
 import '../models/provider_response.dart';
 import '../models/ai_provider_metadata.dart';
 import '../models/ai_system_prompt.dart';
+import '../models/ai_image_params.dart';
 // RealtimeClient removed - replaced by HybridConversationService
 
 import 'package:http/http.dart' as http;
@@ -158,16 +159,13 @@ class OpenAIProvider extends BaseProvider {
             text: 'Error: Invalid or missing model for OpenAI provider');
       }
 
-      final enableImageGeneration =
+      // 🚀 Parse image parameters for enhanced image generation
+      final imageParams = AiImageParams.fromMap(additionalParams);
+      final enableImageGeneration = imageParams.enableImageGeneration ??
           additionalParams?['enableImageGeneration'] == true;
 
-      // Build input string - combine system prompt and history
-      String inputText = systemPrompt.context.toString();
-
-      // Add history messages
-      for (final msg in history) {
-        inputText += '\n${msg['content'] ?? ''}';
-      }
+      // Build input text from system prompt and history
+      final inputText = _buildInputText(systemPrompt, history);
 
       final bodyMap = <String, dynamic>{
         'model': selectedModel,
@@ -175,11 +173,8 @@ class OpenAIProvider extends BaseProvider {
 
       // Different formats based on capability
       if (enableImageGeneration) {
-        // Image generation format
-        bodyMap['input'] = inputText;
-        bodyMap['tools'] = [
-          {'type': 'image_generation'}
-        ];
+        _buildImageGenerationRequest(
+            bodyMap, systemPrompt, inputText, imageParams);
       } else if (imageBase64 != null && imageBase64.isNotEmpty) {
         // Vision format (as per your example)
         bodyMap['input'] = [
@@ -501,4 +496,149 @@ class OpenAIProvider extends BaseProvider {
       _availableVoices.map((final v) => v.name).toList();
   bool isValidVoice(final String voiceName) => _availableVoices
       .any((final v) => v.name.toLowerCase() == voiceName.toLowerCase());
+
+  // === FUNCIONES PRIVADAS PARA ORGANIZAR LÓGICA ===
+
+  /// Construye el texto de input combinando system prompt e historial
+  String _buildInputText(final AISystemPrompt systemPrompt,
+      final List<Map<String, String>> history) {
+    String inputText = systemPrompt.context.toString();
+
+    // Agregar mensajes del historial
+    for (final msg in history) {
+      inputText += '\n${msg['content'] ?? ''}';
+    }
+
+    return inputText;
+  }
+
+  /// Construye la request completa para generación de imágenes
+  void _buildImageGenerationRequest(
+    final Map<String, dynamic> bodyMap,
+    final AISystemPrompt systemPrompt,
+    final String inputText,
+    final AiImageParams imageParams,
+  ) {
+    // Construir input array similar al servicio antiguo
+    final input = _buildImageInputArray(systemPrompt, inputText);
+
+    // Construir tools con parámetros de imagen
+    final tools = _buildImageTools(imageParams);
+
+    // Manejar seed y obtener datos relacionados
+    final seedData = _handleSeedAndImageGenCall(imageParams);
+
+    // Agregar image_generation_call si es necesario
+    if (seedData['imageGenCall'] != null) {
+      input.add(seedData['imageGenCall'] as Map<String, dynamic>);
+    }
+
+    // Construir body final
+    bodyMap['input'] = input;
+    bodyMap['tools'] = tools;
+    if (seedData['previousResponseId'] != null) {
+      bodyMap['previous_response_id'] = seedData['previousResponseId'];
+    }
+  }
+
+  /// Construye el array de input para generación de imágenes
+  List<Map<String, dynamic>> _buildImageInputArray(
+      final AISystemPrompt systemPrompt, final String inputText) {
+    final input = <Map<String, dynamic>>[];
+
+    // System prompt
+    input.add({
+      'role': 'system',
+      'content': [
+        {'type': 'input_text', 'text': systemPrompt.context.toString()},
+      ],
+    });
+
+    // User content
+    final userContent = <dynamic>[
+      {'type': 'input_text', 'text': inputText},
+    ];
+
+    input.add({'role': 'user', 'content': userContent});
+
+    return input;
+  }
+
+  /// Construye los tools con parámetros de imagen
+  List<Map<String, dynamic>> _buildImageTools(final AiImageParams imageParams) {
+    final tools = <Map<String, dynamic>>[
+      {
+        'type': 'image_generation',
+        'moderation': 'low',
+      }
+    ];
+
+    // Mapear parámetros de imagen a tools
+    final tool = tools[0];
+
+    // Fidelity con default
+    tool['input_fidelity'] = imageParams.fidelity ?? 'low';
+
+    // Background con default
+    tool['background'] = imageParams.background ?? 'opaque';
+
+    // Quality opcional
+    if (imageParams.quality != null) {
+      tool['quality'] = imageParams.quality;
+    }
+
+    // Format opcional
+    if (imageParams.format != null) {
+      tool['output_format'] = imageParams.format;
+    }
+
+    // Mapear aspectRatio a size
+    final derivedSize = _mapAspectRatioToSize(imageParams.aspectRatio);
+    tool['size'] = derivedSize;
+
+    return tools;
+  }
+
+  /// Mapea aspectRatio a size específico de la API
+  String _mapAspectRatioToSize(final String? aspectRatio) {
+    switch (aspectRatio) {
+      case 'square':
+        return '1024x1024';
+      case 'portrait':
+        return '1024x1536';
+      case 'landscape':
+        return '1536x1024';
+      default:
+        return '1024x1024'; // Default square
+    }
+  }
+
+  /// Maneja el seed según servicio antiguo y retorna datos relacionados
+  Map<String, dynamic> _handleSeedAndImageGenCall(
+      final AiImageParams imageParams) {
+    String? previousResponseId;
+    Map<String, dynamic>? imageGenCall;
+
+    if (imageParams.seed != null) {
+      final seed = imageParams.seed!;
+
+      if (seed.startsWith('resp_')) {
+        // Response-level ID va en previous_response_id
+        previousResponseId = seed;
+      } else {
+        // Image ID va en image_generation_call
+        final derivedSize = _mapAspectRatioToSize(imageParams.aspectRatio);
+        imageGenCall = {
+          'type': 'image_generation_call',
+          'id': seed,
+          'size': derivedSize, // También aplicar size aquí
+        };
+      }
+    }
+
+    return {
+      'previousResponseId': previousResponseId,
+      'imageGenCall': imageGenCall,
+    };
+  }
 }

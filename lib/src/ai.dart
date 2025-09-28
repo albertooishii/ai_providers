@@ -46,15 +46,37 @@ class AI {
   /// para máxima flexibilidad del usuario.
   ///
   /// [systemPrompt] - Opcional. Si no se proporciona, usa configuración por defecto
+  /// [imageParams] - Opcional. Parámetros específicos de imagen (formato, calidad, seed, etc.)
   static Future<AIResponse> image(
     final String prompt, [
     final AISystemPrompt? systemPrompt,
+    final AiImageParams? imageParams,
   ]) async {
-    AILogger.d('[AI] 🖼️ image() - generating image: ${prompt.length} chars');
+    AILogger.d(
+        '[AI] 🖼️ image() - generating image: ${prompt.length} chars${imageParams != null ? ', params: $imageParams' : ''}');
     await _manager.initialize();
 
-    // Delegar a ImageGenerationService - siempre guarda en caché para flexibilidad
-    return ImageGenerationService.instance.generateImage(prompt, systemPrompt);
+    // Si no se proporcionan parámetros de imagen, usar el servicio básico
+    if (imageParams == null) {
+      return ImageGenerationService.instance
+          .generateImage(prompt, systemPrompt);
+    }
+
+    // Si se proporcionan parámetros avanzados, usar AIProviderManager directamente
+    final defaultSystemPrompt = systemPrompt ??
+        AISystemPrompt(
+          context: 'AI image generation',
+          dateTime: DateTime.now(),
+          instructions: {'quality': 'high', 'style': 'detailed'},
+        );
+
+    return AIProviderManager.instance.sendMessage(
+      message: prompt,
+      systemPrompt: defaultSystemPrompt,
+      capability: AICapability.imageGeneration,
+      additionalParams: imageParams
+          .mergeWithAdditionalParams({'enableImageGeneration': true}),
+    );
   }
 
   /// 👁️ Análisis de imagen/visión
