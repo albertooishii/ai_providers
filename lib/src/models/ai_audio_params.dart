@@ -40,21 +40,22 @@
 class AiAudioParams {
   const AiAudioParams({
     this.speed = 1.0,
-    this.audioFormat,
+    this.audioFormat = 'pcm',
     this.language,
     this.accent,
     this.temperature,
     this.emotion,
   });
 
-  /// Factory constructor desde Map&lt;String, dynamic&gt; para compatibilidad
+  /// Factory constructor desde `Map<String, dynamic>` para compatibilidad
   factory AiAudioParams.fromMap(final Map<String, dynamic>? params) {
     if (params == null) return const AiAudioParams();
 
     return AiAudioParams(
       speed: (params['speed'] as num?)?.toDouble() ?? 1.0,
       audioFormat: params['response_format'] as String? ??
-          params['audioFormat'] as String?,
+          params['audioFormat'] as String? ??
+          'pcm',
       language: params['language'] as String?,
       temperature: (params['temperature'] as num?)?.toDouble(),
       emotion: params['emotion'] as String?,
@@ -74,13 +75,15 @@ class AiAudioParams {
 
   /// Formato de archivo de audio para salida TTS (síntesis de voz).
   ///
+  /// Valor por defecto: `'pcm'` (recomendado, compatible con todos los proveedores).
+  ///
   /// **Formatos por proveedor:**
   /// - OpenAI: `mp3`, `opus`, `aac`, `flac`, `wav`, `pcm`
   /// - Google: Solo `pcm` (formato nativo)
   /// - Android Native: Siempre `wav` (hardcoded)
   ///
   /// Valores disponibles en [AiAudioFormat] para conveniencia.
-  final String? audioFormat;
+  final String audioFormat;
 
   /// Idioma ISO estándar para compatibilidad y filtrado de voces.
   ///
@@ -137,12 +140,12 @@ class AiAudioParams {
   /// Valores básicos disponibles en [AiAudioEmotion] para conveniencia.
   final String? emotion;
 
-  /// Convierte a Map<String, dynamic> para compatibilidad con additionalParams
+  /// Convierte a `Map<String, dynamic>` para compatibilidad con additionalParams
   Map<String, dynamic> toMap() {
     final map = <String, dynamic>{};
 
     map['speed'] = speed;
-    if (audioFormat != null) map['response_format'] = audioFormat;
+    map['response_format'] = audioFormat;
     if (language != null) map['language'] = language;
     if (accent != null) map['accent'] = accent;
     if (temperature != null) map['temperature'] = temperature;

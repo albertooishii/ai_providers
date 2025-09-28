@@ -465,11 +465,9 @@ Requirements:
       promptBuilder.write('\n- Speaking pace: $speedDescription');
     }
 
-    // Añadir formato de audio si está especificado (Google siempre genera PCM internamente)
-    if (audioParams.audioFormat != null) {
-      promptBuilder
-          .write('\n- Audio format preference: ${audioParams.audioFormat}');
-    }
+    // Añadir formato de audio (Google siempre genera PCM internamente)
+    promptBuilder
+        .write('\n- Audio format preference: ${audioParams.audioFormat}');
 
     return promptBuilder.toString();
   }

@@ -295,9 +295,8 @@ class OpenAIProvider extends BaseProvider {
     // Usar parámetros tipados con fallbacks inteligentes
     final voice = additionalParams?['voice'] ?? getDefaultVoice();
     final speed = audioParams.speed; // Siempre tiene valor por defecto (1.0)
-    final responseFormat = audioParams.audioFormat ??
-        config.configuration.additionalSettings['audio_format'] ??
-        'pcm'; // ✅ PCM por defecto según recomendación
+    final responseFormat =
+        audioParams.audioFormat; // ✅ Siempre tiene valor por defecto 'pcm'
 
     final payload = <String, dynamic>{
       'model': selectedModel,
