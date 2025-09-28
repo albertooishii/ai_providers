@@ -50,14 +50,7 @@ if ! dart doc; then
     exit 1
 fi
 
-echo "✅ dart doc completado - documentación actualizada"
-
-# Añadir la documentación generada al commit si hay cambios
-if [ -d "doc/api" ] && [ -n "$(git status --porcelain doc/)" ]; then
-    echo "🔄 Añadiendo documentación actualizada al commit..."
-    git add doc/
-    echo "✅ Documentación añadida al commit"
-fi
+echo "✅ dart doc completado - documentación actualizada (no se añade al commit, se genera automáticamente en pub.dev)"
 
 echo "🚀 Pre-commit hook completado exitosamente!"
 EOF
