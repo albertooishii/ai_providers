@@ -200,7 +200,12 @@ class GoogleProvider extends BaseProvider {
       if (isSuccessfulResponse(response.statusCode)) {
         return _processGeminiResponse(jsonDecode(response.body));
       } else {
-        handleApiError(response.statusCode, response.body, 'text_generation');
+        final hasMoreKeys = handleApiError(
+            response.statusCode, response.body, 'text_generation');
+        if (!hasMoreKeys) {
+          throw StateError(
+              'All Google AI API keys have been exhausted - no retry needed');
+        }
         throw Exception(
             '${response.statusCode} ${response.reasonPhrase ?? ''}: ${response.body}');
       }

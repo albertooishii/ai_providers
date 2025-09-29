@@ -1,5 +1,27 @@
 # Registro de Cambios
 
+## [1.3.3] - 29 de septiembre de 2025 🧹 LIMPIEZA DE DEPENDENCIAS + 🚀 OPTIMIZACIÓN APIKEY
+
+### 🚀 Optimizaciones de Performance
+- **ApiKeyManager inteligente**: Elimina rotación inútil de API keys cuando solo hay una configurada
+- **Failover más rápido**: Reduce tiempo de fallback de ~3-4 segundos a inmediato en casos de una sola key
+- **Mejor manejo de errores**: Excepciones específicas cuando se agotan todas las API keys
+- **Control de flujo mejorado**: `markCurrentKeyFailed()` y `markCurrentKeyExhausted()` ahora devuelven `bool`
+
+### 🔧 Mejoras Técnicas
+- **base_provider.handleApiError()**: Actualizado para manejar nuevos valores de retorno booleanos
+- **Providers actualizados**: OpenAI, Google y XAI providers con mejor manejo de errores
+- **Logging mejorado**: Mensajes más específicos para debugging de API key exhaustion
+
+### 🗑️ Dependencias Removidas
+- **`flutter_secure_storage`**: Eliminada dependencia innecesaria que no se usaba en el código
+- **Compilación mejorada**: Resueltos problemas de compilación en Linux por dependencias no utilizadas
+- **Tamaño reducido**: Menos dependencias = instalación más rápida y menor tamaño
+
+### 🔧 Correcciones
+- **Example compilando**: El proyecto example ahora compila sin problemas en todas las plataformas
+- **Dependencias limpias**: Solo dependencias realmente necesarias
+
 ## [1.3.2] - 28 de septiembre de 2025 ✨ AIAUDIOPARAMS MEJORADO - PCM POR DEFECTO
 
 ### 🔧 Mejoras en API

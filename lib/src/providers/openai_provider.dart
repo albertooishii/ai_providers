@@ -158,11 +158,6 @@ class OpenAIProvider extends BaseProvider {
             text: 'Error: Invalid or missing model for OpenAI provider');
       }
 
-      // 🚀 Parse image parameters for enhanced image generation
-      final imageParams = AiImageParams.fromMap(additionalParams);
-      final enableImageGeneration = imageParams.enableImageGeneration ??
-          additionalParams?['enableImageGeneration'] == true;
-
       // Build input text from system prompt and history
       final inputText = _buildInputText(systemPrompt, history);
 
@@ -170,11 +165,8 @@ class OpenAIProvider extends BaseProvider {
         'model': selectedModel,
       };
 
-      // Different formats based on capability
-      if (enableImageGeneration) {
-        _buildImageGenerationRequest(
-            bodyMap, systemPrompt, inputText, imageParams);
-      } else if (imageBase64 != null && imageBase64.isNotEmpty) {
+      // Different formats based on content type
+      if (imageBase64 != null && imageBase64.isNotEmpty) {
         // Vision format (as per your example)
         bodyMap['input'] = [
           {
@@ -204,7 +196,13 @@ class OpenAIProvider extends BaseProvider {
       if (isSuccessfulResponse(response.statusCode)) {
         return _processTextResponse(jsonDecode(response.body));
       } else {
-        handleApiError(response.statusCode, response.body, 'text_generation');
+        final hasMoreKeys = handleApiError(
+            response.statusCode, response.body, 'text_generation');
+        if (!hasMoreKeys) {
+          // Lanzar excepción específica que evite retry
+          throw StateError(
+              'All OpenAI API keys have been exhausted - no retry needed');
+        }
         throw HttpException(
             '${response.statusCode} ${response.reasonPhrase ?? ''}: ${response.body}');
       }
@@ -271,9 +269,59 @@ class OpenAIProvider extends BaseProvider {
     final String? model,
     final Map<String, dynamic>? additionalParams,
   ) async {
-    final params = Map<String, dynamic>.from(additionalParams ?? {});
-    params['enableImageGeneration'] = true;
-    return _sendTextRequest(history, systemPrompt, model, null, null, params);
+    final prompt = history.isNotEmpty ? history.last['content'] ?? '' : '';
+    if (prompt.isEmpty) {
+      return ProviderResponse(
+          text: 'Error: No prompt provided for image generation.');
+    }
+
+    try {
+      final selectedModel =
+          model ?? getDefaultModel(AICapability.imageGeneration);
+
+      if (selectedModel == null || !isValidModelForProvider(selectedModel)) {
+        return ProviderResponse(
+            text:
+                'Error: Invalid or missing model for OpenAI image generation');
+      }
+
+      // Parse image parameters and build request body
+      final imageParams = AiImageParams.fromMap(additionalParams);
+      final inputText = _buildInputText(systemPrompt, history);
+
+      final bodyMap = <String, dynamic>{
+        'model': selectedModel,
+      };
+
+      // Build image generation request directly (no duplication with text flow)
+      _buildImageGenerationRequest(
+          bodyMap, systemPrompt, inputText, imageParams);
+
+      // Execute HTTP request with shared logic
+      final url = Uri.parse(getEndpointUrl('chat'));
+      final headers = buildAuthHeaders();
+      final bodyJson = jsonEncode(bodyMap);
+
+      final response =
+          await http.Client().post(url, headers: headers, body: bodyJson);
+
+      if (isSuccessfulResponse(response.statusCode)) {
+        return _processTextResponse(jsonDecode(response.body));
+      } else {
+        final hasMoreKeys = handleApiError(
+            response.statusCode, response.body, 'image_generation');
+        if (!hasMoreKeys) {
+          // Lanzar excepción específica que evite retry
+          throw StateError(
+              'All OpenAI API keys have been exhausted - no retry needed');
+        }
+        throw HttpException(
+            '${response.statusCode} ${response.reasonPhrase ?? ''}: ${response.body}');
+      }
+    } on Exception catch (e) {
+      AILogger.e('[OpenAIProvider] Image generation failed: $e');
+      return ProviderResponse(text: 'Error generating image: $e');
+    }
   }
 
   Future<ProviderResponse> _sendTTSRequest(

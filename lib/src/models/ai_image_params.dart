@@ -12,7 +12,6 @@
 ///
 /// | Campo | Tipo | Valores | Descripción |
 /// |-------|------|---------|-------------|
-/// | `enableImageGeneration` | `bool?` | `true`, `false` | Fuerza la capability de imagen cuando usas `AI.generate()`. `AI.image()` lo activa automáticamente. |
 /// | `aspectRatio` | `String?` | `auto`, `portrait`, `landscape`, `square` | Relación de aspecto deseada. OpenAI lo convierte a tamaños (`1024x1024`, `1024x1536`, `1536x1024`). `auto` usa formato cuadrado. |
 /// | `format` | `String?` | `png`, `webp`, `jpeg` | Formato de exportación cuando el proveedor lo soporta. |
 /// | `background` | `String?` | `opaque`, `transparent` | Tipo de fondo: sólido o transparente. |
@@ -36,7 +35,6 @@
 /// Compatible con additionalParams existentes pero con estructura tipada.
 class AiImageParams {
   const AiImageParams({
-    this.enableImageGeneration,
     this.aspectRatio,
     this.format,
     this.background,
@@ -50,7 +48,6 @@ class AiImageParams {
     if (params == null) return const AiImageParams();
 
     return AiImageParams(
-      enableImageGeneration: params['enableImageGeneration'] as bool?,
       aspectRatio: params['aspectRatio'] as String?,
       format: params['format'] as String?,
       background: params['background'] as String?,
@@ -59,12 +56,6 @@ class AiImageParams {
       seed: params['seed'] as String?,
     );
   }
-
-  /// Fuerza la generación de imágenes cuando se usa con [AI.generate].
-  ///
-  /// Cuando usas [AI.image] directamente, este parámetro se activa automáticamente.
-  /// Solo es útil si llamas a [AI.generate] manualmente con [AICapability.imageGeneration].
-  final bool? enableImageGeneration;
 
   /// Relación de aspecto de la imagen generada.
   ///
@@ -117,9 +108,6 @@ class AiImageParams {
   Map<String, dynamic> toMap() {
     final map = <String, dynamic>{};
 
-    if (enableImageGeneration != null) {
-      map['enableImageGeneration'] = enableImageGeneration;
-    }
     if (aspectRatio != null) map['aspectRatio'] = aspectRatio;
     if (format != null) map['format'] = format;
     if (background != null) map['background'] = background;
@@ -149,7 +137,6 @@ class AiImageParams {
 
   /// Copy with para modificaciones inmutables
   AiImageParams copyWith({
-    final bool? enableImageGeneration,
     final String? aspectRatio,
     final String? format,
     final String? background,
@@ -158,8 +145,6 @@ class AiImageParams {
     final String? seed,
   }) {
     return AiImageParams(
-      enableImageGeneration:
-          enableImageGeneration ?? this.enableImageGeneration,
       aspectRatio: aspectRatio ?? this.aspectRatio,
       format: format ?? this.format,
       background: background ?? this.background,
@@ -171,7 +156,7 @@ class AiImageParams {
 
   @override
   String toString() {
-    return 'AiImageParams(enableImageGeneration: $enableImageGeneration, aspectRatio: $aspectRatio, '
+    return 'AiImageParams(aspectRatio: $aspectRatio, '
         'format: $format, background: $background, fidelity: $fidelity, quality: $quality, seed: $seed)';
   }
 }

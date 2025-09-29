@@ -165,12 +165,12 @@ class ApiKeyManager {
   }
 
   /// Mark current key as failed and rotate to next
-  static void markCurrentKeyFailed(
+  static bool markCurrentKeyFailed(
     final String providerId,
     final String error,
   ) {
     final keys = loadKeysForProvider(providerId);
-    if (keys.isEmpty) return;
+    if (keys.isEmpty) return false;
 
     final cacheKey = providerId.toLowerCase();
     final currentIndex = _currentKeyIndex[cacheKey] ?? 0;
@@ -178,19 +178,30 @@ class ApiKeyManager {
     if (currentIndex < keys.length) {
       keys[currentIndex].markFailed(error);
 
-      // Move to next key for next request
-      _currentKeyIndex[cacheKey] = (currentIndex + 1) % keys.length;
+      // Check if there are other available keys before rotating
+      final availableKeys = keys.where((final key) => key.isAvailable).length;
 
-      AILogger.i(
-        '[ApiKeyManager] Rotated $providerId to next key after failure',
-      );
+      if (availableKeys > 0) {
+        // Move to next key for next request
+        _currentKeyIndex[cacheKey] = (currentIndex + 1) % keys.length;
+        AILogger.i(
+          '[ApiKeyManager] Rotated $providerId to next key after failure',
+        );
+        return true;
+      } else {
+        AILogger.w(
+          '[ApiKeyManager] No available keys remaining for $providerId after failure',
+        );
+        return false;
+      }
     }
+    return false;
   }
 
   /// Mark current key as rate limited
-  static void markCurrentKeyExhausted(final String providerId) {
+  static bool markCurrentKeyExhausted(final String providerId) {
     final keys = loadKeysForProvider(providerId);
-    if (keys.isEmpty) return;
+    if (keys.isEmpty) return false;
 
     final cacheKey = providerId.toLowerCase();
     final currentIndex = _currentKeyIndex[cacheKey] ?? 0;
@@ -198,13 +209,24 @@ class ApiKeyManager {
     if (currentIndex < keys.length) {
       keys[currentIndex].markExhausted();
 
-      // Move to next key for next request
-      _currentKeyIndex[cacheKey] = (currentIndex + 1) % keys.length;
+      // Check if there are other available keys before rotating
+      final availableKeys = keys.where((final key) => key.isAvailable).length;
 
-      AILogger.i(
-        '[ApiKeyManager] Rotated $providerId to next key after rate limit',
-      );
+      if (availableKeys > 0) {
+        // Move to next key for next request
+        _currentKeyIndex[cacheKey] = (currentIndex + 1) % keys.length;
+        AILogger.i(
+          '[ApiKeyManager] Rotated $providerId to next key after rate limit',
+        );
+        return true;
+      } else {
+        AILogger.w(
+          '[ApiKeyManager] No available keys remaining for $providerId after rate limit',
+        );
+        return false;
+      }
     }
+    return false;
   }
 
   /// Get statistics for a provider

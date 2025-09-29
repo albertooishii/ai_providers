@@ -179,7 +179,12 @@ class XAIProvider extends BaseProvider {
       if (isSuccessfulResponse(response.statusCode)) {
         return _processGrokResponse(jsonDecode(response.body));
       } else {
-        handleApiError(response.statusCode, response.body, 'text_generation');
+        final hasMoreKeys = handleApiError(
+            response.statusCode, response.body, 'text_generation');
+        if (!hasMoreKeys) {
+          throw StateError(
+              'All XAI API keys have been exhausted - no retry needed');
+        }
         return ProviderResponse(
             text: 'API Error ${response.statusCode}: ${response.body}');
       }

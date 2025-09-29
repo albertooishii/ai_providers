@@ -472,7 +472,8 @@ class _AdvancedDemoScreenState extends State<AdvancedDemoScreen> {
       return const SizedBox.shrink();
     }
 
-    final providers = _systemStats!['providerDetails'] as Map<String, dynamic>;
+    final providers =
+        _systemStats!['providerDetails'] as Map<String, AIProvider>;
 
     return Card(
       child: ExpansionTile(
@@ -488,10 +489,11 @@ class _AdvancedDemoScreenState extends State<AdvancedDemoScreen> {
         ),
         children: providers.entries.map((entry) {
           final providerId = entry.key;
-          final providerInfo = entry.value as Map<String, dynamic>;
-          final displayName = providerInfo['displayName'] as String;
-          final description = providerInfo['description'] as String;
-          final capabilities = providerInfo['capabilities'] as List<String>;
+          final provider = entry.value;
+          final displayName = provider.displayName;
+          final description = provider.description;
+          final capabilities =
+              provider.capabilities.map((c) => c.name).toList();
 
           return Container(
             margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
@@ -690,22 +692,22 @@ class _AdvancedDemoScreenState extends State<AdvancedDemoScreen> {
 
     try {
       final providers =
-          _systemStats!['providerDetails'] as Map<String, dynamic>;
+          _systemStats!['providerDetails'] as Map<String, AIProvider>;
       final providerModels = <String, Map<String, dynamic>>{};
 
       for (final entry in providers.entries) {
         final providerId = entry.key;
-        final providerInfo = entry.value as Map<String, dynamic>;
+        final provider = entry.value;
 
         try {
           final models = await AI.getAvailableModels(providerId);
           providerModels[providerId] = {
-            'displayName': providerInfo['displayName'],
+            'displayName': provider.displayName,
             'models': models,
           };
         } catch (e) {
           providerModels[providerId] = {
-            'displayName': providerInfo['displayName'],
+            'displayName': provider.displayName,
             'models': ['Error: ${e.toString()}'],
           };
         }

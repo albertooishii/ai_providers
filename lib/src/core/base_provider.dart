@@ -53,8 +53,9 @@ abstract class BaseProvider {
   String get apiKey {
     final key = ApiKeyManager.getNextAvailableKey(providerId);
     if (key == null || key.isEmpty) {
-      throw Exception(
-        'No valid $providerId API key available. Please configure ${config.apiSettings.requiredEnvKeys.first} in environment.',
+      // Usar StateError para indicar que no se debe hacer retry
+      throw StateError(
+        '🔑 All $providerId API keys exhausted - switching to fallback provider',
       );
     }
     return key;
@@ -88,30 +89,44 @@ abstract class BaseProvider {
   bool isSuccessfulResponse(final int statusCode) => statusCode == 200;
 
   /// Common error handling
-  void handleApiError(
+  /// Returns true if provider can retry, false if all keys exhausted
+  bool handleApiError(
       final int statusCode, final String body, final String operation) {
     AILogger.e(
         '[$providerId] API Error - Operation: $operation, Status: $statusCode, Body: $body');
 
     switch (statusCode) {
       case 401:
-        ApiKeyManager.markCurrentKeyFailed(providerId, 'Invalid API key (401)');
+        final hasMoreKeys = ApiKeyManager.markCurrentKeyFailed(
+            providerId, 'Invalid API key (401)');
+        if (!hasMoreKeys) {
+          throw Exception('All API keys invalid for $providerId');
+        }
         throw Exception('Invalid API key');
       case 429:
-        ApiKeyManager.markCurrentKeyExhausted(providerId);
+        final hasMoreKeys = ApiKeyManager.markCurrentKeyExhausted(providerId);
+        if (!hasMoreKeys) {
+          throw Exception('All API keys rate limited for $providerId');
+        }
         throw Exception('Rate limit exceeded');
       case 402:
-        ApiKeyManager.markCurrentKeyFailed(
+        final hasMoreKeys = ApiKeyManager.markCurrentKeyFailed(
             providerId, 'Payment required (402)');
+        if (!hasMoreKeys) {
+          throw Exception('All API keys require payment for $providerId');
+        }
         throw Exception('Payment required');
       case 403:
-        ApiKeyManager.markCurrentKeyFailed(
+        final hasMoreKeys = ApiKeyManager.markCurrentKeyFailed(
             providerId, 'Access forbidden (403)');
+        if (!hasMoreKeys) {
+          throw Exception('All API keys forbidden for $providerId');
+        }
         throw Exception('Access forbidden');
       default:
         AILogger.w(
             '[$providerId] ⚠️ API error $statusCode for operation: $operation');
-        break;
+        return true;
     }
   }
 

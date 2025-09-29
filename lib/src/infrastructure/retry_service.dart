@@ -297,6 +297,13 @@ class IntelligentRetryService {
     // Don't retry if we've reached max attempts
     if (attemptNumber >= config.maxAttempts) return false;
 
+    // 🚫 Don't retry StateError (used for API key exhaustion)
+    if (error is StateError) {
+      AILogger.i(
+          '[RetryService] 🚫 Skipping retry for StateError: ${error.message}');
+      return false;
+    }
+
     // Check error type
     if (error is SocketException && config.retryOnNetworkError) return true;
     if (error is TimeoutException && config.retryOnTimeout) return true;

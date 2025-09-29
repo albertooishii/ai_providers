@@ -41,14 +41,10 @@ class NoProviderAvailableException implements Exception {
 class AIProviderManager {
   AIProviderManager._internal();
   static final AIProviderManager _instance = AIProviderManager._internal();
-  static bool _autoInitializeCalled = false;
 
   static AIProviderManager get instance {
-    if (!_autoInitializeCalled) {
-      _autoInitializeCalled = true;
-      // Schedule auto-initialization on first access
-      Future.microtask(() => _instance.initialize());
-    }
+    // No auto-initialization to prevent duplicate initialization
+    // Users must call AI.initialize() explicitly before using the API
     return _instance;
   }
 
@@ -330,10 +326,9 @@ class AIProviderManager {
         continue;
       }
 
-      // Check cache first if available (skip cache for audio transcription - each audio is unique)
+      // Check cache first if available (ONLY for audio generation/TTS - not for text generation)
       CacheKey? cacheKey;
-      if (_cacheService != null &&
-          capability != AICapability.audioTranscription) {
+      if (_cacheService != null && capability == AICapability.audioGeneration) {
         // Calculate the model that will actually be used for proper cache key
         String? modelToUseForCache =
             await _getSavedModelForProviderIfSupported(capability, providerId);
@@ -484,8 +479,10 @@ class AIProviderManager {
           success: true,
         );
 
-        // Cache the response if caching is available
-        if (_cacheService?.memoryCache != null && cacheKey != null) {
+        // Cache the response if caching is available (ONLY for audio generation/TTS)
+        if (_cacheService?.memoryCache != null &&
+            cacheKey != null &&
+            capability == AICapability.audioGeneration) {
           await _cacheService!.memoryCache!.set(cacheKey, response);
         }
 
