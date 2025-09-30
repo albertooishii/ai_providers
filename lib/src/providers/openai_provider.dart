@@ -253,7 +253,6 @@ class OpenAIProvider extends BaseProvider {
 
     return ProviderResponse(
       text: text.trim().isNotEmpty ? text : '',
-      seed: imageId,
       prompt: revisedPrompt.trim(),
       imageBase64: imageBase64Output,
     );
@@ -589,30 +588,19 @@ class OpenAIProvider extends BaseProvider {
     final AiImageParams imageParams,
   ) {
     // Construir input array similar al servicio antiguo
-    final input = _buildImageInputArray(aiContext, inputText);
+    final input = _buildImageInputArray(aiContext, inputText, imageParams);
 
     // Construir tools con parámetros de imagen
     final tools = _buildImageTools(imageParams);
 
-    // Manejar seed y obtener datos relacionados
-    final seedData = _handleSeedAndImageGenCall(imageParams);
-
-    // Agregar image_generation_call si es necesario
-    if (seedData['imageGenCall'] != null) {
-      input.add(seedData['imageGenCall'] as Map<String, dynamic>);
-    }
-
     // Construir body final
     bodyMap['input'] = input;
     bodyMap['tools'] = tools;
-    if (seedData['previousResponseId'] != null) {
-      bodyMap['previous_response_id'] = seedData['previousResponseId'];
-    }
   }
 
   /// Construye el array de input para generación de imágenes
-  List<Map<String, dynamic>> _buildImageInputArray(
-      final AIContext aiContext, final String inputText) {
+  List<Map<String, dynamic>> _buildImageInputArray(final AIContext aiContext,
+      final String inputText, final AiImageParams imageParams) {
     final input = <Map<String, dynamic>>[];
 
     // System prompt
@@ -627,6 +615,19 @@ class OpenAIProvider extends BaseProvider {
     final userContent = <dynamic>[
       {'type': 'input_text', 'text': inputText},
     ];
+
+    // Agregar imagen source si está disponible (para edición)
+    if (_hasSourceImageForEditing(imageParams)) {
+      final sourceImage = imageParams.sourceImageBase64!;
+      final imageUrl = sourceImage.startsWith('data:')
+          ? sourceImage
+          : 'data:image/png;base64,$sourceImage';
+
+      userContent.add({
+        'type': 'input_image',
+        'image_url': imageUrl,
+      });
+    }
 
     input.add({'role': 'user', 'content': userContent});
 
@@ -684,33 +685,10 @@ class OpenAIProvider extends BaseProvider {
     }
   }
 
-  /// Maneja el seed según servicio antiguo y retorna datos relacionados
-  Map<String, dynamic> _handleSeedAndImageGenCall(
-      final AiImageParams imageParams) {
-    String? previousResponseId;
-    Map<String, dynamic>? imageGenCall;
-
-    if (imageParams.seed != null) {
-      final seed = imageParams.seed!;
-
-      if (seed.startsWith('resp_')) {
-        // Response-level ID va en previous_response_id
-        previousResponseId = seed;
-      } else {
-        // Image ID va en image_generation_call
-        final derivedSize = _mapAspectRatioToSize(imageParams.aspectRatio);
-        imageGenCall = {
-          'type': 'image_generation_call',
-          'id': seed,
-          'size': derivedSize, // También aplicar size aquí
-        };
-      }
-    }
-
-    return {
-      'previousResponseId': previousResponseId,
-      'imageGenCall': imageGenCall,
-    };
+  /// Maneja sourceImageBase64 para edición de imágenes usando la API de Responses
+  bool _hasSourceImageForEditing(final AiImageParams imageParams) {
+    return imageParams.sourceImageBase64 != null &&
+        imageParams.sourceImageBase64!.isNotEmpty;
   }
 
   /// Construye instructions de OpenAI combinando accent y emotion

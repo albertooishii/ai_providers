@@ -8,6 +8,7 @@ import '../models/ai_provider_metadata.dart';
 import '../models/ai_context.dart';
 import '../models/ai_audio_params.dart';
 
+import 'package:ai_providers/src/utils/json_utils.dart' as json_utils;
 import 'package:http/http.dart' as http;
 import '../utils/logger.dart';
 import '../models/ai_capability.dart';
@@ -217,6 +218,42 @@ class GoogleProvider extends BaseProvider {
       final candidates = data['candidates'] as List<dynamic>?;
       if (candidates != null && candidates.isNotEmpty) {
         final candidate = candidates.first as Map<String, dynamic>;
+
+        // 🎯 NUEVO: Verificar finishReason para detectar rechazos de políticas
+        final finishReason = candidate['finishReason'] as String?;
+        if (finishReason != null) {
+          switch (finishReason) {
+            case 'IMAGE_OTHER':
+              AILogger.w(
+                  '[GoogleProvider] ⚠️ Google rechazó la imagen por políticas de contenido (IMAGE_OTHER)');
+              return ProviderResponse(
+                text:
+                    'Error: Google rechazó generar la imagen por políticas de contenido. Intenta con una descripción menos específica.',
+              );
+            case 'SAFETY':
+              AILogger.w(
+                  '[GoogleProvider] ⚠️ Google rechazó la imagen por seguridad (SAFETY)');
+              return ProviderResponse(
+                text:
+                    'Error: Google rechazó generar la imagen por motivos de seguridad.',
+              );
+            case 'RECITATION':
+              AILogger.w(
+                  '[GoogleProvider] ⚠️ Google rechazó la imagen por recitación (RECITATION)');
+              return ProviderResponse(
+                text:
+                    'Error: Google rechazó generar la imagen por políticas de recitación.',
+              );
+            case 'STOP':
+              // STOP es normal, continuar procesando
+              break;
+            default:
+              AILogger.w(
+                  '[GoogleProvider] ⚠️ Google finalizó con razón desconocida: $finishReason');
+              break;
+          }
+        }
+
         final content = candidate['content'] as Map<String, dynamic>?;
 
         if (content != null) {
@@ -234,18 +271,42 @@ class GoogleProvider extends BaseProvider {
               final imageBase64 = inlineData['data'] as String?;
 
               if (imageBase64 != null && imageBase64.isNotEmpty) {
-                // 🔥 CAPTURAR EL TEXTO REAL DE GEMINI también
+                // 🔥 CAPTURAR EL TEXTO REAL DE GEMINI como "revised prompt"
                 final textPart = parts.firstWhere(
                   (final part) => part is Map && part.containsKey('text'),
                   orElse: () => null,
                 );
 
-                final geminiText = textPart != null
-                    ? textPart['text'] as String
-                    : ''; // ✅ Si no hay texto, dejarlo vacío (más honesto)
+                String geminiText = '';
+                String revisedPrompt = '';
+
+                if (textPart != null) {
+                  final fullText = textPart['text'] as String? ?? '';
+
+                  // Extraer JSON estructurado de la respuesta
+                  final jsonExtracted = json_utils.extractJsonBlock(fullText);
+
+                  if (!jsonExtracted.containsKey('raw')) {
+                    // JSON válido extraído
+                    revisedPrompt =
+                        jsonExtracted['description']?.toString() ?? '';
+                    geminiText = jsonExtracted['response']?.toString() ??
+                        'Image generated successfully';
+                  } else {
+                    // Fallback: si no hay JSON válido, usar texto completo como descripción
+                    final rawText =
+                        jsonExtracted['raw']?.toString() ?? fullText;
+                    revisedPrompt = rawText;
+                    geminiText = 'Image generated successfully';
+                  }
+                }
 
                 return ProviderResponse(
-                  text: geminiText, // ✅ Usar el texto real de Gemini o vacío
+                  text: geminiText.isNotEmpty
+                      ? geminiText
+                      : 'Image generated successfully',
+                  prompt:
+                      revisedPrompt, // ✅ Descripción detallada como "revised prompt"
                   imageBase64: imageBase64,
                 );
               }
@@ -261,6 +322,16 @@ class GoogleProvider extends BaseProvider {
               return ProviderResponse(text: textPart['text'] as String);
             }
           }
+        }
+
+        // 🎯 NUEVO: Si tenemos finishReason problemático y sin contenido, reportar específicamente
+        if (finishReason == 'IMAGE_OTHER' ||
+            finishReason == 'SAFETY' ||
+            finishReason == 'RECITATION') {
+          return ProviderResponse(
+            text:
+                'Error: Google no pudo generar la imagen (finishReason: $finishReason)',
+          );
         }
       }
 
@@ -294,41 +365,38 @@ class GoogleProvider extends BaseProvider {
       final contents = <Map<String, dynamic>>[];
 
       // ✨ 1. Agregar system prompt desde AIContext (igual que _sendTextRequest)
-      if (aiContext.context.toString().isNotEmpty ||
-          aiContext.instructions.isNotEmpty) {
+      // Usar la serialización correcta del AIContext
+      final contextJson = aiContext.toJson();
+
+      if (contextJson['context'] != null || aiContext.instructions.isNotEmpty) {
         final systemParts = <String>[];
 
-        // Incluir context si no está vacío
-        final contextStr = aiContext.context.toString();
-        if (contextStr.isNotEmpty &&
-            contextStr != '{}' &&
-            contextStr != 'null') {
-          systemParts.add('Context: $contextStr');
+        // Incluir context usando serialización correcta
+        final contextData = contextJson['context'];
+        if (contextData != null) {
+          final contextStr =
+              contextData is String ? contextData : jsonEncode(contextData);
+          if (contextStr.isNotEmpty &&
+              contextStr != '{}' &&
+              contextStr != 'null') {
+            systemParts.add('Context: $contextStr');
+          }
         }
 
         // Incluir instructions si no están vacías
-        final instructionsStr = aiContext.instructions.toString();
+        final instructionsStr = jsonEncode(aiContext.instructions);
         if (instructionsStr.isNotEmpty &&
             instructionsStr != '{}' &&
             instructionsStr != 'null') {
           systemParts.add('Instructions: $instructionsStr');
         }
 
-        // Agregar system prompt con patrón user->model como en _sendTextRequest
+        // Agregar system prompt directamente sin respuesta del modelo
         if (systemParts.isNotEmpty) {
           contents.add({
             'role': 'user',
             'parts': [
               {'text': systemParts.join('\n\n')},
-            ],
-          });
-          contents.add({
-            'role': 'model',
-            'parts': [
-              {
-                'text':
-                    'I understand the system instructions and will follow them accordingly for image generation.'
-              },
             ],
           });
 
@@ -337,12 +405,53 @@ class GoogleProvider extends BaseProvider {
         }
       }
 
-      // ✨ 2. Agregar el prompt del usuario
+      // ✨ 2. Agregar el prompt del usuario (con imagen base si está disponible)
+      // ✅ Obtener imagen base para edición si está en additionalParams
+      final sourceImageBase64 =
+          additionalParams?['sourceImageBase64'] as String?;
+
+      // Modificar el prompt para que Gemini también genere una descripción detallada
+      final isEditing =
+          sourceImageBase64 != null && sourceImageBase64.isNotEmpty;
+
+      final enhancedPrompt = isEditing
+          ? '''$prompt
+
+After editing the image, provide your response as a JSON object with the following structure:
+{
+  "description": "Detailed description of the changes made and final result including what was modified, visual elements, composition, colors, lighting, style and key features",
+  "response": "Brief confirmation message about the edit"
+}'''
+          : '''$prompt
+
+After generating the image, provide your response as a JSON object with the following structure:
+{
+  "description": "Detailed description of what you created including visual elements, composition, colors, lighting, style, key features and artistic choices",
+  "response": "Brief confirmation message about the generation"
+}''';
+
+      final userParts = <Map<String, dynamic>>[
+        {'text': enhancedPrompt}
+      ];
+      if (sourceImageBase64 != null && sourceImageBase64.isNotEmpty) {
+        final imageData = sourceImageBase64.startsWith('data:')
+            ? sourceImageBase64.split(',').last
+            : sourceImageBase64;
+
+        userParts.add({
+          'inline_data': {
+            'mime_type': 'image/jpeg',
+            'data': imageData,
+          },
+        });
+
+        AILogger.d(
+            '[GoogleProvider] 🖼️ Image editing mode: usando imagen base para edición');
+      }
+
       contents.add({
         'role': 'user',
-        'parts': [
-          {'text': prompt}
-        ]
+        'parts': userParts,
       });
 
       final bodyMap = {
@@ -904,10 +1013,13 @@ Requirements:
   /// Construye prompt para transcripción desde Context
   String _buildPromptFromContext(final AIContext aiContext) {
     final parts = <String>[];
+    final contextJson = aiContext.toJson();
 
-    // Agregar contexto si hay
-    if (aiContext.context.isNotEmpty) {
-      final contextStr = aiContext.context.toString();
+    // Agregar contexto usando serialización correcta
+    final contextData = contextJson['context'];
+    if (contextData != null) {
+      final contextStr =
+          contextData is String ? contextData : jsonEncode(contextData);
       if (contextStr.isNotEmpty && contextStr != '{}') {
         parts.add(contextStr);
       }
@@ -915,7 +1027,7 @@ Requirements:
 
     // Agregar instrucciones si hay
     if (aiContext.instructions.isNotEmpty) {
-      final instructionsStr = aiContext.instructions.toString();
+      final instructionsStr = jsonEncode(aiContext.instructions);
       if (instructionsStr.isNotEmpty && instructionsStr != '{}') {
         parts.add(instructionsStr);
       }

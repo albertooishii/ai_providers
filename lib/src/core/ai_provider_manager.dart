@@ -405,7 +405,6 @@ class AIProviderManager {
 
           // If the capability requested an image, ensure the provider returned something
           if (requestedImage &&
-              (providerResp.seed.isEmpty) &&
               (providerResp.imageBase64 == null ||
                   providerResp.imageBase64!.isEmpty)) {
             AILogger.w(
@@ -453,13 +452,10 @@ class AIProviderManager {
           // Build final AIResponse combining provider metadata and persisted filenames
           final finalResp = AIResponse(
             text: providerResp.text,
-            image: providerResp.seed.isNotEmpty ||
-                    providerResp.prompt.isNotEmpty ||
+            image: providerResp.prompt.isNotEmpty ||
                     imageFileName != null ||
                     providerResp.imageBase64 != null
                 ? AiImage(
-                    seed:
-                        providerResp.seed.isNotEmpty ? providerResp.seed : null,
                     prompt: providerResp.prompt.isNotEmpty
                         ? providerResp.prompt
                         : null,

@@ -23,9 +23,9 @@ import 'ai_audio.dart';
 /// **Generación de imágenes:**
 /// ```dart
 /// final response = await AI.image('Un paisaje futurista');
-/// print(response.text);        // Descripción o prompt procesado
-/// print(response.image?.url);  // Ruta del archivo de imagen guardado
-/// print(response.image?.seed); // Seed para reproducibilidad
+/// print(response.text);          // Descripción o prompt procesado
+/// print(response.image?.url);    // Ruta del archivo de imagen guardado
+/// print(response.image?.prompt); // Prompt usado para generación
 /// ```
 ///
 /// **Síntesis de voz (TTS):**

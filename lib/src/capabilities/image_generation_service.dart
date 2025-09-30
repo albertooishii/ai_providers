@@ -86,9 +86,6 @@ class ImageGenerationService {
     if (imageParams.fidelity != null) {
       mergedInstructions['fidelity'] = imageParams.fidelity;
     }
-    if (imageParams.seed != null) {
-      mergedInstructions['seed'] = imageParams.seed;
-    }
 
     return AIContext(
       context: originalContext.context,
@@ -124,7 +121,6 @@ class ImageGenerationService {
         instructions['background'] = params.background;
       }
       if (params.fidelity != null) instructions['fidelity'] = params.fidelity;
-      if (params.seed != null) instructions['seed'] = params.seed;
     }
 
     return AIContext(
@@ -171,12 +167,6 @@ class ImageGenerationService {
       if (fidelityDesc.isNotEmpty) {
         requirements.add(fidelityDesc);
       }
-    }
-
-    // Seed -> Descripción de consistencia
-    if (params.seed != null) {
-      requirements.add(
-          'Ensure consistent generation using reference seed ${params.seed}');
     }
 
     return requirements.isEmpty ? '' : '${requirements.join('. ')}.';

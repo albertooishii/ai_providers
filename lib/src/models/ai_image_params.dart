@@ -17,7 +17,7 @@
 /// | `background` | `String?` | `opaque`, `transparent` | Tipo de fondo: sólido o transparente. |
 /// | `fidelity` | `String?` | `low`, `medium`, `high` | Fidelidad de entrada para ediciones/iteraciones. OpenAI usa `low` por defecto. |
 /// | `quality` | `String?` | `standard`, `high`, `ultra` | Calidad visual solicitada en proveedores que lo soportan. |
-/// | `seed` | `String?` | Cualquier string | Identificador para repetir resultados. Usa IDs `resp_...` para reutilizar respuestas de OpenAI o etiquetas personalizadas. |
+/// | `sourceImageBase64` | `String?` | Base64 string | Imagen base en formato Base64 para editar/iterar. Soportado tanto por OpenAI como Gemini. |
 ///
 /// **Ejemplo de uso:**
 /// ```dart
@@ -26,7 +26,7 @@
 ///   quality: AiImageQuality.high,
 ///   format: AiImageFormat.png,
 ///   background: AiImageBackground.transparent,
-///   seed: 'mi-logo-v1',
+///   sourceImageBase64: 'data:image/png;base64,iVBORw0KGgoAAAA...',
 /// );
 ///
 /// final image = await AI.image('Logo corporativo moderno', null, params);
@@ -40,7 +40,7 @@ class AiImageParams {
     this.background,
     this.fidelity,
     this.quality,
-    this.seed,
+    this.sourceImageBase64,
   });
 
   /// Factory constructor desde Map&lt;String, dynamic&gt; para compatibilidad
@@ -53,7 +53,7 @@ class AiImageParams {
       background: params['background'] as String?,
       fidelity: params['fidelity'] as String?,
       quality: params['quality'] as String?,
-      seed: params['seed'] as String?,
+      sourceImageBase64: params['sourceImageBase64'] as String?,
     );
   }
 
@@ -97,12 +97,13 @@ class AiImageParams {
   /// - `ultra`: Máxima calidad disponible (si el proveedor lo soporta)
   final String? quality;
 
-  /// Identificador para reproducir resultados consistentes.
+  /// Imagen base en formato Base64 para editar o iterar.
   ///
-  /// - Para OpenAI: Usa IDs como `resp_xxx` para reutilizar respuestas previas
-  /// - Para otros proveedores: Cualquier string como etiqueta de consistencia
-  /// - Ejemplo: `'logo-v1'`, `'avatar-2024'`, `resp_2vdL8bzZzul3k8CjdVxL9nRR`
-  final String? seed;
+  /// - Para OpenAI: Se usa como input_image en la API de Responses
+  /// - Para Gemini: Se pasa como imagen de contexto para edición
+  /// - Formato: `'data:image/png;base64,iVBORw0KGgoAAAA...'` o solo el Base64
+  /// - Ejemplo: Imagen previa generada que se quiere modificar
+  final String? sourceImageBase64;
 
   /// Convierte a Map&lt;String, dynamic&gt; para compatibilidad con additionalParams
   Map<String, dynamic> toMap() {
@@ -113,7 +114,7 @@ class AiImageParams {
     if (background != null) map['background'] = background;
     if (fidelity != null) map['fidelity'] = fidelity;
     if (quality != null) map['quality'] = quality;
-    if (seed != null) map['seed'] = seed;
+    if (sourceImageBase64 != null) map['sourceImageBase64'] = sourceImageBase64;
 
     return map;
   }
@@ -142,7 +143,7 @@ class AiImageParams {
     final String? background,
     final String? fidelity,
     final String? quality,
-    final String? seed,
+    final String? sourceImageBase64,
   }) {
     return AiImageParams(
       aspectRatio: aspectRatio ?? this.aspectRatio,
@@ -150,14 +151,14 @@ class AiImageParams {
       background: background ?? this.background,
       fidelity: fidelity ?? this.fidelity,
       quality: quality ?? this.quality,
-      seed: seed ?? this.seed,
+      sourceImageBase64: sourceImageBase64 ?? this.sourceImageBase64,
     );
   }
 
   @override
   String toString() {
     return 'AiImageParams(aspectRatio: $aspectRatio, '
-        'format: $format, background: $background, fidelity: $fidelity, quality: $quality, seed: $seed)';
+        'format: $format, background: $background, fidelity: $fidelity, quality: $quality, sourceImageBase64: ${sourceImageBase64?.length ?? 0} chars)';
   }
 }
 

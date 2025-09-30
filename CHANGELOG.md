@@ -1,5 +1,51 @@
 # Registro de Cambios
 
+## [1.5.0] - 1 de octubre de 2025 🚀 SISTEMA SOURCEIMAGEBASE64 + PROMPT REVISADO JSON
+
+### 🔄 Breaking Changes - Sistema Seed Eliminado
+- **AiImageParams.seed → sourceImageBase64**: Campo `seed` completamente removido y reemplazado por `sourceImageBase64` para edición de imágenes
+- **ProviderResponse.seed eliminado**: Removido campo `seed` de respuestas de providers
+- **AiImage.seed eliminado**: Modelo AiImage ya no incluye campo `seed`
+- **AIProviderManager sin seed**: Eliminadas todas las referencias y validaciones de seed
+
+### ✨ Nuevas Características
+- **🖼️ Sistema sourceImageBase64 unificado**: Ambos OpenAI y Google ahora soportan edición de imágenes usando Base64 como input
+- **🔄 Prompt revisado mejorado en Gemini**: Sistema JSON robusto para extraer descripciones detalladas de imágenes generadas
+- **🛠️ Utilidad JSON robusta**: Nueva `json_utils.dart` con parsing inteligente de JSON, markdown y texto mixto
+- **🎯 Respuestas de políticas inteligentes**: Google provider detecta rechazos por finishReason (IMAGE_OTHER, SAFETY, RECITATION)
+
+### 🔧 Mejoras Técnicas
+- **JSON estructurado**: Gemini ahora responde con formato `{"description": "...", "response": "..."}` para mejor parsing
+- **Serialización AIContext mejorada**: GoogleProvider usa `aiContext.toJson()` correctamente
+- **Fallbacks robustos**: Sistema de parsing JSON con multiple fallbacks para máxima compatibilidad
+- **Manejo de errores**: Detección específica de rechazos de contenido con mensajes informativos
+
+### 📋 Migración Requerida
+```dart
+// ❌ ANTES (v1.4.x)
+const params = AiImageParams(
+  seed: 'resp_abc123', // Para reutilizar respuesta
+  quality: AiImageQuality.high,
+);
+
+// ✅ AHORA (v1.5.0)  
+const params = AiImageParams(
+  sourceImageBase64: 'data:image/png;base64,...', // Para editar imagen
+  quality: AiImageQuality.high,
+);
+```
+
+### 🔧 Detalles Técnicos
+- **OpenAI**: sourceImageBase64 se mapea a `input_image` en la API de Responses
+- **Gemini**: sourceImageBase64 se pasa como `inline_data` para contexto de edición
+- **Parsing JSON**: `extractJsonBlock()` con balanceado de llaves y detección de markdown
+- **Compatibilidad**: Sistema de fallback mantiene funcionalidad si el JSON no es válido
+
+### ⚡ Optimizaciones
+- **Menor complejidad**: Sin manejo dual de seeds vs response IDs
+- **Mejor UX**: Mensajes específicos cuando Google rechaza contenido
+- **Código más limpio**: Eliminadas validaciones y conversiones de seed innecesarias
+
 ## [1.4.3] - 30 de septiembre de 2025 🔄 REFACTOR: Reestructuración AIResponse con Modelos Tipados
 
 ### 🔄 Breaking Changes (Estructura de Datos)
