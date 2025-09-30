@@ -24,7 +24,7 @@ class HybridConversationService {
   // =================================================================
 
   bool _isActive = false;
-  AISystemPrompt? _currentSystemPrompt;
+  AIContext? _currentAiContext;
 
   // Stream controllers para eventos de conversación
   final StreamController<String> _responseController =
@@ -63,7 +63,7 @@ class HybridConversationService {
   bool get isActive => _isActive;
 
   /// System prompt actual para la conversación
-  AISystemPrompt? get currentSystemPrompt => _currentSystemPrompt;
+  AIContext? get currentAiContext => _currentAiContext;
 
   // =================================================================
   // CONVERSATION MANAGEMENT
@@ -71,9 +71,9 @@ class HybridConversationService {
 
   /// Inicia una conversación en tiempo real con voz
   ///
-  /// [systemPrompt] - Prompt del sistema que define el contexto y comportamiento de la IA
+  /// [context] - Prompt del sistema que define el contexto y comportamiento de la IA
   /// [initialMessage] - Mensaje inicial opcional de la IA
-  Future<void> startConversation(final AISystemPrompt systemPrompt,
+  Future<void> startConversation(final AIContext aiContext,
       {final String? initialMessage}) async {
     if (_isActive) {
       AILogger.w('[HybridConversation] Ya hay una conversación activa');
@@ -84,7 +84,7 @@ class HybridConversationService {
       AILogger.d('[HybridConversation] 🚀 Iniciando conversación realtime');
 
       _isActive = true;
-      _currentSystemPrompt = systemPrompt;
+      _currentAiContext = aiContext;
       _conversationHistory.clear();
 
       _stateController.add(HybridConversationState.initializing);
@@ -105,7 +105,7 @@ class HybridConversationService {
 
   /// Envía un mensaje de texto (sin voz)
   Future<void> sendTextMessage(final String message) async {
-    if (!_isActive || _currentSystemPrompt == null) {
+    if (!_isActive || _currentAiContext == null) {
       AILogger.w('[HybridConversation] No hay conversación activa');
       return;
     }
@@ -119,13 +119,13 @@ class HybridConversationService {
       // Agregar mensaje del usuario al historial
       _conversationHistory.add({'role': 'user', 'content': message});
 
-      // Usar nueva API AI.text() con mensaje y systemPrompt actualizado
-      final updatedSystemPrompt = _currentSystemPrompt!.copyWith(
+      // Usar nueva API AI.text() con mensaje y context actualizado
+      final updatedContext = _currentAiContext!.copyWith(
         dateTime: DateTime.now(),
         history: _conversationHistory,
       );
 
-      final response = await AI.text(message, updatedSystemPrompt);
+      final response = await AI.text(message, updatedContext);
 
       await _processAIResponse(response.text, speakResponse: true);
     } on Exception catch (e) {
@@ -137,7 +137,7 @@ class HybridConversationService {
 
   /// Envía audio para transcribir y procesar
   Future<void> sendAudioMessage(final String audioBase64) async {
-    if (!_isActive || _currentSystemPrompt == null) {
+    if (!_isActive || _currentAiContext == null) {
       AILogger.w('[HybridConversation] No hay conversación activa');
       return;
     }
@@ -176,7 +176,7 @@ class HybridConversationService {
     AILogger.d('[HybridConversation] ⏹️ Deteniendo conversación');
 
     _isActive = false;
-    _currentSystemPrompt = null;
+    _currentAiContext = null;
     _stateController.add(HybridConversationState.stopped);
 
     AILogger.d('[HybridConversation] ✅ Conversación detenida');

@@ -8,7 +8,7 @@ import 'package:record/record.dart';
 import '../models/ai_response.dart';
 
 import '../models/ai_capability.dart';
-import '../models/ai_system_prompt.dart';
+import '../models/ai_context.dart';
 import '../core/ai_provider_manager.dart';
 import '../utils/logger.dart';
 import '../utils/waveform_utils.dart';
@@ -70,21 +70,21 @@ class AudioTranscriptionService {
   /// Esta es la firma EXACTA que necesita AI.listen() para evitar circular dependency.
   Future<AIResponse> transcribe(
     final String audioBase64, [
-    final AISystemPrompt? systemPrompt,
+    final AIContext? aiContext,
   ]) async {
     try {
       AILogger.d('[AudioTranscriptionService] 🎧 Transcribiendo audio...');
 
-      // Usar el SystemPrompt proporcionado o crear uno por defecto
-      final effectiveSystemPrompt =
-          systemPrompt ?? _createDefaultTranscriptionSystemPrompt();
+      // Usar el Context proporcionado o crear uno por defecto
+      final effectiveContext =
+          aiContext ?? _createDefaultTranscriptionContext();
 
       // Llamar directamente a AIProviderManager (no a AI.listen() para evitar circular dependency)
       // Nota: El caché está deshabilitado para audioTranscription en AIProviderManager
       return await AIProviderManager.instance.sendMessage(
         message:
             'CRITICAL: You are a speech transcription system. ONLY transcribe the actual spoken words in the provided audio. Do NOT create fictional dialogue. Do NOT generate sample conversations about Maria del Carmen, directors, schools, or any invented content. If no clear speech is detected, return empty text. Transcribe ONLY what is actually spoken.',
-        systemPrompt: effectiveSystemPrompt,
+        aiContext: effectiveContext,
         capability: AICapability.audioTranscription,
         imageBase64: audioBase64, // Reutilizamos imageBase64 para audio
       );
@@ -181,12 +181,12 @@ class AudioTranscriptionService {
   /// [duration] - Duración máxima (null = ilimitado hasta silencio)
   /// [silenceTimeout] - Tiempo de silencio para auto-detención
   /// [autoStop] - Detener automáticamente al detectar silencio
-  /// [systemPrompt] - Instrucciones del sistema para transcripción
+  /// [context] - Contexto e instrucciones del sistema para transcripción
   Future<String?> recordAndTranscribe({
     final Duration? duration,
     final Duration silenceTimeout = const Duration(seconds: 2),
     final bool autoStop = true,
-    final AISystemPrompt? systemPrompt,
+    final AIContext? aiContext,
   }) async {
     try {
       // Log de configuración inteligente
@@ -223,7 +223,7 @@ class AudioTranscriptionService {
         return null; // Retorna null para indicar que la grabación está en progreso
       }
 
-      // Las instrucciones de transcripción se pasan directamente al provider via SystemPrompt
+      // Las instrucciones de transcripción se pasan directamente al provider via Context
 
       AILogger.d(
           '[AudioTranscriptionService] ✅ recordAndTranscribe completado: $transcript');
@@ -382,8 +382,8 @@ class AudioTranscriptionService {
 
   // === MÉTODOS PRIVADOS ===
 
-  /// Crea SystemPrompt por defecto para transcripción de audio
-  AISystemPrompt _createDefaultTranscriptionSystemPrompt() {
+  /// Crea Context por defecto para transcripción de audio
+  AIContext _createDefaultTranscriptionContext() {
     final context = <String, dynamic>{
       'task': 'audio_transcription',
       'stt': true,
@@ -399,7 +399,7 @@ class AudioTranscriptionService {
       'context': 'general',
     };
 
-    return AISystemPrompt(
+    return AIContext(
       context: context,
       dateTime: DateTime.now(),
       instructions: instructions,
@@ -669,7 +669,7 @@ class AudioTranscriptionService {
   }
 
   // === MÉTODOS SIMPLIFICADOS DE FORMATO ===
-  // Nota: El formato real ahora se maneja directamente en los providers via SystemPrompt
+  // Nota: El formato real ahora se maneja directamente en los providers via Context
 
   void _startRecordingTimers() {
     _recordingTimer = Timer.periodic(const Duration(milliseconds: 100), (

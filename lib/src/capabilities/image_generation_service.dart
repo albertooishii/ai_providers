@@ -22,7 +22,7 @@ class ImageGenerationService {
   /// Acepta parámetros opcionales para casos avanzados pero mantiene simplicidad.
   Future<AIResponse> generateImage(
     final String prompt, [
-    final AISystemPrompt? systemPrompt,
+    final AIContext? aiContext,
     final bool saveToCache = true,
     final AiImageParams? imageParams,
   ]) async {
@@ -31,14 +31,13 @@ class ImageGenerationService {
         '[ImageGenerationService] 🖼️ Generando imagen: ${prompt.substring(0, prompt.length.clamp(0, 50))}... (saveToCache: $saveToCache)',
       );
 
-      // Crear SystemPrompt respetando el original y fusionando parámetros de imagen
-      final finalSystemPrompt =
-          _buildFinalSystemPrompt(systemPrompt, imageParams);
+      // Crear Context respetando el original y fusionando parámetros de imagen
+      final finalContext = _buildFinalContext(aiContext, imageParams);
 
       // Llamar directamente a AIProviderManager con todos los parámetros
       return await AIProviderManager.instance.sendMessage(
         message: prompt,
-        systemPrompt: finalSystemPrompt,
+        aiContext: finalContext,
         capability: AICapability.imageGeneration,
         saveToCache: saveToCache,
         additionalParams: imageParams?.toMap(),
@@ -51,24 +50,24 @@ class ImageGenerationService {
 
   // === MÉTODOS PRIVADOS ===
 
-  /// 🔄 Construye SystemPrompt final respetando el original y fusionando parámetros de imagen
-  AISystemPrompt _buildFinalSystemPrompt(
-    final AISystemPrompt? originalSystemPrompt,
+  /// 🔄 Construye Context final respetando el original y fusionando parámetros de imagen
+  AIContext _buildFinalContext(
+    final AIContext? originalContext,
     final AiImageParams? imageParams,
   ) {
-    // Si no hay systemPrompt original, crear uno desde parámetros
-    if (originalSystemPrompt == null) {
-      return _createSystemPromptFromParams(imageParams);
+    // Si no hay context original, crear uno desde parámetros
+    if (originalContext == null) {
+      return _createContextFromParams(imageParams);
     }
 
     // Si no hay parámetros de imagen, usar el original sin cambios
     if (imageParams == null) {
-      return originalSystemPrompt;
+      return originalContext;
     }
 
     // 🔥 FUSIONAR: Respetar original + añadir parámetros de imagen
     final mergedInstructions = <String, dynamic>{
-      ...originalSystemPrompt.instructions,
+      ...originalContext.instructions,
     };
 
     // Agregar descripción textual de parámetros de imagen
@@ -91,16 +90,17 @@ class ImageGenerationService {
       mergedInstructions['seed'] = imageParams.seed;
     }
 
-    return AISystemPrompt(
-      context: originalSystemPrompt.context,
-      dateTime: originalSystemPrompt.dateTime,
+    return AIContext(
+      context: originalContext.context,
+      dateTime: originalContext.dateTime,
+      history: originalContext.history,
       instructions: mergedInstructions,
     );
   }
 
-  /// Crea SystemPrompt desde AiImageParams o valores por defecto
-  /// Respeta el systemPrompt original y concatena parámetros de imagen
-  AISystemPrompt _createSystemPromptFromParams(final AiImageParams? params) {
+  /// Crea Context desde AiImageParams o valores por defecto
+  /// Respeta el context original y concatena parámetros de imagen
+  AIContext _createContextFromParams(final AiImageParams? params) {
     final context = <String, dynamic>{
       'task': 'image_generation',
     };
@@ -127,7 +127,7 @@ class ImageGenerationService {
       if (params.seed != null) instructions['seed'] = params.seed;
     }
 
-    return AISystemPrompt(
+    return AIContext(
       context: context,
       dateTime: DateTime.now(),
       instructions: instructions,

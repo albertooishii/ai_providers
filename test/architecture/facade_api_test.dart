@@ -53,7 +53,7 @@ void main() {
   
   
   // API Ultra-Limpia
-  await AI.text(history, systemPrompt);
+  await AI.text(history, context);
   await AI.speak('¡Hola!');
   await AI.image('Un gato espacial'); 
   await AI.listen(audioFile);

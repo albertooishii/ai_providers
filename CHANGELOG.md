@@ -1,5 +1,35 @@
 # Registro de Cambios
 
+## [1.4.0] - 30 de septiembre de 2025 🔄 REFACTOR BREAKING: AISystemPrompt → AIContext
+
+### 💥 Breaking Changes
+- **Modelo renombrado**: `AISystemPrompt` → `AIContext` para mayor claridad conceptual
+- **Archivo renombrado**: `ai_system_prompt.dart` → `ai_context.dart`
+- **Parámetros actualizados**: `systemPrompt` → `aiContext` en APIs de funciones
+- **Import actualizado**: `import 'package:ai_providers/ai_providers.dart'` sigue funcionando (re-exportado)
+
+### 🚀 Mejoras Arquitecturales
+- **Concepto más claro**: AIContext representa el contexto completo de conversación, no solo system prompt
+- **History real**: AIProviderManager ahora usa `aiContext.history` directamente en lugar de generar historia falsa
+- **Naming consistency**: Separación clara entre `context` (propiedad del modelo) y `aiContext` (parámetro de función)
+- **Flutter compatibility**: Evita conflictos de nombres con `BuildContext` de Flutter
+
+### 🔧 Mejoras Técnicas
+- **Mejor abstracción**: AIContext encapsula contexto completo: historia, instrucciones, metadatos y contexto de aplicación
+- **API más intuitiva**: Los nombres reflejan mejor la funcionalidad real del modelo
+- **Retrocompatibilidad**: Aunque breaking, la migración es simple (find & replace)
+
+### 📚 Migración Requerida
+```dart
+// ANTES (v1.3.x)
+final systemPrompt = AISystemPrompt(context: profile, ...);
+await AI.text(prompt, systemPrompt);
+
+// AHORA (v1.4.0+)
+final aiContext = AIContext(context: profile, ...);  
+await AI.text(prompt, aiContext);
+```
+
 ## [1.3.3] - 29 de septiembre de 2025 🧹 LIMPIEZA DE DEPENDENCIAS + 🚀 OPTIMIZACIÓN APIKEY
 
 ### 🚀 Optimizaciones de Performance
@@ -40,17 +70,17 @@
 ## [1.3.1] - 28 de septiembre de 2025 🎙️ SIMPLIFICACIÓN AUDIO - TRANSCRIPTION CLEANUP
 
 ### 🧹 Simplificación y Mejoras
-- **Eliminado `TranscribeInstructions`**: Simplificamos la arquitectura de audio eliminando la clase `TranscribeInstructions` que tenía características no utilizadas (anti-hallucination). Ahora `AI.listen()` usa directamente `AISystemPrompt`.
+- **Eliminado `TranscribeInstructions`**: Simplificamos la arquitectura de audio eliminando la clase `TranscribeInstructions` que tenía características no utilizadas (anti-hallucination). Ahora `AI.listen()` usa directamente `AIContext`.
 - **`AiAudioParams` clarificado**: La documentación ahora especifica claramente que `AiAudioParams` es exclusivamente para **síntesis de voz (TTS)** con `AI.speak()`, no para transcripción.
 - **Demo actualizado**: El ejemplo `audio_demo_screen.dart` ahora usa `AiAudioParams` en lugar de las obsoletas `SynthesizeInstructions`.
 
 ### 🔧 Cambios Técnicos
-- **API transcripción simplificada**: `AI.listen()` y `AI.transcribe()` ahora reciben solo `AISystemPrompt`
-- **Proveedores actualizados**: OpenAI y Google providers ajustados para usar `AISystemPrompt` directamente en transcripción
+- **API transcripción simplificada**: `AI.listen()` y `AI.transcribe()` ahora reciben solo `AIContext`
+- **Proveedores actualizados**: OpenAI y Google providers ajustados para usar `AIContext` directamente en transcripción
 - **Documentación mejorada**: `AiAudioParams` ahora documenta correctamente solo parámetros TTS reales soportados por cada proveedor
 
 ### 📚 Documentación
-- README actualizado para reflejar el uso correcto de `AiAudioParams` vs `AISystemPrompt`
+- README actualizado para reflejar el uso correcto de `AiAudioParams` vs `AIContext`
 - Comentarios de código clarificados para distinguir entre TTS y STT
 - Eliminadas referencias confusas a STT en `AiAudioParams`
 

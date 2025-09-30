@@ -3,7 +3,7 @@ import '../models/ai_capability.dart';
 import '../models/ai_provider_config.dart';
 import '../models/ai_provider_metadata.dart';
 import '../models/provider_response.dart';
-import '../models/ai_system_prompt.dart';
+import '../models/ai_context.dart';
 // provider_interface.dart removed - no more abstract interfaces!
 import 'package:http/http.dart' as http;
 import '../utils/logger.dart';
@@ -204,10 +204,10 @@ abstract class BaseProvider {
   int compareModels(final String a, final String b);
 
   /// Abstract method for sending messages - each provider implements their own logic
-  /// Uses typed AISystemPrompt for better type safety
+  /// Uses typed AIContext for better type safety
   Future<ProviderResponse> sendMessage({
     required final List<Map<String, String>> history,
-    required final AISystemPrompt systemPrompt,
+    required final AIContext aiContext,
     required final AICapability capability,
     final String? model,
     final String? imageBase64,

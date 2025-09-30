@@ -5,7 +5,7 @@ import 'dart:convert';
 import '../core/provider_registry.dart';
 import '../models/provider_response.dart';
 import '../models/ai_provider_metadata.dart';
-import '../models/ai_system_prompt.dart';
+import '../models/ai_context.dart';
 import 'package:http/http.dart' as http;
 import '../utils/logger.dart';
 import '../models/ai_capability.dart';
@@ -100,7 +100,7 @@ class XAIProvider extends BaseProvider {
   @override
   Future<ProviderResponse> sendMessage({
     required final List<Map<String, String>> history,
-    required final AISystemPrompt systemPrompt,
+    required final AIContext aiContext,
     required final AICapability capability,
     final String? model,
     final String? imageBase64,
@@ -110,7 +110,7 @@ class XAIProvider extends BaseProvider {
     switch (capability) {
       case AICapability.textGeneration:
       case AICapability.imageAnalysis:
-        return _sendTextRequest(history, systemPrompt, model, imageBase64,
+        return _sendTextRequest(history, aiContext, model, imageBase64,
             imageMimeType, additionalParams);
       default:
         return ProviderResponse(
@@ -120,7 +120,7 @@ class XAIProvider extends BaseProvider {
 
   Future<ProviderResponse> _sendTextRequest(
     final List<Map<String, String>> history,
-    final AISystemPrompt systemPrompt,
+    final AIContext aiContext,
     final String? model,
     final String? imageBase64,
     final String? imageMimeType,
@@ -137,8 +137,8 @@ class XAIProvider extends BaseProvider {
       final messages = <Map<String, dynamic>>[];
 
       // Add system prompt
-      messages.add(
-          {'role': 'system', 'content': jsonEncode(systemPrompt.toJson())});
+      messages
+          .add({'role': 'system', 'content': jsonEncode(aiContext.toJson())});
 
       // Add conversation history
       for (int i = 0; i < history.length; i++) {

@@ -10,7 +10,7 @@ import '../core/provider_registry.dart';
 import '../infrastructure/api_key_manager.dart';
 import '../infrastructure/cache_service.dart';
 import '../models/ai_user_preferences.dart';
-import '../models/ai_system_prompt.dart';
+import '../models/ai_context.dart';
 import '../infrastructure/http_connection_pool.dart';
 import '../infrastructure/monitoring_service.dart';
 import '../infrastructure/retry_service.dart';
@@ -201,7 +201,7 @@ class AIProviderManager {
   /// Automatically selects the optimal provider and model based on capability and user preferences
   Future<AIResponse> sendMessage({
     required final String message,
-    required final AISystemPrompt systemPrompt,
+    required final AIContext aiContext,
     final AICapability capability =
         AICapability.textGeneration, // Default to text generation
     final String? imageBase64,
@@ -246,7 +246,7 @@ class AIProviderManager {
     //     providerId: providerId,
     //     model: requestModel,
     //     history: history,
-    //     systemPrompt: systemPrompt,
+    //     aiContext: aiContext,
     //     imageBase64: imageBase64,
     //     imageMimeType: imageMimeType,
     //     additionalParams: additionalParams,
@@ -254,19 +254,32 @@ class AIProviderManager {
 
     //   return _monitoringService!.getOrCreateRequest(
     //     fingerprint,
-    //     () => _executeRequest(capability, providerId, history, systemPrompt, imageBase64, imageMimeType, additionalParams, requestModel),
+    //     () => _executeRequest(capability, providerId, history, aiContext, imageBase64, imageMimeType, additionalParams, requestModel),
     //   );
     // }
 
-    // Build history from message
-    final history = [
-      {'role': 'user', 'content': message},
-    ];
+    // Use history from AIContext if available, otherwise create simple history from message
+    final List<Map<String, String>> history;
+    if (aiContext.hasHistory && aiContext.history!.isNotEmpty) {
+      // Convert AIContext history to the expected format
+      // (AIContext.history should already include the current message)
+      history = aiContext.history!
+          .map((final msg) => {
+                'role': msg['role']?.toString() ?? 'user',
+                'content': msg['content']?.toString() ?? '',
+              })
+          .toList();
+    } else {
+      // Fallback for simple cases without context history
+      history = [
+        {'role': 'user', 'content': message},
+      ];
+    }
 
     // Fallback to direct execution if deduplication is not available
     return _sendMessageWithMonitoring(
       history: history,
-      systemPrompt: systemPrompt,
+      aiContext: aiContext,
       capability: capability,
       imageBase64: imageBase64,
       imageMimeType: imageMimeType,
@@ -279,7 +292,7 @@ class AIProviderManager {
   /// Uses automatic provider and model selection - no manual preferences
   Future<AIResponse> _sendMessageWithMonitoring({
     required final List<Map<String, String>> history,
-    required final AISystemPrompt systemPrompt,
+    required final AIContext aiContext,
     required final AICapability capability,
     final String? imageBase64,
     final String? imageMimeType,
@@ -392,7 +405,7 @@ class AIProviderManager {
           // so the provider implementation can be updated during migration.
           final ProviderResponse providerResp = await provider.sendMessage(
             history: history,
-            systemPrompt: systemPrompt,
+            aiContext: aiContext,
             capability: capability,
             model: modelToUse,
             imageBase64: effectiveImageBase64,
@@ -454,8 +467,7 @@ class AIProviderManager {
             prompt: providerResp.prompt,
             imageFileName: imageFileName ?? '',
             audioFileName: audioFileName ?? '',
-            // Preserve imageBase64 when not saving to cache (preview mode)
-            imageBase64: saveToCache ? null : providerResp.imageBase64,
+            imageBase64: providerResp.imageBase64,
             audioBase64: providerResp.audioBase64,
           );
 

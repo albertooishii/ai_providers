@@ -5,7 +5,7 @@ import 'dart:io';
 import '../core/provider_registry.dart';
 import '../models/provider_response.dart';
 import '../models/ai_provider_metadata.dart';
-import '../models/ai_system_prompt.dart';
+import '../models/ai_context.dart';
 import '../models/ai_audio_params.dart';
 
 import 'package:http/http.dart' as http;
@@ -101,7 +101,7 @@ class GoogleProvider extends BaseProvider {
   @override
   Future<ProviderResponse> sendMessage({
     required final List<Map<String, String>> history,
-    required final AISystemPrompt systemPrompt,
+    required final AIContext aiContext,
     required final AICapability capability,
     final String? model,
     final String? imageBase64,
@@ -111,28 +111,28 @@ class GoogleProvider extends BaseProvider {
     switch (capability) {
       case AICapability.textGeneration:
       case AICapability.imageAnalysis:
-        return _sendTextRequest(history, systemPrompt, model, imageBase64,
+        return _sendTextRequest(history, aiContext, model, imageBase64,
             imageMimeType, additionalParams);
       case AICapability.imageGeneration:
         return _sendImageGenerationRequest(
-            history, systemPrompt, model, additionalParams);
+            history, aiContext, model, additionalParams);
       case AICapability.audioGeneration:
         return _sendTTSRequest(history, model, additionalParams);
       case AICapability.audioTranscription:
         return _sendTranscriptionRequest(
           imageBase64 ?? '',
-          systemPrompt,
+          aiContext,
           model,
         );
       case AICapability.realtimeConversation:
         return _handleRealtimeRequest(
-            history, systemPrompt, model, additionalParams);
+            history, aiContext, model, additionalParams);
     }
   }
 
   Future<ProviderResponse> _sendTextRequest(
     final List<Map<String, String>> history,
-    final AISystemPrompt systemPrompt,
+    final AIContext aiContext,
     final String? model,
     final String? imageBase64,
     final String? imageMimeType,
@@ -151,7 +151,7 @@ class GoogleProvider extends BaseProvider {
       contents.add({
         'role': 'user',
         'parts': [
-          {'text': systemPrompt.context.toString()},
+          {'text': aiContext.context.toString()},
         ],
       });
       contents.add({
@@ -276,7 +276,7 @@ class GoogleProvider extends BaseProvider {
 
   Future<ProviderResponse> _sendImageGenerationRequest(
     final List<Map<String, String>> history,
-    final AISystemPrompt systemPrompt,
+    final AIContext aiContext,
     final String? model,
     final Map<String, dynamic>? additionalParams,
   ) async {
@@ -480,7 +480,7 @@ Requirements:
   /// Native Gemini STT using generateContent
   Future<ProviderResponse> _sendTranscriptionRequest(
     final String audioBase64,
-    final AISystemPrompt systemPrompt,
+    final AIContext aiContext,
     final String? model,
   ) async {
     if (audioBase64.isEmpty) {
@@ -492,8 +492,8 @@ Requirements:
       final selectedModel =
           model ?? getDefaultModel(AICapability.audioTranscription);
 
-      // Construir prompt desde SystemPrompt
-      final promptText = _buildPromptFromSystemPrompt(systemPrompt);
+      // Construir prompt desde Context
+      final promptText = _buildPromptFromContext(aiContext);
       final transcriptionPrompt = promptText.isNotEmpty
           ? promptText
           : 'Please transcribe this audio file to text. Provide only the transcribed text without additional comments.';
@@ -548,7 +548,7 @@ Requirements:
   /// Handle realtime conversation setup
   Future<ProviderResponse> _handleRealtimeRequest(
     final List<Map<String, String>> history,
-    final AISystemPrompt systemPrompt,
+    final AIContext aiContext,
     final String? model,
     final Map<String, dynamic>? additionalParams,
   ) async {
@@ -584,15 +584,15 @@ Requirements:
   Future<ProviderResponse> transcribeAudio({
     required final String audioBase64,
     final String? model,
-    final AISystemPrompt? systemPrompt,
+    final AIContext? aiContext,
   }) async {
-    final effectiveSystemPrompt = systemPrompt ??
-        AISystemPrompt(
+    final effectiveContext = aiContext ??
+        AIContext(
           context: {'task': 'audio_transcription'},
           dateTime: DateTime.now(),
           instructions: {},
         );
-    return _sendTranscriptionRequest(audioBase64, effectiveSystemPrompt, model);
+    return _sendTranscriptionRequest(audioBase64, effectiveContext, model);
   }
 
   /// [REMOVED] createRealtimeClient - Replaced by HybridConversationService
@@ -844,21 +844,21 @@ Requirements:
   bool isValidVoice(final String voiceName) => _availableVoices
       .any((final v) => v.name.toLowerCase() == voiceName.toLowerCase());
 
-  /// Construye prompt para transcripción desde SystemPrompt
-  String _buildPromptFromSystemPrompt(final AISystemPrompt systemPrompt) {
+  /// Construye prompt para transcripción desde Context
+  String _buildPromptFromContext(final AIContext aiContext) {
     final parts = <String>[];
 
     // Agregar contexto si hay
-    if (systemPrompt.context.isNotEmpty) {
-      final contextStr = systemPrompt.context.toString();
+    if (aiContext.context.isNotEmpty) {
+      final contextStr = aiContext.context.toString();
       if (contextStr.isNotEmpty && contextStr != '{}') {
         parts.add(contextStr);
       }
     }
 
     // Agregar instrucciones si hay
-    if (systemPrompt.instructions.isNotEmpty) {
-      final instructionsStr = systemPrompt.instructions.toString();
+    if (aiContext.instructions.isNotEmpty) {
+      final instructionsStr = aiContext.instructions.toString();
       if (instructionsStr.isNotEmpty && instructionsStr != '{}') {
         parts.add(instructionsStr);
       }

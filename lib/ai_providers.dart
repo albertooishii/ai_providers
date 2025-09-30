@@ -8,7 +8,7 @@
 /// import 'package:ai_providers/ai_providers.dart';
 ///
 /// // 🎯 API Ultra-Limpia - ÚNICA FORMA DE USAR AI
-/// final textResponse = await AI.text(history, systemPrompt);
+/// final textResponse = await AI.text(history, context);
 /// final audioResponse = await AI.speak('¡Hola mundo!');
 /// final imageResponse = await AI.image('Un gato espacial');
 /// final transcription = await AI.listen(audioFile);
@@ -55,7 +55,7 @@ export 'src/models/audio_models.dart';
 export 'src/models/ai_init_config.dart';
 
 /// Generic system prompt model for AI providers
-export 'src/models/ai_system_prompt.dart';
+export 'src/models/ai_context.dart';
 
 /// Instructions for audio transcription (Speech-to-Text)
 

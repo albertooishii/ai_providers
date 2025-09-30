@@ -2,7 +2,7 @@ import 'package:ai_providers/ai_providers.dart';
 import '../core/ai_provider_manager.dart';
 import '../utils/logger.dart';
 
-/// Servicio para análisis de imágenes con manejo inteligente de SystemPrompt
+/// Servicio para análisis de imágenes con manejo inteligente de Context
 ///
 /// Este servicio es la capa intermedia entre AI.vision() y AIProviderManager,
 /// siguiendo la nueva arquitectura donde Services manejan lógica específica.
@@ -17,11 +17,11 @@ class ImageAnalysisService {
   ///
   /// Recibe mismos parámetros que AI.vision() y delega a AIProviderManager.
   /// [prompt] - Opcional. Si no se proporciona, usa 'Describe esta imagen detalladamente'
-  /// [systemPrompt] - Opcional. Si no se proporciona, usa configuración por defecto.
+  /// [context] - Opcional. Si no se proporciona, usa configuración por defecto.
   Future<AIResponse> analyze(
     final String imageBase64, [
     final String? prompt,
-    final AISystemPrompt? systemPrompt,
+    final AIContext? aiContext,
     final String? imageMimeType,
   ]) async {
     try {
@@ -29,8 +29,8 @@ class ImageAnalysisService {
       final effectivePrompt = prompt ?? 'Describe esta imagen detalladamente';
 
       // Usar system prompt por defecto si no se proporciona
-      final effectiveSystemPrompt =
-          systemPrompt ?? _createDefaultImageAnalysisSystemPrompt();
+      final effectiveContext =
+          aiContext ?? _createDefaultImageAnalysisContext();
 
       AILogger.d(
           '[ImageAnalysisService] 👁️ Analizando imagen: ${effectivePrompt.substring(0, effectivePrompt.length.clamp(0, 50))}...');
@@ -38,7 +38,7 @@ class ImageAnalysisService {
       // Llamar directamente a AIProviderManager (no a AI.vision() para evitar circular dependency)
       return await AIProviderManager.instance.sendMessage(
         message: effectivePrompt,
-        systemPrompt: effectiveSystemPrompt,
+        aiContext: effectiveContext,
         capability: AICapability.imageAnalysis,
         imageBase64: imageBase64,
         imageMimeType: imageMimeType ?? 'image/jpeg',
@@ -52,7 +52,7 @@ class ImageAnalysisService {
   // === MÉTODOS PRIVADOS ===
 
   /// Crea un system prompt por defecto optimizado para análisis de imágenes
-  AISystemPrompt _createDefaultImageAnalysisSystemPrompt() {
+  AIContext _createDefaultImageAnalysisContext() {
     final instructions = <String, dynamic>{
       'role':
           'Eres un experto analizador de imágenes con capacidades de visión avanzada.',
@@ -68,7 +68,7 @@ class ImageAnalysisService {
           'Solo describe lo que puedes ver claramente, evita especulaciones.',
     };
 
-    return AISystemPrompt(
+    return AIContext(
       context: {
         'task': 'image_analysis',
         'mode': 'vision',

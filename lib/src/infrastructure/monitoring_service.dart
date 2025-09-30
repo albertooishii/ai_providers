@@ -6,7 +6,7 @@ import 'dart:async';
 import 'dart:convert';
 import '../utils/logger.dart';
 import '../models/ai_response.dart';
-import '../models/ai_system_prompt.dart';
+import '../models/ai_context.dart';
 
 /// Métricas de rendimiento para un provider
 class ProviderMetrics {
@@ -150,7 +150,7 @@ class MonitoringService {
     required final String providerId,
     required final String model,
     required final String capability,
-    required final List<AISystemPrompt> messages,
+    required final List<AIContext> messages,
     final Map<String, dynamic>? parameters,
   }) {
     final content = {
@@ -302,7 +302,7 @@ class RequestDeduplicationService {
     required final String providerId,
     required final String model,
     required final String capability,
-    required final List<AISystemPrompt> messages,
+    required final List<AIContext> messages,
     final Map<String, dynamic>? parameters,
   }) =>
       MonitoringService.instance.createFingerprint(

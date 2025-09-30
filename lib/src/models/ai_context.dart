@@ -1,13 +1,13 @@
-/// Generic internal system prompt model for AI providers.
+/// Generic internal AI context model for AI providers.
 /// Designed to be completely portable and work with any AI application.
 library;
 
 import 'dart:convert';
 
-/// Generic system prompt that works with any AI application.
+/// Generic AI context that works with any AI application.
 /// No external dependencies - completely self-contained.
-class AISystemPrompt {
-  const AISystemPrompt({
+class AIContext {
+  const AIContext({
     required this.context,
     required this.dateTime,
     this.history,
@@ -15,8 +15,8 @@ class AISystemPrompt {
   });
 
   /// Factory constructor from JSON
-  factory AISystemPrompt.fromJson(final Map<String, dynamic> json) {
-    return AISystemPrompt(
+  factory AIContext.fromJson(final Map<String, dynamic> json) {
+    return AIContext(
       context: json['context'] ?? <String, dynamic>{},
       dateTime: DateTime.parse(
         json['dateTime'] ?? DateTime.now().toIso8601String(),
@@ -87,13 +87,13 @@ class AISystemPrompt {
   }
 
   /// Create a copy with updated fields
-  AISystemPrompt copyWith({
+  AIContext copyWith({
     final dynamic context,
     final DateTime? dateTime,
     final List<Map<String, dynamic>>? history,
     final Map<String, dynamic>? instructions,
   }) {
-    return AISystemPrompt(
+    return AIContext(
       context: context ?? this.context,
       dateTime: dateTime ?? this.dateTime,
       history: history ?? this.history,
@@ -104,7 +104,7 @@ class AISystemPrompt {
   @override
   bool operator ==(final Object other) {
     if (identical(this, other)) return true;
-    return other is AISystemPrompt &&
+    return other is AIContext &&
         other.context == context &&
         other.dateTime == dateTime &&
         _listEquals(other.history, history) &&

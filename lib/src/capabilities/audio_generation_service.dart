@@ -59,13 +59,13 @@ class AudioGenerationService {
       AILogger.d(
           '[AudioGenerationService] 🎤 Sintetizando audio: ${text.substring(0, text.length.clamp(0, 50))}...');
 
-      // Crear SystemPrompt con parámetros de audio
-      final systemPrompt = _createSynthesizeSystemPrompt(audioParams);
+      // Crear Context con parámetros de audio
+      final context = _createSynthesizeContext(audioParams);
 
       // Llamar directamente a AIProviderManager - siempre guarda en caché para máxima flexibilidad
       final response = await AIProviderManager.instance.sendMessage(
         message: text,
-        systemPrompt: systemPrompt,
+        aiContext: context,
         capability: AICapability.audioGeneration,
         additionalParams: audioParams?.toMap(),
         saveToCache: true,
@@ -97,13 +97,13 @@ class AudioGenerationService {
       AILogger.d(
           '[AudioGenerationService] 🎨 Sintetizando audio (avanzado): ${text.substring(0, text.length.clamp(0, 50))}... (saveToCache: $saveToCache, play: $play)');
 
-      // Crear SystemPrompt con parámetros de audio
-      final systemPrompt = _createSynthesizeSystemPrompt(audioParams);
+      // Crear Context con parámetros de audio
+      final context = _createSynthesizeContext(audioParams);
 
       // Llamar directamente a AIProviderManager con control completo
       final response = await AIProviderManager.instance.sendMessage(
         message: text,
-        systemPrompt: systemPrompt,
+        aiContext: context,
         capability: AICapability.audioGeneration,
         additionalParams: audioParams?.toMap(),
         saveToCache: saveToCache,
@@ -281,9 +281,8 @@ class AudioGenerationService {
 
   // === MÉTODOS PRIVADOS ===
 
-  /// Crea SystemPrompt para síntesis de audio con parámetros tipados
-  AISystemPrompt _createSynthesizeSystemPrompt(
-      final AiAudioParams? audioParams) {
+  /// Crea Context para síntesis de audio con parámetros tipados
+  AIContext _createSynthesizeContext(final AiAudioParams? audioParams) {
     final effectiveParams = audioParams ?? const AiAudioParams();
 
     final context = <String, dynamic>{
@@ -297,7 +296,7 @@ class AudioGenerationService {
       ...effectiveParams.toMap(),
     };
 
-    return AISystemPrompt(
+    return AIContext(
       context: context,
       dateTime: DateTime.now(),
       instructions: instructions,

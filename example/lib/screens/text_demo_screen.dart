@@ -302,7 +302,7 @@ class _TextDemoScreenState extends State<TextDemoScreen> {
           '🤖 Generating text with ${_selectedProvider.toUpperCase()}...');
 
       // Create system prompt with the selected provider preference
-      final systemPrompt = AISystemPrompt(
+      final aiContext = AIContext(
         context: {
           'user': 'Demo User',
           'app': 'AI Providers Example',
@@ -322,7 +322,7 @@ class _TextDemoScreenState extends State<TextDemoScreen> {
       );
 
       // 🎯 Call the real AI.text() method!
-      final response = await AI.text(_promptController.text, systemPrompt);
+      final response = await AI.text(_promptController.text, aiContext);
 
       debugPrint('✅ AI response received: ${response.text.length} characters');
 
@@ -527,7 +527,7 @@ class _TextDemoScreenState extends State<TextDemoScreen> {
                         key: ValueKey(
                             'models_$_selectedProvider'), // Force rebuild when provider changes
                         future: _getModelsForProvider(_selectedProvider),
-                        builder: (context, snapshot) {
+                        builder: (aiContext, snapshot) {
                           if (!snapshot.hasData) {
                             return const SizedBox(
                               height: 40,

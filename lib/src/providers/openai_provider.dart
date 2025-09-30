@@ -6,7 +6,7 @@ import 'dart:io';
 import '../core/provider_registry.dart';
 import '../models/provider_response.dart';
 import '../models/ai_provider_metadata.dart';
-import '../models/ai_system_prompt.dart';
+import '../models/ai_context.dart';
 import '../models/ai_image_params.dart';
 import '../models/ai_audio_params.dart';
 // RealtimeClient removed - replaced by HybridConversationService
@@ -111,7 +111,7 @@ class OpenAIProvider extends BaseProvider {
   @override
   Future<ProviderResponse> sendMessage({
     required final List<Map<String, String>> history,
-    required final AISystemPrompt systemPrompt,
+    required final AIContext aiContext,
     required final AICapability capability,
     final String? model,
     final String? imageBase64,
@@ -121,28 +121,28 @@ class OpenAIProvider extends BaseProvider {
     switch (capability) {
       case AICapability.textGeneration:
       case AICapability.imageAnalysis:
-        return _sendTextRequest(history, systemPrompt, model, imageBase64,
+        return _sendTextRequest(history, aiContext, model, imageBase64,
             imageMimeType, additionalParams);
       case AICapability.imageGeneration:
         return _sendImageGenerationRequest(
-            history, systemPrompt, model, additionalParams);
+            history, aiContext, model, additionalParams);
       case AICapability.audioGeneration:
         return _sendTTSRequest(history, model, additionalParams);
       case AICapability.audioTranscription:
         return _sendTranscriptionRequest(
           imageBase64 ?? '',
-          systemPrompt,
+          aiContext,
           model,
         );
       case AICapability.realtimeConversation:
         return _handleRealtimeRequest(
-            history, systemPrompt, model, additionalParams);
+            history, aiContext, model, additionalParams);
     }
   }
 
   Future<ProviderResponse> _sendTextRequest(
     final List<Map<String, String>> history,
-    final AISystemPrompt systemPrompt,
+    final AIContext aiContext,
     final String? model,
     final String? imageBase64,
     final String? imageMimeType,
@@ -159,7 +159,7 @@ class OpenAIProvider extends BaseProvider {
       }
 
       // Build input text from system prompt and history
-      final inputText = _buildInputText(systemPrompt, history);
+      final inputText = _buildInputText(aiContext, history);
 
       final bodyMap = <String, dynamic>{
         'model': selectedModel,
@@ -265,7 +265,7 @@ class OpenAIProvider extends BaseProvider {
 
   Future<ProviderResponse> _sendImageGenerationRequest(
     final List<Map<String, String>> history,
-    final AISystemPrompt systemPrompt,
+    final AIContext aiContext,
     final String? model,
     final Map<String, dynamic>? additionalParams,
   ) async {
@@ -287,15 +287,14 @@ class OpenAIProvider extends BaseProvider {
 
       // Parse image parameters and build request body
       final imageParams = AiImageParams.fromMap(additionalParams);
-      final inputText = _buildInputText(systemPrompt, history);
+      final inputText = _buildInputText(aiContext, history);
 
       final bodyMap = <String, dynamic>{
         'model': selectedModel,
       };
 
       // Build image generation request directly (no duplication with text flow)
-      _buildImageGenerationRequest(
-          bodyMap, systemPrompt, inputText, imageParams);
+      _buildImageGenerationRequest(bodyMap, aiContext, inputText, imageParams);
 
       // Execute HTTP request with shared logic
       final url = Uri.parse(getEndpointUrl('chat'));
@@ -385,7 +384,7 @@ class OpenAIProvider extends BaseProvider {
 
   Future<ProviderResponse> _sendTranscriptionRequest(
     final String audioBase64,
-    final AISystemPrompt systemPrompt,
+    final AIContext aiContext,
     final String? model,
   ) async {
     try {
@@ -403,8 +402,8 @@ class OpenAIProvider extends BaseProvider {
             getDefaultModel(AICapability.audioTranscription) ??
             defaults['transcription_model'];
 
-        // Usar SystemPrompt como prompt para OpenAI
-        final promptText = _buildPromptFromSystemPrompt(systemPrompt);
+        // Usar Context como prompt para OpenAI
+        final promptText = _buildPromptFromContext(aiContext);
         if (promptText.isNotEmpty) {
           request.fields['prompt'] = promptText;
         }
@@ -432,7 +431,7 @@ class OpenAIProvider extends BaseProvider {
 
   Future<ProviderResponse> _handleRealtimeRequest(
     final List<Map<String, String>> history,
-    final AISystemPrompt systemPrompt,
+    final AIContext aiContext,
     final String? model,
     final Map<String, dynamic>? additionalParams,
   ) async {
@@ -468,15 +467,15 @@ class OpenAIProvider extends BaseProvider {
   Future<ProviderResponse> transcribeAudio({
     required final String audioBase64,
     final String? model,
-    final AISystemPrompt? systemPrompt,
+    final AIContext? aiContext,
   }) async {
-    final effectiveSystemPrompt = systemPrompt ??
-        AISystemPrompt(
+    final effectiveContext = aiContext ??
+        AIContext(
           context: {'task': 'audio_transcription'},
           dateTime: DateTime.now(),
           instructions: {},
         );
-    return _sendTranscriptionRequest(audioBase64, effectiveSystemPrompt, model);
+    return _sendTranscriptionRequest(audioBase64, effectiveContext, model);
   }
 
   /// [REMOVED] createRealtimeClient - Replaced by HybridConversationService
@@ -562,9 +561,9 @@ class OpenAIProvider extends BaseProvider {
   // === FUNCIONES PRIVADAS PARA ORGANIZAR LÓGICA ===
 
   /// Construye el texto de input combinando system prompt e historial
-  String _buildInputText(final AISystemPrompt systemPrompt,
-      final List<Map<String, String>> history) {
-    String inputText = systemPrompt.context.toString();
+  String _buildInputText(
+      final AIContext aiContext, final List<Map<String, String>> history) {
+    String inputText = aiContext.context.toString();
 
     // Agregar mensajes del historial
     for (final msg in history) {
@@ -577,12 +576,12 @@ class OpenAIProvider extends BaseProvider {
   /// Construye la request completa para generación de imágenes
   void _buildImageGenerationRequest(
     final Map<String, dynamic> bodyMap,
-    final AISystemPrompt systemPrompt,
+    final AIContext aiContext,
     final String inputText,
     final AiImageParams imageParams,
   ) {
     // Construir input array similar al servicio antiguo
-    final input = _buildImageInputArray(systemPrompt, inputText);
+    final input = _buildImageInputArray(aiContext, inputText);
 
     // Construir tools con parámetros de imagen
     final tools = _buildImageTools(imageParams);
@@ -605,14 +604,14 @@ class OpenAIProvider extends BaseProvider {
 
   /// Construye el array de input para generación de imágenes
   List<Map<String, dynamic>> _buildImageInputArray(
-      final AISystemPrompt systemPrompt, final String inputText) {
+      final AIContext aiContext, final String inputText) {
     final input = <Map<String, dynamic>>[];
 
     // System prompt
     input.add({
       'role': 'system',
       'content': [
-        {'type': 'input_text', 'text': systemPrompt.context.toString()},
+        {'type': 'input_text', 'text': aiContext.context.toString()},
       ],
     });
 
@@ -724,21 +723,21 @@ class OpenAIProvider extends BaseProvider {
     return parts.join('. ');
   }
 
-  /// Construye prompt para transcripción desde SystemPrompt
-  String _buildPromptFromSystemPrompt(final AISystemPrompt systemPrompt) {
+  /// Construye prompt para transcripción desde Context
+  String _buildPromptFromContext(final AIContext aiContext) {
     final parts = <String>[];
 
     // Agregar contexto si hay
-    if (systemPrompt.context.isNotEmpty) {
-      final contextStr = systemPrompt.context.toString();
+    if (aiContext.context.isNotEmpty) {
+      final contextStr = aiContext.context.toString();
       if (contextStr.isNotEmpty && contextStr != '{}') {
         parts.add(contextStr);
       }
     }
 
     // Agregar instrucciones si hay
-    if (systemPrompt.instructions.isNotEmpty) {
-      final instructionsStr = systemPrompt.instructions.toString();
+    if (aiContext.instructions.isNotEmpty) {
+      final instructionsStr = aiContext.instructions.toString();
       if (instructionsStr.isNotEmpty && instructionsStr != '{}') {
         parts.add(instructionsStr);
       }

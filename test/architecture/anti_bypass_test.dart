@@ -55,7 +55,7 @@ ${problematicImports.map((final import) => '  ❌ $import').join('\n')}
   import 'package:ai_providers/ai_providers.dart';
   
   // Use public AI.* facade
-  final response = await AI.text(message, systemPrompt);
+  final response = await AI.text(message, context);
   final audioResponse = await AI.speak(text);
   final conversation = AI.createConversation();
 
@@ -89,14 +89,14 @@ import 'package:ai_providers/ai_providers.dart';
 await AI.initialize();
 
 // ✅ Text generation
-final response = await AI.text(message, systemPrompt);
+final response = await AI.text(message, context);
 
 // ✅ Audio synthesis  
 final audioResponse = await AI.speak(text);
 
 // ✅ Conversation with streams
 final conversation = AI.createConversation();
-await conversation.startConversation(systemPrompt);
+await conversation.startConversation(context);
 ''',
       );
     });
