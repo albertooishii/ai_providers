@@ -204,9 +204,8 @@ abstract class BaseProvider {
   int compareModels(final String a, final String b);
 
   /// Abstract method for sending messages - each provider implements their own logic
-  /// Uses typed AIContext for better type safety
+  /// Uses typed AIContext for better type safety and eliminates history duplication
   Future<ProviderResponse> sendMessage({
-    required final List<Map<String, String>> history,
     required final AIContext aiContext,
     required final AICapability capability,
     final String? model,

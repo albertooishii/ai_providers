@@ -1,5 +1,24 @@
 # Registro de Cambios
 
+## [1.4.1] - 30 de septiembre de 2025 ⚡ OPTIMIZACIÓN: Eliminación de History Duplicado
+
+### ⚡ Optimizaciones de Performance
+- **History unificado**: Eliminado parámetro `history` duplicado en providers
+- **Menos memoria**: Los providers ahora usan únicamente `aiContext.history`
+- **API más limpia**: Interface simplificada sin parámetros redundantes
+- **Cache optimizado**: Keys de cache usan `aiContext.history` directamente
+
+### 🔧 Mejoras Técnicas
+- **Providers actualizados**: OpenAI, Google, XAI y Android Native providers simplificados
+- **BaseProvider mejorado**: Signatura `sendMessage` sin parámetro `history` duplicado
+- **AIProviderManager optimizado**: Eliminada construcción de history redundante
+- **Mejor eficiencia**: Una sola fuente de verdad para el historial de conversación
+
+### ✅ Compatibilidad
+- **Sin breaking changes**: La API pública permanece igual
+- **Tests completos**: 16/16 tests ai_providers + 63/63 tests ai_chan pasando
+- **Análisis limpio**: 0 errores de analyzer en ambos proyectos
+
 ## [1.4.0] - 30 de septiembre de 2025 🔄 REFACTOR BREAKING: AISystemPrompt → AIContext
 
 ### 💥 Breaking Changes

@@ -258,27 +258,9 @@ class AIProviderManager {
     //   );
     // }
 
-    // Use history from AIContext if available, otherwise create simple history from message
-    final List<Map<String, String>> history;
-    if (aiContext.hasHistory && aiContext.history!.isNotEmpty) {
-      // Convert AIContext history to the expected format
-      // (AIContext.history should already include the current message)
-      history = aiContext.history!
-          .map((final msg) => {
-                'role': msg['role']?.toString() ?? 'user',
-                'content': msg['content']?.toString() ?? '',
-              })
-          .toList();
-    } else {
-      // Fallback for simple cases without context history
-      history = [
-        {'role': 'user', 'content': message},
-      ];
-    }
-
+    // AIContext already contains the complete history, no need to duplicate it
     // Fallback to direct execution if deduplication is not available
     return _sendMessageWithMonitoring(
-      history: history,
       aiContext: aiContext,
       capability: capability,
       imageBase64: imageBase64,
@@ -291,7 +273,6 @@ class AIProviderManager {
   /// Internal method to send message with performance monitoring and caching
   /// Uses automatic provider and model selection - no manual preferences
   Future<AIResponse> _sendMessageWithMonitoring({
-    required final List<Map<String, String>> history,
     required final AIContext aiContext,
     required final AICapability capability,
     final String? imageBase64,
@@ -350,7 +331,7 @@ class AIProviderManager {
 
         cacheKey = CacheKey(
             providerId: providerId,
-            prompt: history.toString(),
+            prompt: aiContext.history?.toString() ?? '',
             model: modelToUseForCache ?? '');
 
         final cachedResponse = await _cacheService!.memoryCache?.get(cacheKey);
@@ -404,7 +385,6 @@ class AIProviderManager {
           // If a provider returns a different type (legacy AIResponse or other), fail fast
           // so the provider implementation can be updated during migration.
           final ProviderResponse providerResp = await provider.sendMessage(
-            history: history,
             aiContext: aiContext,
             capability: capability,
             model: modelToUse,

@@ -99,7 +99,6 @@ class XAIProvider extends BaseProvider {
 
   @override
   Future<ProviderResponse> sendMessage({
-    required final List<Map<String, String>> history,
     required final AIContext aiContext,
     required final AICapability capability,
     final String? model,
@@ -110,8 +109,8 @@ class XAIProvider extends BaseProvider {
     switch (capability) {
       case AICapability.textGeneration:
       case AICapability.imageAnalysis:
-        return _sendTextRequest(history, aiContext, model, imageBase64,
-            imageMimeType, additionalParams);
+        return _sendTextRequest(
+            aiContext, model, imageBase64, imageMimeType, additionalParams);
       default:
         return ProviderResponse(
             text: 'Capability $capability not supported by XAI provider');
@@ -119,7 +118,6 @@ class XAIProvider extends BaseProvider {
   }
 
   Future<ProviderResponse> _sendTextRequest(
-    final List<Map<String, String>> history,
     final AIContext aiContext,
     final String? model,
     final String? imageBase64,
@@ -134,6 +132,7 @@ class XAIProvider extends BaseProvider {
             text: 'Error: Invalid or missing model for XAI provider');
       }
 
+      final history = aiContext.history ?? [];
       final messages = <Map<String, dynamic>>[];
 
       // Add system prompt

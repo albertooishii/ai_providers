@@ -110,7 +110,6 @@ class OpenAIProvider extends BaseProvider {
 
   @override
   Future<ProviderResponse> sendMessage({
-    required final List<Map<String, String>> history,
     required final AIContext aiContext,
     required final AICapability capability,
     final String? model,
@@ -121,13 +120,12 @@ class OpenAIProvider extends BaseProvider {
     switch (capability) {
       case AICapability.textGeneration:
       case AICapability.imageAnalysis:
-        return _sendTextRequest(history, aiContext, model, imageBase64,
-            imageMimeType, additionalParams);
+        return _sendTextRequest(
+            aiContext, model, imageBase64, imageMimeType, additionalParams);
       case AICapability.imageGeneration:
-        return _sendImageGenerationRequest(
-            history, aiContext, model, additionalParams);
+        return _sendImageGenerationRequest(aiContext, model, additionalParams);
       case AICapability.audioGeneration:
-        return _sendTTSRequest(history, model, additionalParams);
+        return _sendTTSRequest(aiContext, model, additionalParams);
       case AICapability.audioTranscription:
         return _sendTranscriptionRequest(
           imageBase64 ?? '',
@@ -135,13 +133,11 @@ class OpenAIProvider extends BaseProvider {
           model,
         );
       case AICapability.realtimeConversation:
-        return _handleRealtimeRequest(
-            history, aiContext, model, additionalParams);
+        return _handleRealtimeRequest(aiContext, model, additionalParams);
     }
   }
 
   Future<ProviderResponse> _sendTextRequest(
-    final List<Map<String, String>> history,
     final AIContext aiContext,
     final String? model,
     final String? imageBase64,
@@ -158,8 +154,8 @@ class OpenAIProvider extends BaseProvider {
             text: 'Error: Invalid or missing model for OpenAI provider');
       }
 
-      // Build input text from system prompt and history
-      final inputText = _buildInputText(aiContext, history);
+      // Build input text from aiContext (includes system prompt and history)
+      final inputText = _buildInputText(aiContext);
 
       final bodyMap = <String, dynamic>{
         'model': selectedModel,
@@ -264,12 +260,14 @@ class OpenAIProvider extends BaseProvider {
   }
 
   Future<ProviderResponse> _sendImageGenerationRequest(
-    final List<Map<String, String>> history,
     final AIContext aiContext,
     final String? model,
     final Map<String, dynamic>? additionalParams,
   ) async {
-    final prompt = history.isNotEmpty ? history.last['content'] ?? '' : '';
+    // Get prompt from last message in aiContext.history
+    final history = aiContext.history ?? [];
+    final prompt =
+        history.isNotEmpty ? history.last['content']?.toString() ?? '' : '';
     if (prompt.isEmpty) {
       return ProviderResponse(
           text: 'Error: No prompt provided for image generation.');
@@ -287,7 +285,7 @@ class OpenAIProvider extends BaseProvider {
 
       // Parse image parameters and build request body
       final imageParams = AiImageParams.fromMap(additionalParams);
-      final inputText = _buildInputText(aiContext, history);
+      final inputText = _buildInputText(aiContext);
 
       final bodyMap = <String, dynamic>{
         'model': selectedModel,
@@ -324,11 +322,14 @@ class OpenAIProvider extends BaseProvider {
   }
 
   Future<ProviderResponse> _sendTTSRequest(
-    final List<Map<String, String>> history,
+    final AIContext aiContext,
     final String? model,
     final Map<String, dynamic>? additionalParams,
   ) async {
-    final text = history.isNotEmpty ? history.last['content'] ?? '' : '';
+    // Get text from last message in aiContext.history
+    final history = aiContext.history ?? [];
+    final text =
+        history.isNotEmpty ? history.last['content']?.toString() ?? '' : '';
     if (text.isEmpty) {
       return ProviderResponse(text: 'Error: No text provided for TTS.');
     }
@@ -430,7 +431,6 @@ class OpenAIProvider extends BaseProvider {
   }
 
   Future<ProviderResponse> _handleRealtimeRequest(
-    final List<Map<String, String>> history,
     final AIContext aiContext,
     final String? model,
     final Map<String, dynamic>? additionalParams,
@@ -445,7 +445,7 @@ class OpenAIProvider extends BaseProvider {
         model ?? getDefaultModel(AICapability.realtimeConversation);
     return ProviderResponse(
       text:
-          'Realtime conversation session configured successfully. Provider: openai, Model: $realtimeModel, History: ${history.length} messages',
+          'Realtime conversation session configured successfully. Provider: openai, Model: $realtimeModel, History: ${aiContext.history?.length ?? 0} messages',
     );
   }
 
@@ -455,10 +455,17 @@ class OpenAIProvider extends BaseProvider {
     final String? model,
     final Map<String, dynamic>? additionalParams,
   }) async {
-    return _sendTTSRequest(
-      [
-        {'role': 'user', 'content': text},
+    // Create a simple context for TTS request
+    final ttsContext = AIContext(
+      context: {'instructions': 'Convert text to speech'},
+      dateTime: DateTime.now(),
+      instructions: {'role': 'Convert the given text to speech'},
+      history: [
+        {'role': 'user', 'content': text}
       ],
+    );
+    return _sendTTSRequest(
+      ttsContext,
       model,
       {...?additionalParams, 'voice': voice},
     );
@@ -560,14 +567,15 @@ class OpenAIProvider extends BaseProvider {
 
   // === FUNCIONES PRIVADAS PARA ORGANIZAR LÓGICA ===
 
-  /// Construye el texto de input combinando system prompt e historial
-  String _buildInputText(
-      final AIContext aiContext, final List<Map<String, String>> history) {
+  /// Construye el texto de input combinando system prompt e historial desde aiContext
+  String _buildInputText(final AIContext aiContext) {
     String inputText = aiContext.context.toString();
 
-    // Agregar mensajes del historial
-    for (final msg in history) {
-      inputText += '\n${msg['content'] ?? ''}';
+    // Agregar mensajes del historial desde aiContext.history
+    if (aiContext.hasHistory && aiContext.history != null) {
+      for (final msg in aiContext.history!) {
+        inputText += '\n${msg['content']?.toString() ?? ''}';
+      }
     }
 
     return inputText;

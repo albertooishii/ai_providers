@@ -161,7 +161,6 @@ class AndroidNativeProvider {
   }
 
   Future<ProviderResponse> sendMessage({
-    required final List<Map<String, String>> history,
     required final AIContext aiContext,
     required final AICapability capability,
     final String? model,

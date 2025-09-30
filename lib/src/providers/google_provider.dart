@@ -100,7 +100,6 @@ class GoogleProvider extends BaseProvider {
 
   @override
   Future<ProviderResponse> sendMessage({
-    required final List<Map<String, String>> history,
     required final AIContext aiContext,
     required final AICapability capability,
     final String? model,
@@ -111,13 +110,12 @@ class GoogleProvider extends BaseProvider {
     switch (capability) {
       case AICapability.textGeneration:
       case AICapability.imageAnalysis:
-        return _sendTextRequest(history, aiContext, model, imageBase64,
-            imageMimeType, additionalParams);
+        return _sendTextRequest(
+            aiContext, model, imageBase64, imageMimeType, additionalParams);
       case AICapability.imageGeneration:
-        return _sendImageGenerationRequest(
-            history, aiContext, model, additionalParams);
+        return _sendImageGenerationRequest(aiContext, model, additionalParams);
       case AICapability.audioGeneration:
-        return _sendTTSRequest(history, model, additionalParams);
+        return _sendTTSRequest(aiContext, model, additionalParams);
       case AICapability.audioTranscription:
         return _sendTranscriptionRequest(
           imageBase64 ?? '',
@@ -125,13 +123,11 @@ class GoogleProvider extends BaseProvider {
           model,
         );
       case AICapability.realtimeConversation:
-        return _handleRealtimeRequest(
-            history, aiContext, model, additionalParams);
+        return _handleRealtimeRequest(aiContext, model, additionalParams);
     }
   }
 
   Future<ProviderResponse> _sendTextRequest(
-    final List<Map<String, String>> history,
     final AIContext aiContext,
     final String? model,
     final String? imageBase64,
@@ -146,6 +142,7 @@ class GoogleProvider extends BaseProvider {
             text: 'Error: Invalid or missing model for Google provider');
       }
 
+      final history = aiContext.history ?? [];
       final contents = <Map<String, dynamic>>[];
       // Add system prompt
       contents.add({
@@ -275,11 +272,11 @@ class GoogleProvider extends BaseProvider {
   }
 
   Future<ProviderResponse> _sendImageGenerationRequest(
-    final List<Map<String, String>> history,
     final AIContext aiContext,
     final String? model,
     final Map<String, dynamic>? additionalParams,
   ) async {
+    final history = aiContext.history ?? [];
     final prompt = history.isNotEmpty ? history.last['content'] ?? '' : '';
     if (prompt.isEmpty) {
       return ProviderResponse(
@@ -324,10 +321,11 @@ class GoogleProvider extends BaseProvider {
 
   /// Native Gemini TTS using generateContent
   Future<ProviderResponse> _sendTTSRequest(
-    final List<Map<String, String>> history,
+    final AIContext aiContext,
     final String? model,
     final Map<String, dynamic>? additionalParams,
   ) async {
+    final history = aiContext.history ?? [];
     final text = history.isNotEmpty ? history.last['content'] ?? '' : '';
     if (text.isEmpty) {
       return ProviderResponse(text: 'Error: No text provided for TTS.');
@@ -547,7 +545,6 @@ Requirements:
 
   /// Handle realtime conversation setup
   Future<ProviderResponse> _handleRealtimeRequest(
-    final List<Map<String, String>> history,
     final AIContext aiContext,
     final String? model,
     final Map<String, dynamic>? additionalParams,
@@ -562,7 +559,7 @@ Requirements:
         model ?? getDefaultModel(AICapability.realtimeConversation);
     return ProviderResponse(
       text:
-          'Realtime conversation session configured successfully. Provider: google, Model: $realtimeModel, History: ${history.length} messages',
+          'Realtime conversation session configured successfully. Provider: google, Model: $realtimeModel, History: ${aiContext.history?.length ?? 0} messages',
     );
   }
 
@@ -572,10 +569,18 @@ Requirements:
     final String? model,
     final Map<String, dynamic>? additionalParams,
   }) async {
-    return _sendTTSRequest(
-      [
+    // Create temporary AIContext for TTS
+    final aiContext = AIContext(
+      context: '',
+      dateTime: DateTime.now(),
+      instructions: {},
+      history: [
         {'role': 'user', 'content': text}
       ],
+    );
+
+    return _sendTTSRequest(
+      aiContext,
       model,
       {...?additionalParams, 'voice': voice},
     );
