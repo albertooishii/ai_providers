@@ -258,10 +258,18 @@ class AIProviderManager {
     //   );
     // }
 
-    // AIContext already contains the complete history, no need to duplicate it
-    // Fallback to direct execution if deduplication is not available
+    // Add the user message to the context history before sending to provider
+    final updatedHistory = <Map<String, dynamic>>[...(aiContext.history ?? [])];
+    updatedHistory.add({'role': 'user', 'content': message});
+
+    final contextWithMessage = AIContext(
+      context: aiContext.context,
+      dateTime: aiContext.dateTime,
+      instructions: aiContext.instructions,
+      history: updatedHistory,
+    ); // AIContext now contains the complete history including the new user message
     return _sendMessageWithMonitoring(
-      aiContext: aiContext,
+      aiContext: contextWithMessage,
       capability: capability,
       imageBase64: imageBase64,
       imageMimeType: imageMimeType,

@@ -1,5 +1,21 @@
 # Registro de Cambios
 
+## [1.4.2] - 30 de septiembre de 2025 🔧 FIX: Corrección Message History Context
+
+### 🐛 Bug Fixes Críticos
+- **Message Context Fix**: El mensaje del usuario ahora se agrega correctamente al `aiContext.history`
+- **Historial completo**: Los providers reciben el contexto completo incluyendo el mensaje actual
+- **API consistency**: Flujo completo desde `AI.text()` hasta provider funciona correctamente
+
+### 🔧 Mejoras Técnicas
+- **AIProviderManager**: Agregado mensaje de usuario al historial antes de enviar al provider
+- **Type Safety**: Corrección de tipos en `List<Map<String, dynamic>>` para history
+
+### ✅ Impacto
+- **Conversaciones funcionales**: Los mensajes del usuario ahora aparecen en las requests
+- **Mejor UX**: Las respuestas de IA tienen el contexto completo del mensaje
+- **Sin breaking changes**: API pública permanece inalterada
+
 ## [1.4.1] - 30 de septiembre de 2025 ⚡ OPTIMIZACIÓN: Eliminación de History Duplicado
 
 ### ⚡ Optimizaciones de Performance
