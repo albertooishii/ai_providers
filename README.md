@@ -50,7 +50,8 @@ Future<void> main() async {
   final transcript = await AI.listen();
 
   debugPrint('Texto: ${text.text}');
-  debugPrint('Imagen base64: ${image.imageBase64?.substring(0, 32)}...');
+  debugPrint('Imagen URL: ${image.image?.url}');
+  debugPrint('Imagen base64: ${image.image?.base64?.substring(0, 32)}...');
   debugPrint('Transcripción: ${transcript.text}');
 
   runApp(const MyApp());
@@ -99,7 +100,7 @@ flutter run
 | Método | Descripción | Retorno |
 |--------|-------------|---------|
 | `AI.text(String message, [AIContext? aiContext])` | Genera texto o respuestas conversacionales. | `Future<AIResponse>` |
-| `AI.image(String prompt, [AIContext? aiContext, AiImageParams? imageParams])` | Crea imágenes y devuelve base64 + nombre de archivo en caché. | `Future<AIResponse>` |
+| `AI.image(String prompt, [AIContext? aiContext, AiImageParams? imageParams])` | Crea imágenes y devuelve objeto `AiImage` con metadatos completos. | `Future<AIResponse>` |
 | `AI.vision(String imageBase64, [String? prompt, AIContext? aiContext, String? imageMimeType])` | Analiza imágenes o realiza visión computacional. | `Future<AIResponse>` |
 | `AI.generate({required String message, required AIContext aiContext, required AICapability capability, String? imageBase64, String? imageMimeType})` | Método avanzado para elegir capability manualmente. | `Future<AIResponse>` |
 

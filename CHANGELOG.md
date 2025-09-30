@@ -1,5 +1,40 @@
 # Registro de Cambios
 
+## [1.4.3] - 30 de septiembre de 2025 🔄 REFACTOR: Reestructuración AIResponse con Modelos Tipados
+
+### 🔄 Breaking Changes (Estructura de Datos)
+- **AIResponse renovado**: Cambio de propiedades planas a objetos tipados estructurados
+- **Nuevos modelos**: `AiImage` y `AiAudio` con campos específicos y metadatos completos
+- **Base64 optimizado**: Disponible durante el proceso, eliminado en memoria final
+
+### 📦 Nuevos Modelos Exportados
+- **AiImage**: Modelo completo para imágenes con `seed`, `url`, `prompt`, `base64`, `createdAtMs`
+- **AiAudio**: Modelo completo para audio con `url`, `transcript`, `base64`, `durationMs`, `isAutoTts`
+- **AIResponse**: Estructura unificada con `text`, `image?`, `audio?`
+
+### 🔧 Migración de API
+```dart
+// ❌ Antes (1.4.2)
+final response = await AI.image('Un gato');
+final fileName = response.imageFileName;
+final base64 = response.imageBase64;
+
+// ✅ Ahora (1.4.3)
+final response = await AI.image('Un gato');
+final fileName = response.image?.url;
+final base64 = response.image?.base64;
+```
+
+### ⚡ Mejoras de Performance
+- **Memoria optimizada**: Base64 no se almacena permanentemente
+- **Estructura limpia**: Separación clara entre metadatos y datos binarios
+- **Debug mejorado**: Serialización JSON funcional para todos los objetos
+
+### 📚 Documentación
+- **Modelos documentados**: AiImage, AiAudio, AIResponse con ejemplos completos
+- **Casos de uso**: Ejemplos para TTS, STT, generación de imágenes
+- **Migración**: Guía clara para actualizar código existente
+
 ## [1.4.2] - 30 de septiembre de 2025 🔧 FIX: Corrección Message History Context
 
 ### 🐛 Bug Fixes Críticos

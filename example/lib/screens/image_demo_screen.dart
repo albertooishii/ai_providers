@@ -730,15 +730,13 @@ class _ImageDemoScreenState extends State<ImageDemoScreen>
       if (!mounted) return;
 
       // Nueva lógica simplificada: siempre disponible en ambos formatos
-      if (response.imageFileName.isNotEmpty ||
-          (response.imageBase64 != null && response.imageBase64!.isNotEmpty)) {
+      if (response.image != null &&
+          (response.image!.url?.isNotEmpty == true ||
+              response.image!.base64?.isNotEmpty == true)) {
         setState(() {
           // Guardar ambos formatos - el usuario puede elegir cuál usar
-          _generatedImageFileName =
-              response.imageFileName.isNotEmpty ? response.imageFileName : null;
-          _generatedImageBase64 = response.imageBase64?.isNotEmpty == true
-              ? response.imageBase64
-              : null;
+          _generatedImageFileName = response.image?.url;
+          _generatedImageBase64 = response.image?.base64;
         });
 
         ScaffoldMessenger.of(context).showSnackBar(

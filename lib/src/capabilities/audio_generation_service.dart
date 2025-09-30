@@ -72,8 +72,8 @@ class AudioGenerationService {
       );
 
       // Si play=true, reproducir automáticamente el audio generado
-      if (play && response.audioFileName.isNotEmpty) {
-        unawaited(playAudioFile(response.audioFileName));
+      if (play && response.audio?.url?.isNotEmpty == true) {
+        unawaited(playAudioFile(response.audio!.url!));
       }
 
       return response;
@@ -110,8 +110,8 @@ class AudioGenerationService {
       );
 
       // Si play=true, reproducir automáticamente el audio generado
-      if (play && response.audioFileName.isNotEmpty) {
-        unawaited(playAudioFile(response.audioFileName));
+      if (play && response.audio?.url?.isNotEmpty == true) {
+        unawaited(playAudioFile(response.audio!.url!));
       }
 
       return response;
@@ -137,7 +137,9 @@ class AudioGenerationService {
       // Usar synthesize() directamente - más eficiente y sin duplicación
       final response = await synthesize(text);
 
-      return response.audioFileName.isNotEmpty ? response.audioFileName : null;
+      return response.audio?.url?.isNotEmpty == true
+          ? response.audio!.url
+          : null;
     } on Exception catch (e) {
       AILogger.e('[AudioGenerationService] Error generando TTS: $e');
       return null;
@@ -185,7 +187,7 @@ class AudioGenerationService {
       // Usar synthesize() con play=true - más eficiente y sin duplicación
       final response = await synthesize(text, audioParams, true);
 
-      return response.audioFileName.isNotEmpty;
+      return response.audio?.url?.isNotEmpty == true;
     } on Exception catch (e) {
       AILogger.e('[AudioGenerationService] Error en synthesizeAndPlay: $e');
       _updateState(AudioPlaybackState.error);

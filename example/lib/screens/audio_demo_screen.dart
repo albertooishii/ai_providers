@@ -630,16 +630,14 @@ class _AudioDemoScreenState extends State<AudioDemoScreen>
       if (!mounted) return;
 
       // Nueva lógica simplificada: siempre disponible en ambos formatos
-      if (response.audioFileName.isNotEmpty ||
-          (response.audioBase64 != null && response.audioBase64!.isNotEmpty)) {
+      if (response.audio != null &&
+          (response.audio!.url?.isNotEmpty == true ||
+              response.audio!.base64?.isNotEmpty == true)) {
         if (!mounted) return;
         setState(() {
           // Guardar ambos formatos - el usuario puede elegir cuál usar
-          _generatedAudioFileName =
-              response.audioFileName.isNotEmpty ? response.audioFileName : null;
-          _generatedAudioBase64 = response.audioBase64?.isNotEmpty == true
-              ? response.audioBase64
-              : null;
+          _generatedAudioFileName = response.audio?.url;
+          _generatedAudioBase64 = response.audio?.base64;
           _hasAudioGenerated = true;
         });
 

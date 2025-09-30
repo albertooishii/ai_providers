@@ -18,6 +18,8 @@ import '../models/ai_capability.dart';
 import '../models/ai_provider_config.dart';
 import '../models/ai_init_config.dart';
 import '../models/ai_response.dart';
+import '../models/ai_image.dart';
+import '../models/ai_audio.dart';
 import '../models/provider_response.dart';
 import '../models/retry_config.dart';
 import '../services/media_persistence_service.dart';
@@ -451,12 +453,28 @@ class AIProviderManager {
           // Build final AIResponse combining provider metadata and persisted filenames
           final finalResp = AIResponse(
             text: providerResp.text,
-            seed: providerResp.seed,
-            prompt: providerResp.prompt,
-            imageFileName: imageFileName ?? '',
-            audioFileName: audioFileName ?? '',
-            imageBase64: providerResp.imageBase64,
-            audioBase64: providerResp.audioBase64,
+            image: providerResp.seed.isNotEmpty ||
+                    providerResp.prompt.isNotEmpty ||
+                    imageFileName != null ||
+                    providerResp.imageBase64 != null
+                ? AiImage(
+                    seed:
+                        providerResp.seed.isNotEmpty ? providerResp.seed : null,
+                    prompt: providerResp.prompt.isNotEmpty
+                        ? providerResp.prompt
+                        : null,
+                    url: imageFileName,
+                    base64: providerResp.imageBase64,
+                    createdAtMs: DateTime.now().millisecondsSinceEpoch,
+                  )
+                : null,
+            audio: audioFileName != null || providerResp.audioBase64 != null
+                ? AiAudio(
+                    url: audioFileName,
+                    base64: providerResp.audioBase64,
+                    createdAtMs: DateTime.now().millisecondsSinceEpoch,
+                  )
+                : null,
           );
 
           return finalResp;

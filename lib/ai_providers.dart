@@ -60,7 +60,10 @@ export 'src/models/ai_context.dart';
 /// Instructions for audio transcription (Speech-to-Text)
 
 /// Image models and utilities (for image generation and analysis)
-export 'src/models/image.dart';
+export 'src/models/ai_image.dart';
+
+/// Audio models and utilities (for audio generation and analysis)
+export 'src/models/ai_audio.dart';
 
 /// Enhanced image generation parameters (format, size, fidelity, seed, etc.)
 export 'src/models/ai_image_params.dart';

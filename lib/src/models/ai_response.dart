@@ -1,52 +1,68 @@
+import 'ai_image.dart';
+import 'ai_audio.dart';
+
+/// Respuesta unificada de proveedores de IA.
+///
+/// Contiene el resultado de operaciones de IA (generación de texto, imágenes, audio, etc.)
+/// con una estructura consistente independientemente del proveedor utilizado.
+///
+/// **Estructura:**
+/// - `text`: Contenido textual generado (siempre presente)
+/// - `image`: Imagen generada (opcional, solo en generación de imágenes)
+/// - `audio`: Audio generado (opcional, solo en TTS/STT)
+///
+/// **Casos de uso:**
+///
+/// **Generación de texto:**
+/// ```dart
+/// final response = await AI.text('Explica la fotosíntesis');
+/// print(response.text); // Explicación generada
+/// // image y audio serán null
+/// ```
+///
+/// **Generación de imágenes:**
+/// ```dart
+/// final response = await AI.image('Un paisaje futurista');
+/// print(response.text);        // Descripción o prompt procesado
+/// print(response.image?.url);  // Ruta del archivo de imagen guardado
+/// print(response.image?.seed); // Seed para reproducibilidad
+/// ```
+///
+/// **Síntesis de voz (TTS):**
+/// ```dart
+/// final response = await AI.speak('¡Hola mundo!');
+/// print(response.text);        // Texto sintetizado
+/// print(response.audio?.url);  // Ruta del archivo de audio guardado
+/// ```
+///
+/// **Transcripción (STT):**
+/// ```dart
+/// final response = await AI.listen(audioFile);
+/// print(response.text);               // Transcripción del audio
+/// print(response.audio?.transcript);  // Mismo contenido textual
+/// ```
 class AIResponse {
   AIResponse({
     required this.text,
-    this.seed = '',
-    this.prompt = '',
-    this.imageFileName = '',
-    this.audioFileName = '',
-    this.imageBase64,
-    this.audioBase64,
+    this.image,
+    this.audio,
   });
 
   factory AIResponse.fromJson(final Map<String, dynamic> json) {
-    final image = json['image'] ?? {};
     return AIResponse(
       text: json['text'] ?? '',
-      seed: image['seed'] ?? '',
-      prompt: image['prompt'] ?? '',
-      imageFileName: image['file_name'] ?? '',
-      audioFileName: json['audio'] is Map
-          ? (json['audio']['file_name'] ?? '')
-          : (json['audio_file_name'] ?? ''),
-      imageBase64: image['base64'],
-      audioBase64:
-          json['audio'] is Map ? json['audio']['base64'] : json['audio_base64'],
+      image: json['image'] != null ? AiImage.fromJson(json['image']) : null,
+      audio: json['audio'] != null ? AiAudio.fromJson(json['audio']) : null,
     );
   }
+
   final String text;
-  final String seed;
-  final String prompt;
-  final String imageFileName;
-  final String audioFileName;
-
-  /// Raw image data as base64 string (preferred for direct use)
-  final String? imageBase64;
-
-  /// Raw audio data as base64 string (preferred for direct use)
-  final String? audioBase64;
+  final AiImage? image;
+  final AiAudio? audio;
 
   Map<String, dynamic> toJson() => {
         'text': text,
-        'image': {
-          'seed': seed,
-          'prompt': prompt,
-          'file_name': imageFileName,
-          'base64': imageBase64,
-        },
-        'audio': {
-          'file_name': audioFileName,
-          'base64': audioBase64,
-        },
+        if (image != null) 'image': image!.toJson(),
+        if (audio != null) 'audio': audio!.toJson(),
       };
 }
