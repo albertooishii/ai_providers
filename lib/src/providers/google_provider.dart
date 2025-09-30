@@ -291,14 +291,66 @@ class GoogleProvider extends BaseProvider {
             text: 'Error: No model configured for image generation');
       }
 
-      final bodyMap = {
-        'contents': [
-          {
+      final contents = <Map<String, dynamic>>[];
+
+      // ✨ 1. Agregar system prompt desde AIContext (igual que _sendTextRequest)
+      if (aiContext.context.toString().isNotEmpty ||
+          aiContext.instructions.isNotEmpty) {
+        final systemParts = <String>[];
+
+        // Incluir context si no está vacío
+        final contextStr = aiContext.context.toString();
+        if (contextStr.isNotEmpty &&
+            contextStr != '{}' &&
+            contextStr != 'null') {
+          systemParts.add('Context: $contextStr');
+        }
+
+        // Incluir instructions si no están vacías
+        final instructionsStr = aiContext.instructions.toString();
+        if (instructionsStr.isNotEmpty &&
+            instructionsStr != '{}' &&
+            instructionsStr != 'null') {
+          systemParts.add('Instructions: $instructionsStr');
+        }
+
+        // Agregar system prompt con patrón user->model como en _sendTextRequest
+        if (systemParts.isNotEmpty) {
+          contents.add({
+            'role': 'user',
             'parts': [
-              {'text': prompt}
-            ]
-          }
-        ],
+              {'text': systemParts.join('\n\n')},
+            ],
+          });
+          contents.add({
+            'role': 'model',
+            'parts': [
+              {
+                'text':
+                    'I understand the system instructions and will follow them accordingly for image generation.'
+              },
+            ],
+          });
+
+          AILogger.d(
+              '[GoogleProvider] 🎯 Image generation with system context: ${systemParts.length} parts');
+        }
+      }
+
+      // ✨ 2. Agregar el prompt del usuario
+      contents.add({
+        'role': 'user',
+        'parts': [
+          {'text': prompt}
+        ]
+      });
+
+      final bodyMap = {
+        'contents': contents, // ← Usar contents completos (no solo prompt)
+        'generationConfig': {
+          'maxOutputTokens': config.configuration.maxOutputTokens,
+          'temperature': additionalParams?['temperature'] ?? 0.7,
+        },
       };
 
       final url = Uri.parse(
