@@ -8,7 +8,7 @@ import '../models/ai_provider_metadata.dart';
 import '../models/ai_context.dart';
 import '../models/ai_audio_params.dart';
 
-import 'package:ai_providers/src/utils/json_utils.dart' as json_utils;
+import '../utils/json_utils.dart' as json_utils;
 import 'package:http/http.dart' as http;
 import '../utils/logger.dart';
 import '../models/ai_capability.dart';
@@ -283,30 +283,52 @@ class GoogleProvider extends BaseProvider {
                 if (textPart != null) {
                   final fullText = textPart['text'] as String? ?? '';
 
+                  AILogger.d(
+                      '[GoogleProvider] 🖼️ Processing image response text (${fullText.length} chars)');
+
                   // Extraer JSON estructurado de la respuesta
                   final jsonExtracted = json_utils.extractJsonBlock(fullText);
 
                   if (!jsonExtracted.containsKey('raw')) {
-                    // JSON válido extraído
-                    revisedPrompt =
-                        jsonExtracted['description']?.toString() ?? '';
-                    geminiText = jsonExtracted['response']?.toString() ??
-                        'Image generated successfully';
+                    // JSON válido extraído - usar solo el campo description
+                    final description = jsonExtracted['description'];
+                    final response = jsonExtracted['response'];
+
+                    // Asegurarse de que description no contenga delimitadores markdown
+                    if (description != null) {
+                      revisedPrompt = description.toString().trim();
+                      AILogger.d(
+                          '[GoogleProvider] ✅ Extracted description (${revisedPrompt.length} chars)');
+                    } else {
+                      AILogger.w(
+                          '[GoogleProvider] ⚠️ No description field in extracted JSON');
+                      revisedPrompt = '';
+                    }
+
+                    if (response != null) {
+                      geminiText = response.toString().trim();
+                    } else {
+                      geminiText = 'Image generated successfully';
+                    }
                   } else {
                     // Fallback: si no hay JSON válido, usar texto completo como descripción
                     final rawText =
                         jsonExtracted['raw']?.toString() ?? fullText;
                     revisedPrompt = rawText;
                     geminiText = 'Image generated successfully';
+                    AILogger.w(
+                        '[GoogleProvider] ⚠️ Could not extract JSON, using raw text as prompt');
                   }
+                } else {
+                  AILogger.w(
+                      '[GoogleProvider] ⚠️ No text part found in image response');
                 }
 
                 return ProviderResponse(
                   text: geminiText.isNotEmpty
                       ? geminiText
                       : 'Image generated successfully',
-                  prompt:
-                      revisedPrompt, // ✅ Descripción detallada como "revised prompt"
+                  prompt: revisedPrompt, // ✅ Solo la descripción limpia
                   imageBase64: imageBase64,
                 );
               }
