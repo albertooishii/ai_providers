@@ -1,3 +1,5 @@
+import 'package:ai_providers/src/models/additional_params.dart';
+
 import '../infrastructure/api_key_manager.dart';
 import '../models/ai_capability.dart';
 import '../models/ai_provider_config.dart';
@@ -203,14 +205,15 @@ abstract class BaseProvider {
   /// Model comparison - provider specific
   int compareModels(final String a, final String b);
 
-  /// Abstract method for sending messages - each provider implements their own logic
-  /// Uses typed AIContext for better type safety and eliminates history duplication
+  /// Main method that all providers must implement
+  /// Handles all AI interactions through a unified interface
   Future<ProviderResponse> sendMessage({
     required final AIContext aiContext,
     required final AICapability capability,
     final String? model,
     final String? imageBase64,
     final String? imageMimeType,
-    final Map<String, dynamic>? additionalParams,
+    final AdditionalParams? additionalParams,
+    final String? voice,
   });
 }

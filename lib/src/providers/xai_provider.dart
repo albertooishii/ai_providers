@@ -1,8 +1,8 @@
 import 'dart:async';
 import 'dart:convert';
-// dart:typed_data removed - no longer needed
 
 import '../core/provider_registry.dart';
+import '../models/additional_params.dart';
 import '../models/provider_response.dart';
 import '../models/ai_provider_metadata.dart';
 import '../models/ai_context.dart';
@@ -104,7 +104,8 @@ class XAIProvider extends BaseProvider {
     final String? model,
     final String? imageBase64,
     final String? imageMimeType,
-    final Map<String, dynamic>? additionalParams,
+    final AdditionalParams? additionalParams,
+    final String? voice,
   }) async {
     switch (capability) {
       case AICapability.textGeneration:
@@ -122,7 +123,7 @@ class XAIProvider extends BaseProvider {
     final String? model,
     final String? imageBase64,
     final String? imageMimeType,
-    final Map<String, dynamic>? additionalParams,
+    final AdditionalParams? additionalParams,
   ) async {
     try {
       final selectedModel =
@@ -168,7 +169,7 @@ class XAIProvider extends BaseProvider {
         'model': selectedModel,
         'messages': messages,
         'max_tokens': config.configuration.maxOutputTokens,
-        'temperature': additionalParams?['temperature'] ?? 0.7,
+        'temperature': 0.7,
       };
 
       final url = Uri.parse(getEndpointUrl('chat'));
@@ -219,7 +220,7 @@ class XAIProvider extends BaseProvider {
     required final String text,
     final String? voice,
     final String? model,
-    final Map<String, dynamic>? additionalParams,
+    final AdditionalParams? additionalParams,
   }) async {
     return ProviderResponse(
         text: 'Audio generation not supported by XAI provider');
@@ -230,7 +231,7 @@ class XAIProvider extends BaseProvider {
     final String? audioFormat,
     final String? model,
     final String? language,
-    final Map<String, dynamic>? additionalParams,
+    final AdditionalParams? additionalParams,
   }) async {
     return ProviderResponse(
         text: 'Audio transcription not supported by XAI provider');

@@ -5,6 +5,8 @@ library;
 
 import 'dart:async';
 import 'dart:io';
+import 'package:ai_providers/src/models/additional_params.dart';
+
 import '../core/config_loader.dart';
 import '../core/provider_registry.dart';
 import '../infrastructure/api_key_manager.dart';
@@ -208,7 +210,7 @@ class AIProviderManager {
         AICapability.textGeneration, // Default to text generation
     final String? imageBase64,
     final String? imageMimeType,
-    final Map<String, dynamic>? additionalParams,
+    final AdditionalParams? additionalParams,
     final bool saveToCache = false, // Nueva opción para guardar en caché
   }) async {
     // Wait for initialization if needed
@@ -287,7 +289,7 @@ class AIProviderManager {
     required final AICapability capability,
     final String? imageBase64,
     final String? imageMimeType,
-    final Map<String, dynamic>? additionalParams,
+    final AdditionalParams? additionalParams,
     final bool saveToCache = false,
   }) async {
     // Attempt to respect user-selected provider/model configuration
@@ -374,15 +376,20 @@ class AIProviderManager {
 
         modelToUse ??= await _getModelForCapability(capability, providerId);
 
+        // Get voice if this is audio generation
+        String? voiceToUse;
+        if (capability == AICapability.audioGeneration) {
+          voiceToUse = await getVoiceForRequest(providerId, capability);
+          AILogger.d('[AIProviderManager] Voice for request: $voiceToUse');
+        }
+
         AILogger.d(
             'Attempting request with provider: $providerId, model: $modelToUse (intelligent selection)');
 
         // Build a guarded operation so retries will re-execute both the provider
         // call and the image-presence check. This ensures the centralized retry
         // service can detect and retry an empty-image result.
-        final requestedImage =
-            additionalParams?['enableImageGeneration'] == true ||
-                capability == AICapability.imageGeneration;
+        final requestedImage = capability == AICapability.imageGeneration;
 
         Future<AIResponse> guardedCallOperation() async {
           // Manager expects callers/providers to provide base64 via `imageBase64`.
@@ -401,6 +408,7 @@ class AIProviderManager {
             imageBase64: effectiveImageBase64,
             imageMimeType: imageMimeType,
             additionalParams: additionalParams,
+            voice: voiceToUse,
           );
 
           // If the capability requested an image, ensure the provider returned something
@@ -962,6 +970,49 @@ class AIProviderManager {
     }
 
     return null;
+  }
+
+  /// Select voice for audio generation (similar to _selectModel)
+  String? _selectVoice(final String providerId) {
+    try {
+      final providerConfig = _config!.aiProviders[providerId];
+      if (providerConfig == null) return null;
+
+      // Return default voice from config
+      return providerConfig.voices['default'] ??
+          providerConfig.voices['tts_default'];
+    } on Exception catch (e) {
+      AILogger.w('[AIProviderManager] Error selecting voice: $e');
+      return null;
+    }
+  }
+
+  /// Get voice for the current request (saved or default)
+  Future<String?> getVoiceForRequest(
+    final String providerId,
+    final AICapability capability,
+  ) async {
+    // Only for audioGeneration
+    if (capability != AICapability.audioGeneration) {
+      return null;
+    }
+
+    try {
+      // 1. Try to get saved voice
+      final savedVoice = await getSavedVoiceForProvider(providerId);
+      if (savedVoice != null && savedVoice.isNotEmpty) {
+        AILogger.d('[AIProviderManager] Using saved voice: $savedVoice');
+        return savedVoice;
+      }
+
+      // 2. Use default voice
+      final defaultVoice = _selectVoice(providerId);
+      AILogger.d('[AIProviderManager] Using default voice: $defaultVoice');
+      return defaultVoice;
+    } on Exception catch (e) {
+      AILogger.w('[AIProviderManager] Error getting voice: $e');
+      return _selectVoice(providerId);
+    }
   }
 
   /// Select the best model for a provider and capability

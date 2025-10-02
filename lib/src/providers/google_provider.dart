@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import '../core/provider_registry.dart';
+import '../models/additional_params.dart';
 import '../models/provider_response.dart';
 import '../models/ai_provider_metadata.dart';
 import '../models/ai_context.dart';
@@ -106,7 +107,8 @@ class GoogleProvider extends BaseProvider {
     final String? model,
     final String? imageBase64,
     final String? imageMimeType,
-    final Map<String, dynamic>? additionalParams,
+    final AdditionalParams? additionalParams,
+    final String? voice,
   }) async {
     switch (capability) {
       case AICapability.textGeneration:
@@ -116,7 +118,7 @@ class GoogleProvider extends BaseProvider {
       case AICapability.imageGeneration:
         return _sendImageGenerationRequest(aiContext, model, additionalParams);
       case AICapability.audioGeneration:
-        return _sendTTSRequest(aiContext, model, additionalParams);
+        return _sendTTSRequest(aiContext, model, additionalParams, voice);
       case AICapability.audioTranscription:
         return _sendTranscriptionRequest(
           imageBase64 ?? '',
@@ -133,7 +135,7 @@ class GoogleProvider extends BaseProvider {
     final String? model,
     final String? imageBase64,
     final String? imageMimeType,
-    final Map<String, dynamic>? additionalParams,
+    final AdditionalParams? additionalParams,
   ) async {
     try {
       final selectedModel =
@@ -145,22 +147,6 @@ class GoogleProvider extends BaseProvider {
 
       final history = aiContext.history ?? [];
       final contents = <Map<String, dynamic>>[];
-      // Add system prompt
-      contents.add({
-        'role': 'user',
-        'parts': [
-          {'text': aiContext.context.toString()},
-        ],
-      });
-      contents.add({
-        'role': 'model',
-        'parts': [
-          {
-            'text':
-                'I understand the system instructions and will follow them accordingly.'
-          },
-        ],
-      });
 
       // Add conversation history
       for (int i = 0; i < history.length; i++) {
@@ -182,13 +168,55 @@ class GoogleProvider extends BaseProvider {
         contents.add({'role': role, 'parts': parts});
       }
 
-      final bodyMap = {
+      // ✨ Build system instruction from AIContext
+      final systemParts = <String>[];
+
+      // Include context
+      final contextJson = aiContext.toJson();
+      final contextData = contextJson['context'];
+      if (contextData != null) {
+        final contextStr =
+            contextData is String ? contextData : jsonEncode(contextData);
+        if (contextStr.isNotEmpty &&
+            contextStr != '{}' &&
+            contextStr != 'null') {
+          systemParts.add('Context:\n$contextStr');
+        }
+      }
+
+      // Include instructions from aiContext.instructions
+      if (aiContext.instructions.isNotEmpty) {
+        final instructionsStr = jsonEncode(aiContext.instructions);
+        if (instructionsStr.isNotEmpty &&
+            instructionsStr != '{}' &&
+            instructionsStr != 'null') {
+          // If instructions contain a 'raw' key, use that directly
+          if (aiContext.instructions.containsKey('raw')) {
+            systemParts.add('Instructions:\n${aiContext.instructions['raw']}');
+          } else {
+            systemParts.add('Instructions:\n$instructionsStr');
+          }
+        }
+      }
+
+      final bodyMap = <String, dynamic>{
         'contents': contents,
         'generationConfig': {
           'maxOutputTokens': config.configuration.maxOutputTokens,
-          'temperature': additionalParams?['temperature'] ?? 0.7,
+          'temperature': 0.7,
         },
       };
+
+      // ✨ Add systemInstruction at top level if we have system content
+      if (systemParts.isNotEmpty) {
+        bodyMap['systemInstruction'] = {
+          'parts': [
+            {'text': systemParts.join('\n\n')}
+          ]
+        };
+        AILogger.d(
+            '[GoogleProvider] 🎯 Using native systemInstruction with ${systemParts.length} parts');
+      }
 
       final url = Uri.parse(
           getEndpointUrl('chat').replaceAll('{model}', selectedModel));
@@ -367,7 +395,7 @@ class GoogleProvider extends BaseProvider {
   Future<ProviderResponse> _sendImageGenerationRequest(
     final AIContext aiContext,
     final String? model,
-    final Map<String, dynamic>? additionalParams,
+    final AdditionalParams? additionalParams,
   ) async {
     final history = aiContext.history ?? [];
     final prompt = history.isNotEmpty ? history.last['content'] ?? '' : '';
@@ -386,51 +414,10 @@ class GoogleProvider extends BaseProvider {
 
       final contents = <Map<String, dynamic>>[];
 
-      // ✨ 1. Agregar system prompt desde AIContext (igual que _sendTextRequest)
-      // Usar la serialización correcta del AIContext
-      final contextJson = aiContext.toJson();
-
-      if (contextJson['context'] != null || aiContext.instructions.isNotEmpty) {
-        final systemParts = <String>[];
-
-        // Incluir context usando serialización correcta
-        final contextData = contextJson['context'];
-        if (contextData != null) {
-          final contextStr =
-              contextData is String ? contextData : jsonEncode(contextData);
-          if (contextStr.isNotEmpty &&
-              contextStr != '{}' &&
-              contextStr != 'null') {
-            systemParts.add('Context: $contextStr');
-          }
-        }
-
-        // Incluir instructions si no están vacías
-        final instructionsStr = jsonEncode(aiContext.instructions);
-        if (instructionsStr.isNotEmpty &&
-            instructionsStr != '{}' &&
-            instructionsStr != 'null') {
-          systemParts.add('Instructions: $instructionsStr');
-        }
-
-        // Agregar system prompt directamente sin respuesta del modelo
-        if (systemParts.isNotEmpty) {
-          contents.add({
-            'role': 'user',
-            'parts': [
-              {'text': systemParts.join('\n\n')},
-            ],
-          });
-
-          AILogger.d(
-              '[GoogleProvider] 🎯 Image generation with system context: ${systemParts.length} parts');
-        }
-      }
-
-      // ✨ 2. Agregar el prompt del usuario (con imagen base si está disponible)
+      // ✨ 1. Preparar el prompt del usuario (con imagen base si está disponible)
       // ✅ Obtener imagen base para edición si está en additionalParams
       final sourceImageBase64 =
-          additionalParams?['sourceImageBase64'] as String?;
+          additionalParams?.imageParams?.sourceImageBase64;
 
       // Modificar el prompt para que Gemini también genere una descripción detallada
       final isEditing =
@@ -476,13 +463,55 @@ After generating the image, provide your response as a JSON object with the foll
         'parts': userParts,
       });
 
-      final bodyMap = {
-        'contents': contents, // ← Usar contents completos (no solo prompt)
+      // ✨ 2. Build systemInstruction from AIContext (mismo enfoque que _sendTextRequest)
+      final contextJson = aiContext.toJson();
+      final systemParts = <String>[];
+
+      // Include context
+      final contextData = contextJson['context'];
+      if (contextData != null) {
+        final contextStr =
+            contextData is String ? contextData : jsonEncode(contextData);
+        if (contextStr.isNotEmpty &&
+            contextStr != '{}' &&
+            contextStr != 'null') {
+          systemParts.add('Context:\n$contextStr');
+        }
+      }
+
+      // Include instructions from aiContext.instructions
+      if (aiContext.instructions.isNotEmpty) {
+        final instructionsStr = jsonEncode(aiContext.instructions);
+        if (instructionsStr.isNotEmpty &&
+            instructionsStr != '{}' &&
+            instructionsStr != 'null') {
+          // If instructions contain a 'raw' key, use that directly
+          if (aiContext.instructions.containsKey('raw')) {
+            systemParts.add('Instructions:\n${aiContext.instructions['raw']}');
+          } else {
+            systemParts.add('Instructions:\n$instructionsStr');
+          }
+        }
+      }
+
+      final bodyMap = <String, dynamic>{
+        'contents': contents,
         'generationConfig': {
           'maxOutputTokens': config.configuration.maxOutputTokens,
-          'temperature': additionalParams?['temperature'] ?? 0.7,
+          'temperature': 0.7,
         },
       };
+
+      // ✨ Add systemInstruction at top level if we have system content
+      if (systemParts.isNotEmpty) {
+        bodyMap['systemInstruction'] = {
+          'parts': [
+            {'text': systemParts.join('\n\n')}
+          ]
+        };
+        AILogger.d(
+            '[GoogleProvider] 🎯 Image generation using native systemInstruction with ${systemParts.length} parts');
+      }
 
       final url = Uri.parse(
           getEndpointUrl('chat').replaceAll('{model}', selectedModel));
@@ -506,7 +535,8 @@ After generating the image, provide your response as a JSON object with the foll
   Future<ProviderResponse> _sendTTSRequest(
     final AIContext aiContext,
     final String? model,
-    final Map<String, dynamic>? additionalParams,
+    final AdditionalParams? additionalParams,
+    final String? voice,
   ) async {
     final history = aiContext.history ?? [];
     final text = history.isNotEmpty ? history.last['content'] ?? '' : '';
@@ -517,14 +547,15 @@ After generating the image, provide your response as a JSON object with the foll
     try {
       final selectedModel =
           model ?? getDefaultModel(AICapability.audioGeneration);
-      final voice =
-          additionalParams?['voice'] ?? config.voices['default'] ?? 'Puck';
-
-      // Crear AiAudioParams desde additionalParams para usar los nuevos campos
-      final audioParams = AiAudioParams.fromMap(additionalParams);
+      // Use voice parameter directly with fallback to getDefaultVoice()
+      final selectedVoice = voice ??
+          getDefaultVoice(); // Crear AiAudioParams desde additionalParams para usar los nuevos campos
+      final audioParams =
+          additionalParams?.audioParams ?? const AiAudioParams();
 
       // Construir prompt nativo de TTS con parámetros avanzados
-      final ttsPrompt = _buildAdvancedTtsPrompt(text, voice, audioParams);
+      final ttsPrompt =
+          _buildAdvancedTtsPrompt(text, selectedVoice, audioParams);
 
       final contents = [
         {
@@ -540,7 +571,7 @@ After generating the image, provide your response as a JSON object with the foll
         'speech_config': {
           'voice_config': {
             'prebuilt_voice_config': {
-              'voice_name': voice,
+              'voice_name': selectedVoice,
             }
           }
         }
@@ -730,7 +761,7 @@ Requirements:
   Future<ProviderResponse> _handleRealtimeRequest(
     final AIContext aiContext,
     final String? model,
-    final Map<String, dynamic>? additionalParams,
+    final AdditionalParams? additionalParams,
   ) async {
     if (!supportsCapability(AICapability.realtimeConversation)) {
       return ProviderResponse(
@@ -746,11 +777,15 @@ Requirements:
     );
   }
 
+  /// DEPRECATED: Legacy method - use AI.speak() instead
+  /// Voice is now managed through AI.setSelectedVoiceForProvider()
+  @Deprecated(
+      'Use AI.speak() with voice management via AI.setSelectedVoiceForProvider()')
   Future<ProviderResponse> generateAudio({
     required final String text,
     final String? voice,
     final String? model,
-    final Map<String, dynamic>? additionalParams,
+    final AdditionalParams? additionalParams,
   }) async {
     // Create temporary AIContext for TTS
     final aiContext = AIContext(
@@ -765,7 +800,8 @@ Requirements:
     return _sendTTSRequest(
       aiContext,
       model,
-      {...?additionalParams, 'voice': voice},
+      additionalParams,
+      voice,
     );
   }
 

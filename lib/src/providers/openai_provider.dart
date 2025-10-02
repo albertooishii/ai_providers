@@ -4,6 +4,7 @@ import 'dart:io';
 // dart:typed_data removed - no longer needed
 
 import '../core/provider_registry.dart';
+import '../models/additional_params.dart';
 import '../models/provider_response.dart';
 import '../models/ai_provider_metadata.dart';
 import '../models/ai_context.dart';
@@ -115,7 +116,8 @@ class OpenAIProvider extends BaseProvider {
     final String? model,
     final String? imageBase64,
     final String? imageMimeType,
-    final Map<String, dynamic>? additionalParams,
+    final AdditionalParams? additionalParams,
+    final String? voice,
   }) async {
     switch (capability) {
       case AICapability.textGeneration:
@@ -125,7 +127,7 @@ class OpenAIProvider extends BaseProvider {
       case AICapability.imageGeneration:
         return _sendImageGenerationRequest(aiContext, model, additionalParams);
       case AICapability.audioGeneration:
-        return _sendTTSRequest(aiContext, model, additionalParams);
+        return _sendTTSRequest(aiContext, model, additionalParams, voice);
       case AICapability.audioTranscription:
         return _sendTranscriptionRequest(
           imageBase64 ?? '',
@@ -142,7 +144,7 @@ class OpenAIProvider extends BaseProvider {
     final String? model,
     final String? imageBase64,
     final String? imageMimeType,
-    final Map<String, dynamic>? additionalParams,
+    final AdditionalParams? additionalParams,
   ) async {
     try {
       final selectedModel =
@@ -261,7 +263,7 @@ class OpenAIProvider extends BaseProvider {
   Future<ProviderResponse> _sendImageGenerationRequest(
     final AIContext aiContext,
     final String? model,
-    final Map<String, dynamic>? additionalParams,
+    final AdditionalParams? additionalParams,
   ) async {
     // Get prompt from last message in aiContext.history
     final history = aiContext.history ?? [];
@@ -282,8 +284,9 @@ class OpenAIProvider extends BaseProvider {
                 'Error: Invalid or missing model for OpenAI image generation');
       }
 
-      // Parse image parameters and build request body
-      final imageParams = AiImageParams.fromMap(additionalParams);
+      // Extract image parameters from wrapper
+      final imageParams =
+          additionalParams?.imageParams ?? const AiImageParams();
       final inputText = _buildInputText(aiContext);
 
       final bodyMap = <String, dynamic>{
@@ -323,7 +326,8 @@ class OpenAIProvider extends BaseProvider {
   Future<ProviderResponse> _sendTTSRequest(
     final AIContext aiContext,
     final String? model,
-    final Map<String, dynamic>? additionalParams,
+    final AdditionalParams? additionalParams,
+    final String? voice,
   ) async {
     // Get text from last message in aiContext.history
     final history = aiContext.history ?? [];
@@ -336,11 +340,11 @@ class OpenAIProvider extends BaseProvider {
     final selectedModel =
         model ?? getDefaultModel(AICapability.audioGeneration);
 
-    // Crear AiAudioParams desde additionalParams si está disponible
-    final audioParams = AiAudioParams.fromMap(additionalParams);
+    // Extract audio parameters from wrapper
+    final audioParams = additionalParams?.audioParams ?? const AiAudioParams();
 
-    // Usar parámetros tipados con fallbacks inteligentes
-    final voice = additionalParams?['voice'] ?? getDefaultVoice();
+    // Use voice parameter directly with fallback to default
+    final selectedVoice = voice ?? getDefaultVoice();
     final speed = audioParams.speed; // Siempre tiene valor por defecto (1.0)
     final responseFormat =
         audioParams.audioFormat; // ✅ Siempre tiene valor por defecto 'pcm'
@@ -348,7 +352,7 @@ class OpenAIProvider extends BaseProvider {
     final payload = <String, dynamic>{
       'model': selectedModel,
       'input': text,
-      'voice': voice,
+      'voice': selectedVoice,
       'speed': speed,
       'response_format': responseFormat,
     };
@@ -432,7 +436,7 @@ class OpenAIProvider extends BaseProvider {
   Future<ProviderResponse> _handleRealtimeRequest(
     final AIContext aiContext,
     final String? model,
-    final Map<String, dynamic>? additionalParams,
+    final AdditionalParams? additionalParams,
   ) async {
     if (!supportsCapability(AICapability.realtimeConversation)) {
       return ProviderResponse(
@@ -448,11 +452,15 @@ class OpenAIProvider extends BaseProvider {
     );
   }
 
+  /// DEPRECATED: Legacy method - use AI.speak() instead
+  /// Voice is now managed through AI.setSelectedVoiceForProvider()
+  @Deprecated(
+      'Use AI.speak() with voice management via AI.setSelectedVoiceForProvider()')
   Future<ProviderResponse> generateAudio({
     required final String text,
     final String? voice,
     final String? model,
-    final Map<String, dynamic>? additionalParams,
+    final AdditionalParams? additionalParams,
   }) async {
     // Create a simple context for TTS request
     final ttsContext = AIContext(
@@ -466,7 +474,8 @@ class OpenAIProvider extends BaseProvider {
     return _sendTTSRequest(
       ttsContext,
       model,
-      {...?additionalParams, 'voice': voice},
+      additionalParams,
+      voice,
     );
   }
 

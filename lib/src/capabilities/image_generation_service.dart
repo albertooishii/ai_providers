@@ -1,5 +1,6 @@
 import 'package:ai_providers/ai_providers.dart';
 import '../core/ai_provider_manager.dart';
+import '../models/additional_params.dart';
 import '../utils/logger.dart';
 
 /// 🖼️ ImageGenerationService - Servicio completo de generación de imágenes
@@ -40,7 +41,8 @@ class ImageGenerationService {
         aiContext: finalContext,
         capability: AICapability.imageGeneration,
         saveToCache: saveToCache,
-        additionalParams: imageParams?.toMap(),
+        additionalParams:
+            imageParams != null ? AdditionalParams.image(imageParams) : null,
       );
     } catch (e) {
       AILogger.e('[ImageGenerationService] ❌ Error generando imagen: $e');

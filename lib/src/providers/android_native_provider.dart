@@ -5,6 +5,7 @@ import 'dart:async';
 import '../core/provider_registry.dart';
 
 // provider_interface.dart removed - no more abstract interfaces!
+import '../models/additional_params.dart';
 import '../models/ai_provider_metadata.dart';
 import '../models/provider_response.dart';
 import '../models/ai_capability.dart';
@@ -166,7 +167,8 @@ class AndroidNativeProvider {
     final String? model,
     final String? imageBase64,
     final String? imageMimeType,
-    final Map<String, dynamic>? additionalParams,
+    final AdditionalParams? additionalParams,
+    final String? voice,
   }) async {
     throw UnsupportedError(
         'AndroidNativeProvider no soporta sendMessage - solo generateAudio');
@@ -189,7 +191,7 @@ class AndroidNativeProvider {
     required final String text,
     final String? voice,
     final String? model,
-    final Map<String, dynamic>? additionalParams,
+    final AdditionalParams? additionalParams,
   }) async {
     if (!_initialized) {
       throw StateError('AndroidNativeProvider no inicializado');
@@ -201,7 +203,8 @@ class AndroidNativeProvider {
 
     try {
       // Crear AiAudioParams desde additionalParams para usar parámetros tipados
-      final audioParams = AiAudioParams.fromMap(additionalParams);
+      final audioParams =
+          additionalParams?.audioParams ?? const AiAudioParams();
 
       // Configurar idioma si se especifica (filtrado ISO para Android Native)
       if (audioParams.language != null) {
@@ -260,7 +263,7 @@ class AndroidNativeProvider {
     final String? audioFormat,
     final String? model,
     final String? language,
-    final Map<String, dynamic>? additionalParams,
+    final AdditionalParams? additionalParams,
   }) async {
     if (!_initialized) {
       throw StateError('AndroidNativeProvider no inicializado');

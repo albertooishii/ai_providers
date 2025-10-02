@@ -6,6 +6,7 @@ import 'package:audioplayers/audioplayers.dart';
 
 import '../../ai_providers.dart';
 import '../core/ai_provider_manager.dart';
+import '../models/additional_params.dart';
 import '../utils/logger.dart';
 
 /// 🎤 AudioGenerationService - Servicio completo de generación de audio
@@ -67,7 +68,8 @@ class AudioGenerationService {
         message: text,
         aiContext: context,
         capability: AICapability.audioGeneration,
-        additionalParams: audioParams?.toMap(),
+        additionalParams:
+            audioParams != null ? AdditionalParams.audio(audioParams) : null,
         saveToCache: true,
       );
 
@@ -105,7 +107,8 @@ class AudioGenerationService {
         message: text,
         aiContext: context,
         capability: AICapability.audioGeneration,
-        additionalParams: audioParams?.toMap(),
+        additionalParams:
+            audioParams != null ? AdditionalParams.audio(audioParams) : null,
         saveToCache: saveToCache,
       );
 
