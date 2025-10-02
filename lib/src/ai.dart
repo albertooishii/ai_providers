@@ -151,15 +151,25 @@ class AI {
   /// 🎧 Escuchar/grabar y transcribir audio automáticamente
   /// Capability automático: audioTranscription
   ///
+  /// **NUEVO:** Devuelve AIResponse completo con transcripción Y audio grabado (URL + base64)
+  ///
   /// CASOS DE USO:
   /// - Ultra-básico: AI.listen() - detección automática de silencio
   /// - Tiempo fijo: AI.listen(duration: Duration(seconds: 5))
   /// - Control fino: AI.listen(silenceTimeout: Duration(seconds: 2), autoStop: true)
   ///
+  /// **Ejemplo:**
+  /// ```dart
+  /// final response = await AI.listen();
+  /// print(response.text);        // Transcripción del audio
+  /// print(response.audio?.url);  // Ruta del archivo de audio grabado
+  /// print(response.audio?.base64); // Audio en base64 para envío
+  /// ```
+  ///
   /// [duration] - Duración máxima de grabación (null = ilimitado hasta silencio)
   /// [silenceTimeout] - Tiempo de silencio para auto-detención (por defecto 2 segundos)
   /// [autoStop] - Detener automáticamente al detectar silencio (por defecto true)
-  /// [context] - Instrucciones del sistema para la transcripción
+  /// [systemPrompt] - Instrucciones del sistema para la transcripción
   static Future<AIResponse> listen({
     final Duration? duration,
     final Duration silenceTimeout = const Duration(seconds: 2),
@@ -177,18 +187,15 @@ class AI {
     await _manager.initialize();
 
     // Delegar toda la lógica avanzada al AudioTranscriptionService
-    final transcript =
-        await AudioTranscriptionService.instance.recordAndTranscribe(
+    final result = await AudioTranscriptionService.instance.recordAndTranscribe(
       duration: duration,
       silenceTimeout: silenceTimeout,
       autoStop: autoStop,
       systemPrompt: systemPrompt,
     );
 
-    // Retornar AIResponse con el resultado
-    return AIResponse(
-      text: transcript ?? '',
-    );
+    // Retornar AIResponse completo (incluye audio grabado)
+    return result;
   }
 
   // ═══════════════════════════════════════════════════════════════════════════════
@@ -216,8 +223,10 @@ class AI {
   }
 
   /// 🛑 Detener grabación de audio en curso
-  /// Detiene la grabación actual y retorna la transcripción del audio grabado hasta el momento
-  static Future<String?> stopListen() async {
+  /// Detiene la grabación actual y retorna AIResponse con transcripción y audio grabado
+  ///
+  /// **Devuelve:** AIResponse con `text` (transcripción) y `audio` (URL + base64 del archivo grabado)
+  static Future<AIResponse?> stopListen() async {
     AILogger.d('[AI] 🛑 stopListen() - stopping audio recording');
     await _manager.initialize();
 

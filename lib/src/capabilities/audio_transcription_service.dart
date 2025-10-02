@@ -6,6 +6,7 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:record/record.dart';
 import '../models/ai_response.dart';
+import '../models/ai_audio.dart';
 
 import '../models/ai_capability.dart';
 import '../models/ai_system_prompt.dart';
@@ -40,7 +41,7 @@ class AudioTranscriptionService {
   // Control manual para forzar terminación
   bool _forceStop = false;
   bool _isInSilenceDetectionMode = false;
-  Completer<String?>? _manualStopCompleter;
+  Completer<AIResponse?>? _manualStopCompleter;
   StreamSubscription<Uint8List>? _currentStreamSubscription;
 
   // Calibración de ruido ambiente para detección de silencio adaptativa
@@ -181,8 +182,10 @@ class AudioTranscriptionService {
   /// [duration] - Duración máxima (null = ilimitado hasta silencio)
   /// [silenceTimeout] - Tiempo de silencio para auto-detención
   /// [autoStop] - Detener automáticamente al detectar silencio
-  /// [context] - Contexto e instrucciones del sistema para transcripción
-  Future<String?> recordAndTranscribe({
+  /// [systemPrompt] - Contexto e instrucciones del sistema para transcripción
+  ///
+  /// **Devuelve:** AIResponse con transcripción en `text` y audio grabado en `audio` (URL + base64)
+  Future<AIResponse> recordAndTranscribe({
     final Duration? duration,
     final Duration silenceTimeout = const Duration(seconds: 2),
     final bool autoStop = true,
@@ -208,26 +211,32 @@ class AudioTranscriptionService {
       await startRecording();
 
       // Lógica de grabación avanzada
-      String? transcript;
+      AIResponse? result;
       if (duration != null) {
         // Modo duración fija - comportamiento original
         await Future.delayed(duration);
-        transcript = await stopRecording();
+        result = await stopRecording();
       } else if (autoStop) {
         // Modo auto-detección de silencio
-        transcript = await _recordWithSilenceDetection(silenceTimeout);
+        result = await _recordWithSilenceDetection(silenceTimeout);
       } else {
         // Modo manual - solo iniciar, el usuario debe llamar stopRecording()
         AILogger.d(
             '[AudioTranscriptionService] Recording started - manual stop required');
-        return null; // Retorna null para indicar que la grabación está en progreso
+        return AIResponse(
+            text:
+                ''); // Retorna AIResponse vacío para indicar que la grabación está en progreso
       }
 
       // Las instrucciones de transcripción se pasan directamente al provider via Context
-
-      AILogger.d(
-          '[AudioTranscriptionService] ✅ recordAndTranscribe completado: $transcript');
-      return transcript;
+      if (result != null) {
+        AILogger.d(
+            '[AudioTranscriptionService] ✅ recordAndTranscribe completado: ${result.text}');
+        return result;
+      } else {
+        return AIResponse(
+            text: ''); // Retorna AIResponse vacío si no hay resultado
+      }
     } catch (e) {
       AILogger.e(
           '[AudioTranscriptionService] Error en recordAndTranscribe(): $e');
@@ -281,7 +290,8 @@ class AudioTranscriptionService {
   }
 
   /// Detener grabación y transcribir
-  Future<String?> stopRecording() async {
+  /// **Devuelve:** AIResponse con transcripción en `text` y audio grabado en `audio` (URL + base64)
+  Future<AIResponse?> stopRecording() async {
     try {
       if (!_isRecording) {
         AILogger.w('[AudioTranscriptionService] No hay grabación activa');
@@ -312,7 +322,7 @@ class AudioTranscriptionService {
         }
 
         // Crear completer para esperar el resultado
-        _manualStopCompleter = Completer<String?>();
+        _manualStopCompleter = Completer<AIResponse?>();
 
         // Esperar hasta que _recordWithSilenceDetection() complete la transcripción
         return await _manualStopCompleter!.future;
@@ -343,10 +353,13 @@ class AudioTranscriptionService {
         '[AudioTranscriptionService] ✅ Transcripción completada: $transcript',
       );
 
+      // Crear AIResponse con transcripción Y audio grabado
+      final result = await _createAIResponseWithAudio(audioPath, transcript);
+
       // Reset estado para próxima grabación
       _resetRecordingState();
 
-      return transcript.isNotEmpty ? transcript : null;
+      return result;
     } on Exception catch (e) {
       AILogger.e('[AudioTranscriptionService] Error deteniendo grabación: $e');
       _isRecording = false;
@@ -382,6 +395,38 @@ class AudioTranscriptionService {
 
   // === MÉTODOS PRIVADOS ===
 
+  /// Crea AIResponse con transcripción y audio completo (URL + base64)
+  Future<AIResponse> _createAIResponseWithAudio(
+      final String audioPath, final String transcript) async {
+    try {
+      // Leer archivo de audio para obtener base64 y metadatos
+      final file = File(audioPath);
+      final audioBytes = await file.readAsBytes();
+      final base64Audio = base64Encode(audioBytes);
+      final fileStat = file.statSync();
+
+      // Crear objeto AiAudio con toda la información
+      final aiAudio = AiAudio(
+        url: audioPath,
+        transcript: transcript,
+        base64: base64Audio,
+        durationMs: _recordingDuration.inMilliseconds,
+        createdAtMs: fileStat.modified.millisecondsSinceEpoch,
+        isAutoTts: false, // Es grabación, no TTS
+      );
+
+      return AIResponse(
+        text: transcript,
+        audio: aiAudio,
+      );
+    } on Exception catch (e) {
+      AILogger.e(
+          '[AudioTranscriptionService] Error creando AIResponse con audio: $e');
+      // Fallback: solo transcripción sin audio
+      return AIResponse(text: transcript);
+    }
+  }
+
   /// Crea Context por defecto para transcripción de audio
   AISystemPrompt _createDefaultTranscriptionContext() {
     final context = <String, dynamic>{
@@ -407,7 +452,7 @@ class AudioTranscriptionService {
   }
 
   /// Grabación con detección automática de silencio REAL
-  Future<String?> _recordWithSilenceDetection(
+  Future<AIResponse?> _recordWithSilenceDetection(
       final Duration silenceTimeout) async {
     AILogger.d(
         '[AudioTranscriptionService] 🔇 Starting REAL silence detection with ${silenceTimeout.inSeconds}s timeout');
@@ -612,16 +657,21 @@ class AudioTranscriptionService {
 
       final result = transcript.isNotEmpty ? transcript : null;
 
+      // Crear AIResponse con audio si tenemos resultado y recordingPath
+      final audioResponse = result != null
+          ? await _createAIResponseWithAudio(recordingPath, result)
+          : AIResponse(text: result ?? '');
+
       // Si hay un completer esperando (manual stop), completarlo
       if (_manualStopCompleter != null && !_manualStopCompleter!.isCompleted) {
-        _manualStopCompleter!.complete(result);
+        _manualStopCompleter!.complete(audioResponse);
       }
 
       // CRÍTICO: Reset del estado después de completar la transcripción
       // para que la siguiente grabación funcione correctamente
       _resetRecordingState();
 
-      return result;
+      return audioResponse;
     } on Exception catch (e) {
       AILogger.e(
           '[AudioTranscriptionService] Error in real silence detection: $e');
@@ -634,7 +684,7 @@ class AudioTranscriptionService {
       // Reset del estado también en caso de error
       _resetRecordingState();
 
-      return await stopRecording(); // Fallback al método normal
+      return AIResponse(text: ''); // Retornar AIResponse vacío en caso de error
     }
   }
 

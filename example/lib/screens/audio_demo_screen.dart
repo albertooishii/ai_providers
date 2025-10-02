@@ -703,12 +703,12 @@ class _AudioDemoScreenState extends State<AudioDemoScreen>
       });
 
       // Usar la nueva API AI.stopListen() para parar la grabación
-      final transcript = await AI.stopListen();
+      final response = await AI.stopListen();
 
       if (!mounted) return;
       setState(() {
-        if (transcript != null && transcript.isNotEmpty) {
-          _transcribedText = transcript;
+        if (response != null && response.text.trim().isNotEmpty) {
+          _transcribedText = response.text.trim();
         } else {
           _transcribedText = 'No speech detected in recording';
         }

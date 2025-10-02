@@ -1,12 +1,22 @@
 # Registro de Cambios
 
-## [1.6.0] - 2 de octubre de 2025 🔄 REFACTOR: AIContext → AISystemPrompt + Voice Management
+## [1.6.0] - 2 de octubre de 2025 🔄 MAJOR: AIContext → AISystemPrompt + Enhanced AI.listen() with Audio
 
 ### 🔄 Breaking Changes - Restauración de Nombres Correctos
 - **AIContext → AISystemPrompt**: Renombrado clase principal para reflejar correctamente que todos los providers soportan system prompts
 - **aiContext → systemPrompt**: Renombrado parámetro en todas las APIs para consistencia
 - **Archivo renombrado**: `ai_context.dart` → `ai_system_prompt.dart`
 - **Imports actualizados**: Todos los imports actualizados automáticamente en lib/ y example/
+
+### 🎧 NUEVA FUNCIONALIDAD: AI.listen() y AI.stopListen() con Audio Completo
+- **AI.listen() mejorado**: Ahora devuelve `AIResponse` con transcripción Y audio grabado (URL + base64)
+- **AI.stopListen() actualizado**: Cambia de `Future<String?>` a `Future<AIResponse?>` para consistencia
+- **Audio completo incluido**: 
+  - `response.text` - Transcripción del audio
+  - `response.audio?.url` - Ruta del archivo de audio grabado en caché
+  - `response.audio?.base64` - Audio en base64 para envío directo
+  - `response.audio?.durationMs` - Duración de la grabación
+  - `response.audio?.transcript` - Mismo contenido que text
 
 ### ✨ Sistema de Gestión de Voces
 - **AdditionalParams sealed class**: Nueva abstracción type-safe para parámetros de imagen y audio
@@ -15,16 +25,18 @@
 - **AIProviderManager**: Nuevos métodos `_selectVoice()` y `getVoiceForRequest()`
 - **Getters convenientes**: `imageParams` y `audioParams` en AdditionalParams
 
-### 🎯 Corrección de Soporte System Prompts
+### 🎯 Corrección de Soporte System Prompts + processHistory() Obligatorio
 - **xAI (Grok)**: Verificado soporte de `role: system` en messages (OpenAI compatible)
 - **Google Gemini**: Usa `systemInstruction` field nativo (no en messages)
 - **OpenAI**: Usa `role: system` en messages array (formato estándar)
+- **processHistory() abstracto**: Método obligatorio en BaseProvider para manejo consistente de historial
 - **Documentación**: Rationale actualizado - TODOS los providers soportan system prompts
 
 ### 🔧 Mejoras Técnicas
 - **Serialización explícita**: `profile.toJson()` en lugar de pasar objetos directamente
 - **Prompt simple + Context poderoso**: Patrón híbrido restaurado para mejor comportamiento del modelo
 - **Debug mejorado**: JSON extraction con mejor logging y manejo de errores
+- **AudioTranscriptionService mejorado**: Método `_createAIResponseWithAudio()` para generar respuestas completas
 
 ### 📋 Migración Requerida
 ```dart
@@ -32,14 +44,27 @@
 final aiContext = AIContext(context: profile, ...);
 await AI.text(prompt, aiContext);
 
+// Para audio:
+final transcript = await AI.listen(); // Solo String
+final stopped = await AI.stopListen(); // Solo String?
+
 // ✅ AHORA (v1.6.0)
 final systemPrompt = AISystemPrompt(context: profile, ...);
 await AI.text(prompt, systemPrompt);
+
+// Para audio con datos completos:
+final response = await AI.listen();    // AIResponse completo
+print(response.text);                  // Transcripción
+print(response.audio?.url);            // Archivo de audio
+print(response.audio?.base64);         // Audio en base64
+
+final stopped = await AI.stopListen(); // AIResponse? completo
 ```
 
 ### 🧪 Testing
 - **dart analyze**: 0 issues en ai_providers y example
-- **Tests completos**: Sistema de voces completamente implementado
+- **Example actualizado**: Demo de audio corregida para usar nueva API
+- **Tests completos**: Sistema de voces y audio completamente implementado
 - **Pre-commit hooks**: dart fix, dart format, dart doc ejecutados automáticamente
 
 ## [1.5.0] - 1 de octubre de 2025 🚀 SISTEMA SOURCEIMAGEBASE64 + PROMPT REVISADO JSON

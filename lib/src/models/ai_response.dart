@@ -35,10 +35,12 @@ import 'ai_audio.dart';
 /// print(response.audio?.url);  // Ruta del archivo de audio guardado
 /// ```
 ///
-/// **Transcripción (STT):**
+/// **Transcripción con grabación (STT):**
 /// ```dart
-/// final response = await AI.listen(audioFile);
+/// final response = await AI.listen();
 /// print(response.text);               // Transcripción del audio
+/// print(response.audio?.url);         // Ruta del archivo de audio grabado
+/// print(response.audio?.base64);      // Audio en base64 para envío
 /// print(response.audio?.transcript);  // Mismo contenido textual
 /// ```
 class AIResponse {

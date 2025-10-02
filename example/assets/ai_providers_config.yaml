@@ -4,9 +4,9 @@
 
 version: "1.0"
 metadata:
-  description: "AI Providers configuration for AI-chan"
+  description: "AI Providers configuration"
   created: "2025-09-08"
-  last_updated: "2025-09-24"
+  last_updated: "2025-10-02"
 
 # Global settings
 global_settings:
@@ -40,9 +40,9 @@ ai_providers:
         - "OPENAI_API_KEYS"
     
     defaults:
-      text_generation: "gpt-4.1-mini"
-      image_generation: "gpt-4.1-mini"
-      image_analysis: "gpt-4.1-mini"
+      text_generation: "gpt-5-mini"
+      image_generation: "gpt-5-mini"
+      image_analysis: "gpt-5-mini"
       audio_generation: "gpt-4o-mini-tts"
       audio_transcription: "gpt-4o-mini-transcribe"
       realtime_conversation: "gpt-realtime"
