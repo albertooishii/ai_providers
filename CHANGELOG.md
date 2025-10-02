@@ -1,5 +1,20 @@
 # Registro de Cambios
 
+## [1.6.1] - 3 de octubre de 2025 🎯 AI.listen() retorna nullable
+
+### ✨ Mejoras
+- **AI.listen() retorna `Future<AIResponse?>`**: 
+  - Con `autoStop=true` (default): retorna `AIResponse` con transcripción completa
+  - Con `autoStop=false`: retorna `null` inmediatamente (solo inicia grabación)
+  - Más claro y semántico que retornar `AIResponse(text: '')` vacío
+- **Documentación mejorada**: Ejemplos claros del comportamiento según `autoStop`
+- **README actualizado**: Tabla de métodos con descripción precisa del retorno nullable
+
+### 🔧 Cambios Técnicos
+- `AudioTranscriptionService.recordAndTranscribe()`: Retorna `null` cuando `autoStop=false`
+- Usuario debe llamar `AI.stopListen()` para obtener resultado con control manual
+- Sin breaking changes en uso normal (autoStop=true por defecto)
+
 ## [1.6.0] - 2 de octubre de 2025 🔄 MAJOR: AIContext → AISystemPrompt + Enhanced AI.listen() with Audio
 
 ### 🔄 Breaking Changes - Restauración de Nombres Correctos

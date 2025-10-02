@@ -757,8 +757,8 @@ class _AudioDemoScreenState extends State<AudioDemoScreen>
 
       if (!mounted) return;
       setState(() {
-        if (response.text.isNotEmpty) {
-          _transcribedText = response.text;
+        if (response?.text.isNotEmpty == true) {
+          _transcribedText = response?.text;
         } else {
           _transcribedText =
               '🔇 No se detectó audio claro durante la grabación.\n\n'

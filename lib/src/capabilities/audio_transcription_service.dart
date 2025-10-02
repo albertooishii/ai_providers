@@ -184,8 +184,10 @@ class AudioTranscriptionService {
   /// [autoStop] - Detener automáticamente al detectar silencio
   /// [systemPrompt] - Contexto e instrucciones del sistema para transcripción
   ///
-  /// **Devuelve:** AIResponse con transcripción en `text` y audio grabado en `audio` (URL + base64)
-  Future<AIResponse> recordAndTranscribe({
+  /// **Devuelve:**
+  /// - AIResponse con transcripción si autoStop=true o duration!=null
+  /// - null si autoStop=false (grabación iniciada, sin resultado aún)
+  Future<AIResponse?> recordAndTranscribe({
     final Duration? duration,
     final Duration silenceTimeout = const Duration(seconds: 2),
     final bool autoStop = true,
@@ -222,10 +224,8 @@ class AudioTranscriptionService {
       } else {
         // Modo manual - solo iniciar, el usuario debe llamar stopRecording()
         AILogger.d(
-            '[AudioTranscriptionService] Recording started - manual stop required');
-        return AIResponse(
-            text:
-                ''); // Retorna AIResponse vacío para indicar que la grabación está en progreso
+            '[AudioTranscriptionService] Recording started - manual stop required, returning null');
+        return null; // ✅ Retorna null para indicar que no hay resultado aún
       }
 
       // Las instrucciones de transcripción se pasan directamente al provider via Context
@@ -234,8 +234,7 @@ class AudioTranscriptionService {
             '[AudioTranscriptionService] ✅ recordAndTranscribe completado: ${result.text}');
         return result;
       } else {
-        return AIResponse(
-            text: ''); // Retorna AIResponse vacío si no hay resultado
+        return null; // ✅ Retorna null si no hay resultado
       }
     } catch (e) {
       AILogger.e(

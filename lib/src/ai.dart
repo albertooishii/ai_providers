@@ -151,26 +151,27 @@ class AI {
   /// 🎧 Escuchar/grabar y transcribir audio automáticamente
   /// Capability automático: audioTranscription
   ///
-  /// **NUEVO:** Devuelve AIResponse completo con transcripción Y audio grabado (URL + base64)
+  /// **CON autoStop=true (default):** Graba hasta detectar silencio y retorna AIResponse
+  /// **CON autoStop=false:** Solo inicia grabación y retorna null (usar AI.stopListen() para resultado)
   ///
-  /// CASOS DE USO:
-  /// - Ultra-básico: AI.listen() - detección automática de silencio
-  /// - Tiempo fijo: AI.listen(duration: Duration(seconds: 5))
-  /// - Control fino: AI.listen(silenceTimeout: Duration(seconds: 2), autoStop: true)
-  ///
-  /// **Ejemplo:**
+  /// **Ejemplos:**
   /// ```dart
-  /// final response = await AI.listen();
-  /// print(response.text);        // Transcripción del audio
-  /// print(response.audio?.url);  // Ruta del archivo de audio grabado
-  /// print(response.audio?.base64); // Audio en base64 para envío
+  /// // Auto-detección
+  /// final result = await AI.listen();
+  /// if (result != null) print(result.text);
+  ///
+  /// // Control manual
+  /// await AI.listen(autoStop: false); // retorna null
+  /// final result = await AI.stopListen(); // retorna AIResponse
   /// ```
   ///
   /// [duration] - Duración máxima de grabación (null = ilimitado hasta silencio)
-  /// [silenceTimeout] - Tiempo de silencio para auto-detención (por defecto 2 segundos)
-  /// [autoStop] - Detener automáticamente al detectar silencio (por defecto true)
+  /// [silenceTimeout] - Tiempo de silencio para auto-detención (default: 2s)
+  /// [autoStop] - Detener automáticamente al detectar silencio (default: true)
   /// [systemPrompt] - Instrucciones del sistema para la transcripción
-  static Future<AIResponse> listen({
+  ///
+  /// **Retorna:** AIResponse con transcripción si autoStop=true, null si autoStop=false
+  static Future<AIResponse?> listen({
     final Duration? duration,
     final Duration silenceTimeout = const Duration(seconds: 2),
     final bool autoStop = true,
