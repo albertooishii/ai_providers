@@ -5,12 +5,12 @@ library;
 
 import 'dart:async';
 import 'dart:io';
-import 'package:ai_providers/src/models/additional_params.dart';
 
 import '../core/config_loader.dart';
 import '../core/provider_registry.dart';
 import '../infrastructure/api_key_manager.dart';
 import '../infrastructure/cache_service.dart';
+import '../models/additional_params.dart';
 import '../models/ai_user_preferences.dart';
 import '../models/ai_system_prompt.dart';
 import '../infrastructure/http_connection_pool.dart';

@@ -110,6 +110,28 @@ class OpenAIProvider extends BaseProvider {
   }
 
   @override
+  ({
+    List<Map<String, dynamic>> history,
+    AISystemPrompt systemPromptWithoutHistory
+  }) processHistory(final AISystemPrompt systemPrompt) {
+    // Extract history
+    final history = systemPrompt.history ?? <Map<String, dynamic>>[];
+
+    // Create new AISystemPrompt without history to avoid duplication
+    final systemPromptWithoutHistory = AISystemPrompt(
+      context: systemPrompt.context,
+      dateTime: systemPrompt.dateTime,
+      instructions: systemPrompt.instructions,
+      // history defaults to null - omitted to prevent duplication
+    );
+
+    return (
+      history: history,
+      systemPromptWithoutHistory: systemPromptWithoutHistory,
+    );
+  }
+
+  @override
   Future<ProviderResponse> sendMessage({
     required final AISystemPrompt systemPrompt,
     required final AICapability capability,
@@ -579,13 +601,16 @@ class OpenAIProvider extends BaseProvider {
 
   /// Construye el texto de input combinando system prompt e historial desde systemPrompt
   String _buildInputText(final AISystemPrompt systemPrompt) {
-    String inputText = systemPrompt.context.toString();
+    // Use processHistory to extract history and clean systemPrompt
+    final (:history, :systemPromptWithoutHistory) =
+        processHistory(systemPrompt);
 
-    // Agregar mensajes del historial desde systemPrompt.history
-    if (systemPrompt.hasHistory && systemPrompt.history != null) {
-      for (final msg in systemPrompt.history!) {
-        inputText += '\n${msg['content']?.toString() ?? ''}';
-      }
+    // Use systemPrompt WITHOUT history (agnostic approach)
+    String inputText = systemPromptWithoutHistory.toString();
+
+    // Add messages from extracted history
+    for (final msg in history) {
+      inputText += '\n${msg['content']?.toString() ?? ''}';
     }
 
     return inputText;
@@ -616,11 +641,13 @@ class OpenAIProvider extends BaseProvider {
       final AiImageParams imageParams) {
     final input = <Map<String, dynamic>>[];
 
-    // System prompt
+    // System prompt (agnostic approach - use systemPrompt WITHOUT history)
+    final (:history, :systemPromptWithoutHistory) =
+        processHistory(systemPrompt);
     input.add({
       'role': 'system',
       'content': [
-        {'type': 'input_text', 'text': systemPrompt.context.toString()},
+        {'type': 'input_text', 'text': systemPromptWithoutHistory.toString()},
       ],
     });
 

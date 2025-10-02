@@ -101,6 +101,28 @@ class GoogleProvider extends BaseProvider {
   }
 
   @override
+  ({
+    List<Map<String, dynamic>> history,
+    AISystemPrompt systemPromptWithoutHistory
+  }) processHistory(final AISystemPrompt systemPrompt) {
+    // Extract history
+    final history = systemPrompt.history ?? <Map<String, dynamic>>[];
+
+    // Create new AISystemPrompt without history to avoid duplication
+    final systemPromptWithoutHistory = AISystemPrompt(
+      context: systemPrompt.context,
+      dateTime: systemPrompt.dateTime,
+      instructions: systemPrompt.instructions,
+      // history defaults to null - omitted to prevent duplication
+    );
+
+    return (
+      history: history,
+      systemPromptWithoutHistory: systemPromptWithoutHistory,
+    );
+  }
+
+  @override
   Future<ProviderResponse> sendMessage({
     required final AISystemPrompt systemPrompt,
     required final AICapability capability,
@@ -146,7 +168,9 @@ class GoogleProvider extends BaseProvider {
             text: 'Error: Invalid or missing model for Google provider');
       }
 
-      final history = systemPrompt.history ?? [];
+      // Use processHistory to extract history and clean systemPrompt
+      final (:history, :systemPromptWithoutHistory) =
+          processHistory(systemPrompt);
       final contents = <Map<String, dynamic>>[];
 
       // Add conversation history
@@ -169,38 +193,6 @@ class GoogleProvider extends BaseProvider {
         contents.add({'role': role, 'parts': parts});
       }
 
-      // ✨ Build system instruction from AISystemPrompt
-      final systemParts = <String>[];
-
-      // Include context
-      final contextJson = systemPrompt.toJson();
-      final contextData = contextJson['context'];
-      if (contextData != null) {
-        final contextStr =
-            contextData is String ? contextData : jsonEncode(contextData);
-        if (contextStr.isNotEmpty &&
-            contextStr != '{}' &&
-            contextStr != 'null') {
-          systemParts.add('Context:\n$contextStr');
-        }
-      }
-
-      // Include instructions from systemPrompt.instructions
-      if (systemPrompt.instructions.isNotEmpty) {
-        final instructionsStr = jsonEncode(systemPrompt.instructions);
-        if (instructionsStr.isNotEmpty &&
-            instructionsStr != '{}' &&
-            instructionsStr != 'null') {
-          // If instructions contain a 'raw' key, use that directly
-          if (systemPrompt.instructions.containsKey('raw')) {
-            systemParts
-                .add('Instructions:\n${systemPrompt.instructions['raw']}');
-          } else {
-            systemParts.add('Instructions:\n$instructionsStr');
-          }
-        }
-      }
-
       final bodyMap = <String, dynamic>{
         'contents': contents,
         'generationConfig': {
@@ -209,15 +201,16 @@ class GoogleProvider extends BaseProvider {
         },
       };
 
-      // ✨ Add systemInstruction at top level if we have system content
-      if (systemParts.isNotEmpty) {
+      // ✨ Use systemPrompt WITHOUT history (agnostic approach)
+      final systemContent = systemPromptWithoutHistory.toString();
+      if (systemContent.isNotEmpty && systemContent != '{}') {
         bodyMap['systemInstruction'] = {
           'parts': [
-            {'text': systemParts.join('\n\n')}
+            {'text': systemContent}
           ]
         };
         AILogger.d(
-            '[GoogleProvider] 🎯 Using native systemInstruction with ${systemParts.length} parts');
+            '[GoogleProvider] 🎯 Using native systemInstruction with complete systemPrompt');
       }
 
       final url = Uri.parse(

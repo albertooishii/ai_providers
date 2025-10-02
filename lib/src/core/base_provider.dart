@@ -1,6 +1,5 @@
-import 'package:ai_providers/src/models/additional_params.dart';
-
 import '../infrastructure/api_key_manager.dart';
+import '../models/additional_params.dart';
 import '../models/ai_capability.dart';
 import '../models/ai_provider_config.dart';
 import '../models/ai_provider_metadata.dart';
@@ -204,6 +203,14 @@ abstract class BaseProvider {
 
   /// Model comparison - provider specific
   int compareModels(final String a, final String b);
+
+  /// Extract and process history from AISystemPrompt
+  /// Returns a record with (extractedHistory, systemPromptWithoutHistory)
+  /// Each provider must implement this to handle history according to their API
+  ({
+    List<Map<String, dynamic>> history,
+    AISystemPrompt systemPromptWithoutHistory
+  }) processHistory(final AISystemPrompt systemPrompt);
 
   /// Main method that all providers must implement
   /// Handles all AI interactions through a unified interface

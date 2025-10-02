@@ -98,6 +98,28 @@ class XAIProvider extends BaseProvider {
   }
 
   @override
+  ({
+    List<Map<String, dynamic>> history,
+    AISystemPrompt systemPromptWithoutHistory
+  }) processHistory(final AISystemPrompt systemPrompt) {
+    // Extract history
+    final history = systemPrompt.history ?? <Map<String, dynamic>>[];
+
+    // Create new AISystemPrompt without history to avoid duplication
+    final systemPromptWithoutHistory = AISystemPrompt(
+      context: systemPrompt.context,
+      dateTime: systemPrompt.dateTime,
+      instructions: systemPrompt.instructions,
+      // history defaults to null - omitted to prevent duplication
+    );
+
+    return (
+      history: history,
+      systemPromptWithoutHistory: systemPromptWithoutHistory,
+    );
+  }
+
+  @override
   Future<ProviderResponse> sendMessage({
     required final AISystemPrompt systemPrompt,
     required final AICapability capability,
@@ -133,12 +155,16 @@ class XAIProvider extends BaseProvider {
             text: 'Error: Invalid or missing model for XAI provider');
       }
 
-      final history = systemPrompt.history ?? [];
+      // Use processHistory to extract history and clean systemPrompt
+      final (:history, :systemPromptWithoutHistory) =
+          processHistory(systemPrompt);
       final messages = <Map<String, dynamic>>[];
 
-      // Add system prompt
-      messages.add(
-          {'role': 'system', 'content': jsonEncode(systemPrompt.toJson())});
+      // Add system prompt (agnostic approach - use systemPrompt WITHOUT history)
+      final systemContent = systemPromptWithoutHistory.toString();
+      if (systemContent.isNotEmpty && systemContent != '{}') {
+        messages.add({'role': 'system', 'content': systemContent});
+      }
 
       // Add conversation history
       for (int i = 0; i < history.length; i++) {
