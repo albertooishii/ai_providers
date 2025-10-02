@@ -99,17 +99,17 @@ flutter run
 ### Generación y análisis
 | Método | Descripción | Retorno |
 |--------|-------------|---------|
-| `AI.text(String message, [AIContext? aiContext])` | Genera texto o respuestas conversacionales. | `Future<AIResponse>` |
-| `AI.image(String prompt, [AIContext? aiContext, AiImageParams? imageParams])` | Crea imágenes y devuelve objeto `AiImage` con metadatos completos. | `Future<AIResponse>` |
-| `AI.vision(String imageBase64, [String? prompt, AIContext? aiContext, String? imageMimeType])` | Analiza imágenes o realiza visión computacional. | `Future<AIResponse>` |
-| `AI.generate({required String message, required AIContext aiContext, required AICapability capability, String? imageBase64, String? imageMimeType})` | Método avanzado para elegir capability manualmente. | `Future<AIResponse>` |
+| `AI.text(String message, [AISystemPrompt? systemPrompt])` | Genera texto o respuestas conversacionales. | `Future<AIResponse>` |
+| `AI.image(String prompt, [AISystemPrompt? systemPrompt, AiImageParams? imageParams])` | Crea imágenes y devuelve objeto `AiImage` con metadatos completos. | `Future<AIResponse>` |
+| `AI.vision(String imageBase64, [String? prompt, AISystemPrompt? systemPrompt, String? imageMimeType])` | Analiza imágenes o realiza visión computacional. | `Future<AIResponse>` |
+| `AI.generate({required String message, required AISystemPrompt systemPrompt, required AICapability capability, String? imageBase64, String? imageMimeType})` | Método avanzado para elegir capability manualmente. | `Future<AIResponse>` |
 
 ### Audio (TTS/STT)
 | Método | Descripción | Retorno |
 |--------|-------------|---------|
 | `AI.speak(String text, [AiAudioParams? audioParams, bool play = false])` | Genera audio TTS y opcionalmente lo reproduce. | `Future<AIResponse>` |
-| `AI.listen({Duration? duration, Duration silenceTimeout = const Duration(seconds: 2), bool autoStop = true, AIContext? aiContext})` | Graba audio con detección de silencio y devuelve transcripción. | `Future<AIResponse>` |
-| `AI.transcribe(String audioBase64, [AIContext? aiContext])` | Transcribe audio existente en base64. | `Future<AIResponse>` |
+| `AI.listen({Duration? duration, Duration silenceTimeout = const Duration(seconds: 2), bool autoStop = true, AISystemPrompt? systemPrompt})` | Graba audio con detección de silencio y devuelve transcripción. | `Future<AIResponse>` |
+| `AI.transcribe(String audioBase64, [AISystemPrompt? systemPrompt])` | Transcribe audio existente en base64. | `Future<AIResponse>` |
 | `AI.stopSpeak()` / `AI.pauseSpeak()` | Controla la reproducción de audio en curso. | `Future<bool>` |
 | `AI.stopListen()` | Detiene la grabación activa y devuelve la transcripción parcial. | `Future<String?>` |
 

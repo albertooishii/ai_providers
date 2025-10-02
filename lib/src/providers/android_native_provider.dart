@@ -9,7 +9,7 @@ import '../models/additional_params.dart';
 import '../models/ai_provider_metadata.dart';
 import '../models/provider_response.dart';
 import '../models/ai_capability.dart';
-import '../models/ai_context.dart';
+import '../models/ai_system_prompt.dart';
 import '../models/audio_models.dart';
 import '../models/ai_audio_params.dart';
 // RealtimeClient removed - replaced by HybridConversationService
@@ -162,7 +162,7 @@ class AndroidNativeProvider {
   }
 
   Future<ProviderResponse> sendMessage({
-    required final AIContext aiContext,
+    required final AISystemPrompt systemPrompt,
     required final AICapability capability,
     final String? model,
     final String? imageBase64,

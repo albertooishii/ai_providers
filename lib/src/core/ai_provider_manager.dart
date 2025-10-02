@@ -12,7 +12,7 @@ import '../core/provider_registry.dart';
 import '../infrastructure/api_key_manager.dart';
 import '../infrastructure/cache_service.dart';
 import '../models/ai_user_preferences.dart';
-import '../models/ai_context.dart';
+import '../models/ai_system_prompt.dart';
 import '../infrastructure/http_connection_pool.dart';
 import '../infrastructure/monitoring_service.dart';
 import '../infrastructure/retry_service.dart';
@@ -205,7 +205,7 @@ class AIProviderManager {
   /// Automatically selects the optimal provider and model based on capability and user preferences
   Future<AIResponse> sendMessage({
     required final String message,
-    required final AIContext aiContext,
+    required final AISystemPrompt systemPrompt,
     final AICapability capability =
         AICapability.textGeneration, // Default to text generation
     final String? imageBase64,
@@ -250,7 +250,7 @@ class AIProviderManager {
     //     providerId: providerId,
     //     model: requestModel,
     //     history: history,
-    //     aiContext: aiContext,
+    //     systemPrompt: systemPrompt,
     //     imageBase64: imageBase64,
     //     imageMimeType: imageMimeType,
     //     additionalParams: additionalParams,
@@ -258,22 +258,24 @@ class AIProviderManager {
 
     //   return _monitoringService!.getOrCreateRequest(
     //     fingerprint,
-    //     () => _executeRequest(capability, providerId, history, aiContext, imageBase64, imageMimeType, additionalParams, requestModel),
+    //     () => _executeRequest(capability, providerId, history, systemPrompt, imageBase64, imageMimeType, additionalParams, requestModel),
     //   );
     // }
 
     // Add the user message to the context history before sending to provider
-    final updatedHistory = <Map<String, dynamic>>[...(aiContext.history ?? [])];
+    final updatedHistory = <Map<String, dynamic>>[
+      ...(systemPrompt.history ?? [])
+    ];
     updatedHistory.add({'role': 'user', 'content': message});
 
-    final contextWithMessage = AIContext(
-      context: aiContext.context,
-      dateTime: aiContext.dateTime,
-      instructions: aiContext.instructions,
+    final contextWithMessage = AISystemPrompt(
+      context: systemPrompt.context,
+      dateTime: systemPrompt.dateTime,
+      instructions: systemPrompt.instructions,
       history: updatedHistory,
-    ); // AIContext now contains the complete history including the new user message
+    ); // AISystemPrompt now contains the complete history including the new user message
     return _sendMessageWithMonitoring(
-      aiContext: contextWithMessage,
+      systemPrompt: contextWithMessage,
       capability: capability,
       imageBase64: imageBase64,
       imageMimeType: imageMimeType,
@@ -285,7 +287,7 @@ class AIProviderManager {
   /// Internal method to send message with performance monitoring and caching
   /// Uses automatic provider and model selection - no manual preferences
   Future<AIResponse> _sendMessageWithMonitoring({
-    required final AIContext aiContext,
+    required final AISystemPrompt systemPrompt,
     required final AICapability capability,
     final String? imageBase64,
     final String? imageMimeType,
@@ -343,7 +345,7 @@ class AIProviderManager {
 
         cacheKey = CacheKey(
             providerId: providerId,
-            prompt: aiContext.history?.toString() ?? '',
+            prompt: systemPrompt.history?.toString() ?? '',
             model: modelToUseForCache ?? '');
 
         final cachedResponse = await _cacheService!.memoryCache?.get(cacheKey);
@@ -402,7 +404,7 @@ class AIProviderManager {
           // If a provider returns a different type (legacy AIResponse or other), fail fast
           // so the provider implementation can be updated during migration.
           final ProviderResponse providerResp = await provider.sendMessage(
-            aiContext: aiContext,
+            systemPrompt: systemPrompt,
             capability: capability,
             model: modelToUse,
             imageBase64: effectiveImageBase64,

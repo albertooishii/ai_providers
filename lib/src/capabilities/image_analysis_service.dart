@@ -21,7 +21,7 @@ class ImageAnalysisService {
   Future<AIResponse> analyze(
     final String imageBase64, [
     final String? prompt,
-    final AIContext? aiContext,
+    final AISystemPrompt? systemPrompt,
     final String? imageMimeType,
   ]) async {
     try {
@@ -30,7 +30,7 @@ class ImageAnalysisService {
 
       // Usar system prompt por defecto si no se proporciona
       final effectiveContext =
-          aiContext ?? _createDefaultImageAnalysisContext();
+          systemPrompt ?? _createDefaultImageAnalysisContext();
 
       AILogger.d(
           '[ImageAnalysisService] 👁️ Analizando imagen: ${effectivePrompt.substring(0, effectivePrompt.length.clamp(0, 50))}...');
@@ -38,7 +38,7 @@ class ImageAnalysisService {
       // Llamar directamente a AIProviderManager (no a AI.vision() para evitar circular dependency)
       return await AIProviderManager.instance.sendMessage(
         message: effectivePrompt,
-        aiContext: effectiveContext,
+        systemPrompt: effectiveContext,
         capability: AICapability.imageAnalysis,
         imageBase64: imageBase64,
         imageMimeType: imageMimeType ?? 'image/jpeg',
@@ -52,7 +52,7 @@ class ImageAnalysisService {
   // === MÉTODOS PRIVADOS ===
 
   /// Crea un system prompt por defecto optimizado para análisis de imágenes
-  AIContext _createDefaultImageAnalysisContext() {
+  AISystemPrompt _createDefaultImageAnalysisContext() {
     final instructions = <String, dynamic>{
       'role':
           'Eres un experto analizador de imágenes con capacidades de visión avanzada.',
@@ -68,7 +68,7 @@ class ImageAnalysisService {
           'Solo describe lo que puedes ver claramente, evita especulaciones.',
     };
 
-    return AIContext(
+    return AISystemPrompt(
       context: {
         'task': 'image_analysis',
         'mode': 'vision',

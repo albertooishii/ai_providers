@@ -23,7 +23,7 @@ class ImageGenerationService {
   /// Acepta parámetros opcionales para casos avanzados pero mantiene simplicidad.
   Future<AIResponse> generateImage(
     final String prompt, [
-    final AIContext? aiContext,
+    final AISystemPrompt? systemPrompt,
     final bool saveToCache = true,
     final AiImageParams? imageParams,
   ]) async {
@@ -33,12 +33,12 @@ class ImageGenerationService {
       );
 
       // Crear Context respetando el original y fusionando parámetros de imagen
-      final finalContext = _buildFinalContext(aiContext, imageParams);
+      final finalContext = _buildFinalContext(systemPrompt, imageParams);
 
       // Llamar directamente a AIProviderManager con todos los parámetros
       return await AIProviderManager.instance.sendMessage(
         message: prompt,
-        aiContext: finalContext,
+        systemPrompt: finalContext,
         capability: AICapability.imageGeneration,
         saveToCache: saveToCache,
         additionalParams:
@@ -53,8 +53,8 @@ class ImageGenerationService {
   // === MÉTODOS PRIVADOS ===
 
   /// 🔄 Construye Context final respetando el original y fusionando parámetros de imagen
-  AIContext _buildFinalContext(
-    final AIContext? originalContext,
+  AISystemPrompt _buildFinalContext(
+    final AISystemPrompt? originalContext,
     final AiImageParams? imageParams,
   ) {
     // Si no hay context original, crear uno desde parámetros
@@ -89,7 +89,7 @@ class ImageGenerationService {
       mergedInstructions['fidelity'] = imageParams.fidelity;
     }
 
-    return AIContext(
+    return AISystemPrompt(
       context: originalContext.context,
       dateTime: originalContext.dateTime,
       history: originalContext.history,
@@ -99,7 +99,7 @@ class ImageGenerationService {
 
   /// Crea Context desde AiImageParams o valores por defecto
   /// Respeta el context original y concatena parámetros de imagen
-  AIContext _createContextFromParams(final AiImageParams? params) {
+  AISystemPrompt _createContextFromParams(final AiImageParams? params) {
     final context = <String, dynamic>{
       'task': 'image_generation',
     };
@@ -125,7 +125,7 @@ class ImageGenerationService {
       if (params.fidelity != null) instructions['fidelity'] = params.fidelity;
     }
 
-    return AIContext(
+    return AISystemPrompt(
       context: context,
       dateTime: DateTime.now(),
       instructions: instructions,

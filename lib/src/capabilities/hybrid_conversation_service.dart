@@ -24,7 +24,7 @@ class HybridConversationService {
   // =================================================================
 
   bool _isActive = false;
-  AIContext? _currentAiContext;
+  AISystemPrompt? _currentAiContext;
 
   // Stream controllers para eventos de conversación
   final StreamController<String> _responseController =
@@ -63,7 +63,7 @@ class HybridConversationService {
   bool get isActive => _isActive;
 
   /// System prompt actual para la conversación
-  AIContext? get currentAiContext => _currentAiContext;
+  AISystemPrompt? get currentAiContext => _currentAiContext;
 
   // =================================================================
   // CONVERSATION MANAGEMENT
@@ -73,7 +73,7 @@ class HybridConversationService {
   ///
   /// [context] - Prompt del sistema que define el contexto y comportamiento de la IA
   /// [initialMessage] - Mensaje inicial opcional de la IA
-  Future<void> startConversation(final AIContext aiContext,
+  Future<void> startConversation(final AISystemPrompt systemPrompt,
       {final String? initialMessage}) async {
     if (_isActive) {
       AILogger.w('[HybridConversation] Ya hay una conversación activa');
@@ -84,7 +84,7 @@ class HybridConversationService {
       AILogger.d('[HybridConversation] 🚀 Iniciando conversación realtime');
 
       _isActive = true;
-      _currentAiContext = aiContext;
+      _currentAiContext = systemPrompt;
       _conversationHistory.clear();
 
       _stateController.add(HybridConversationState.initializing);

@@ -31,12 +31,12 @@ class AI {
   ///
   /// [context] - Opcional. Si no se proporciona, usa configuración por defecto
   static Future<AIResponse> text(final String message,
-      [final AIContext? aiContext]) async {
+      [final AISystemPrompt? systemPrompt]) async {
     AILogger.d('[AI] 💬 text() - generating response: ${message.length} chars');
     await _manager.initialize();
 
     // Delegar a TextGenerationService (nueva arquitectura)
-    return TextGenerationService.instance.generate(message, aiContext);
+    return TextGenerationService.instance.generate(message, systemPrompt);
   }
 
   /// 🖼️ Generación de imágenes
@@ -71,7 +71,7 @@ class AI {
   /// [imageParams] - Opcional. Parámetros específicos de imagen. Ver [AiImageParams] para detalles completos
   static Future<AIResponse> image(
     final String prompt, [
-    final AIContext? aiContext,
+    final AISystemPrompt? systemPrompt,
     final AiImageParams? imageParams,
   ]) async {
     AILogger.d(
@@ -80,7 +80,7 @@ class AI {
 
     // Delegar siempre a ImageGenerationService que maneja todos los casos
     return ImageGenerationService.instance
-        .generateImage(prompt, aiContext, true, imageParams);
+        .generateImage(prompt, systemPrompt, true, imageParams);
   }
 
   /// 👁️ Análisis de imagen/visión
@@ -91,7 +91,7 @@ class AI {
   static Future<AIResponse> vision(
     final String imageBase64, [
     final String? prompt,
-    final AIContext? aiContext,
+    final AISystemPrompt? systemPrompt,
     final String? imageMimeType,
   ]) async {
     AILogger.d('[AI] 👁️ vision() - analyzing image');
@@ -101,7 +101,7 @@ class AI {
     return ImageAnalysisService.instance.analyze(
       imageBase64,
       prompt,
-      aiContext,
+      systemPrompt,
       imageMimeType,
     );
   }
@@ -164,7 +164,7 @@ class AI {
     final Duration? duration,
     final Duration silenceTimeout = const Duration(seconds: 2),
     final bool autoStop = true,
-    final AIContext? aiContext,
+    final AISystemPrompt? systemPrompt,
   }) async {
     // Log de configuración inteligente
     final configLog = duration != null
@@ -182,7 +182,7 @@ class AI {
       duration: duration,
       silenceTimeout: silenceTimeout,
       autoStop: autoStop,
-      aiContext: aiContext,
+      systemPrompt: systemPrompt,
     );
 
     // Retornar AIResponse con el resultado
@@ -231,13 +231,13 @@ class AI {
   /// [audioBase64] - Audio en formato base64 a transcribir
   /// [context] - Instrucciones del sistema para la transcripción
   static Future<AIResponse> transcribe(final String audioBase64,
-      [final AIContext? aiContext]) async {
+      [final AISystemPrompt? systemPrompt]) async {
     AILogger.d('[AI] 🎧 transcribe() - transcribing audio');
     await _manager.initialize();
 
     // Delegar a AudioTranscriptionService (nueva arquitectura)
     return AudioTranscriptionService.instance
-        .transcribe(audioBase64, aiContext);
+        .transcribe(audioBase64, systemPrompt);
   }
 
   /// 💬 Crear conversación híbrida con streams TTS/STT/respuesta
@@ -255,7 +255,7 @@ class AI {
   /// Permite especificar capability manualmente cuando necesites control total
   static Future<AIResponse> generate({
     required final String message,
-    required final AIContext aiContext,
+    required final AISystemPrompt systemPrompt,
     required final AICapability capability,
     final String? imageBase64,
     final String? imageMimeType,
@@ -264,7 +264,7 @@ class AI {
     await _manager.initialize();
     return _manager.sendMessage(
       message: message,
-      aiContext: aiContext,
+      systemPrompt: systemPrompt,
       capability: capability,
       imageBase64: imageBase64,
       imageMimeType: imageMimeType,

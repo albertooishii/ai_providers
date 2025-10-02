@@ -309,7 +309,7 @@ class _ImageDemoScreenState extends State<ImageDemoScreen>
                                         width: double.infinity,
                                         height: double.infinity,
                                         errorBuilder:
-                                            (aiContext, error, stackTrace) {
+                                            (systemPrompt, error, stackTrace) {
                                           return _buildImageErrorWidget();
                                         },
                                       )
@@ -317,7 +317,7 @@ class _ImageDemoScreenState extends State<ImageDemoScreen>
                                         ? FutureBuilder<File>(
                                             future: _loadImageFromCache(
                                                 _generatedImageFileName!),
-                                            builder: (aiContext, snapshot) {
+                                            builder: (systemPrompt, snapshot) {
                                               if (snapshot.hasData &&
                                                   snapshot.data!.existsSync()) {
                                                 return Image.file(
@@ -326,7 +326,7 @@ class _ImageDemoScreenState extends State<ImageDemoScreen>
                                                       .contain, // Maintain aspect ratio but fill height
                                                   width: double.infinity,
                                                   height: double.infinity,
-                                                  errorBuilder: (aiContext,
+                                                  errorBuilder: (systemPrompt,
                                                       error, stackTrace) {
                                                     return _buildImageErrorWidget();
                                                   },
@@ -437,7 +437,8 @@ class _ImageDemoScreenState extends State<ImageDemoScreen>
                               child: Image.file(
                                 _selectedImageFile!,
                                 fit: BoxFit.cover,
-                                errorBuilder: (aiContext, error, stackTrace) {
+                                errorBuilder:
+                                    (systemPrompt, error, stackTrace) {
                                   return Container(
                                     decoration: BoxDecoration(
                                       gradient: LinearGradient(
@@ -513,7 +514,7 @@ class _ImageDemoScreenState extends State<ImageDemoScreen>
                                   children: [
                                     FutureBuilder<int>(
                                       future: _selectedImageFile!.length(),
-                                      builder: (aiContext, snapshot) {
+                                      builder: (systemPrompt, snapshot) {
                                         if (snapshot.hasData) {
                                           return Text(
                                             FileUtils.formatFileSize(
@@ -697,7 +698,7 @@ class _ImageDemoScreenState extends State<ImageDemoScreen>
 
     try {
       // Create system prompt for image generation
-      final aiContext = AIContext(
+      final systemPrompt = AISystemPrompt(
         context:
             'You are an expert AI image generator. Create high-quality, detailed images based on user prompts.',
         dateTime: DateTime.now(),
@@ -724,7 +725,7 @@ class _ImageDemoScreenState extends State<ImageDemoScreen>
       // Use AI.image for real image generation
       final response = await AI.image(
         _promptController.text.trim(),
-        aiContext,
+        systemPrompt,
       );
 
       if (!mounted) return;
@@ -834,7 +835,7 @@ class _ImageDemoScreenState extends State<ImageDemoScreen>
 
     try {
       // Create system prompt for image analysis
-      final aiContext = AIContext(
+      final systemPrompt = AISystemPrompt(
         context:
             'You are an expert image analysis AI. Provide detailed, accurate analysis of images.',
         dateTime: DateTime.now(),
@@ -866,7 +867,7 @@ class _ImageDemoScreenState extends State<ImageDemoScreen>
         '- Technical aspects (quality, estimated resolution)\n'
         '- Any interesting details or insights\n\n'
         'Format your response in a clear, structured way with sections and bullet points.',
-        aiContext,
+        systemPrompt,
         _selectedImageMimeType,
       );
 
@@ -1134,7 +1135,7 @@ class _ImageDemoScreenState extends State<ImageDemoScreen>
           FutureBuilder<List<String>>(
             key: ValueKey('models_${selectedProvider}_$capability'),
             future: _getModelsForProvider(selectedProvider),
-            builder: (aiContext, snapshot) {
+            builder: (systemPrompt, snapshot) {
               if (!snapshot.hasData) {
                 return const SizedBox(
                   height: 40,
@@ -1383,7 +1384,7 @@ class _ImageDemoScreenState extends State<ImageDemoScreen>
                             ? FutureBuilder<File>(
                                 future: _loadImageFromCache(
                                     _generatedImageFileName!),
-                                builder: (aiContext, snapshot) {
+                                builder: (systemPrompt, snapshot) {
                                   if (snapshot.hasData &&
                                       snapshot.data!.existsSync()) {
                                     return Image.file(

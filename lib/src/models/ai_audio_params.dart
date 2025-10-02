@@ -4,7 +4,7 @@
 /// de audio desde texto usando `AI.speak()`, evitando strings mágicos y ofreciendo
 /// constantes tipadas para voice synthesis.
 ///
-/// **Nota:** Para transcripción de audio (STT), usar `AI.listen()` con `AIContext`.
+/// **Nota:** Para transcripción de audio (STT), usar `AI.listen()` con `AISystemPrompt`.
 ///
 /// **Compatibilidad con proveedores TTS:**
 /// - **OpenAI**: Soporte completo (speed, response_format, language, accent+emotion en instructions)

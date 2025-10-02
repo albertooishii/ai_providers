@@ -66,7 +66,7 @@ class AudioGenerationService {
       // Llamar directamente a AIProviderManager - siempre guarda en caché para máxima flexibilidad
       final response = await AIProviderManager.instance.sendMessage(
         message: text,
-        aiContext: context,
+        systemPrompt: context,
         capability: AICapability.audioGeneration,
         additionalParams:
             audioParams != null ? AdditionalParams.audio(audioParams) : null,
@@ -105,7 +105,7 @@ class AudioGenerationService {
       // Llamar directamente a AIProviderManager con control completo
       final response = await AIProviderManager.instance.sendMessage(
         message: text,
-        aiContext: context,
+        systemPrompt: context,
         capability: AICapability.audioGeneration,
         additionalParams:
             audioParams != null ? AdditionalParams.audio(audioParams) : null,
@@ -287,7 +287,7 @@ class AudioGenerationService {
   // === MÉTODOS PRIVADOS ===
 
   /// Crea Context para síntesis de audio con parámetros tipados
-  AIContext _createSynthesizeContext(final AiAudioParams? audioParams) {
+  AISystemPrompt _createSynthesizeContext(final AiAudioParams? audioParams) {
     final effectiveParams = audioParams ?? const AiAudioParams();
 
     final context = <String, dynamic>{
@@ -301,7 +301,7 @@ class AudioGenerationService {
       ...effectiveParams.toMap(),
     };
 
-    return AIContext(
+    return AISystemPrompt(
       context: context,
       dateTime: DateTime.now(),
       instructions: instructions,

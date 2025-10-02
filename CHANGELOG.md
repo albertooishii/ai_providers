@@ -1,5 +1,47 @@
 # Registro de Cambios
 
+## [1.6.0] - 2 de octubre de 2025 🔄 REFACTOR: AIContext → AISystemPrompt + Voice Management
+
+### 🔄 Breaking Changes - Restauración de Nombres Correctos
+- **AIContext → AISystemPrompt**: Renombrado clase principal para reflejar correctamente que todos los providers soportan system prompts
+- **aiContext → systemPrompt**: Renombrado parámetro en todas las APIs para consistencia
+- **Archivo renombrado**: `ai_context.dart` → `ai_system_prompt.dart`
+- **Imports actualizados**: Todos los imports actualizados automáticamente en lib/ y example/
+
+### ✨ Sistema de Gestión de Voces
+- **AdditionalParams sealed class**: Nueva abstracción type-safe para parámetros de imagen y audio
+- **Voice parameter**: Parámetro `voice` añadido a `sendMessage()` en BaseProvider
+- **Jerarquía de voces**: Saved voice → Config default → Hardcoded fallback
+- **AIProviderManager**: Nuevos métodos `_selectVoice()` y `getVoiceForRequest()`
+- **Getters convenientes**: `imageParams` y `audioParams` en AdditionalParams
+
+### 🎯 Corrección de Soporte System Prompts
+- **xAI (Grok)**: Verificado soporte de `role: system` en messages (OpenAI compatible)
+- **Google Gemini**: Usa `systemInstruction` field nativo (no en messages)
+- **OpenAI**: Usa `role: system` en messages array (formato estándar)
+- **Documentación**: Rationale actualizado - TODOS los providers soportan system prompts
+
+### 🔧 Mejoras Técnicas
+- **Serialización explícita**: `profile.toJson()` en lugar de pasar objetos directamente
+- **Prompt simple + Context poderoso**: Patrón híbrido restaurado para mejor comportamiento del modelo
+- **Debug mejorado**: JSON extraction con mejor logging y manejo de errores
+
+### 📋 Migración Requerida
+```dart
+// ❌ ANTES (v1.5.x)
+final aiContext = AIContext(context: profile, ...);
+await AI.text(prompt, aiContext);
+
+// ✅ AHORA (v1.6.0)
+final systemPrompt = AISystemPrompt(context: profile, ...);
+await AI.text(prompt, systemPrompt);
+```
+
+### 🧪 Testing
+- **dart analyze**: 0 issues en ai_providers y example
+- **Tests completos**: Sistema de voces completamente implementado
+- **Pre-commit hooks**: dart fix, dart format, dart doc ejecutados automáticamente
+
 ## [1.5.0] - 1 de octubre de 2025 🚀 SISTEMA SOURCEIMAGEBASE64 + PROMPT REVISADO JSON
 
 ### 🔄 Breaking Changes - Sistema Seed Eliminado

@@ -55,7 +55,7 @@ export 'src/models/audio_models.dart';
 export 'src/models/ai_init_config.dart';
 
 /// Generic system prompt model for AI providers
-export 'src/models/ai_context.dart';
+export 'src/models/ai_system_prompt.dart';
 
 /// Instructions for audio transcription (Speech-to-Text)
 

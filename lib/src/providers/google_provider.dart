@@ -6,7 +6,7 @@ import '../core/provider_registry.dart';
 import '../models/additional_params.dart';
 import '../models/provider_response.dart';
 import '../models/ai_provider_metadata.dart';
-import '../models/ai_context.dart';
+import '../models/ai_system_prompt.dart';
 import '../models/ai_audio_params.dart';
 
 import '../utils/json_utils.dart' as json_utils;
@@ -102,7 +102,7 @@ class GoogleProvider extends BaseProvider {
 
   @override
   Future<ProviderResponse> sendMessage({
-    required final AIContext aiContext,
+    required final AISystemPrompt systemPrompt,
     required final AICapability capability,
     final String? model,
     final String? imageBase64,
@@ -114,24 +114,25 @@ class GoogleProvider extends BaseProvider {
       case AICapability.textGeneration:
       case AICapability.imageAnalysis:
         return _sendTextRequest(
-            aiContext, model, imageBase64, imageMimeType, additionalParams);
+            systemPrompt, model, imageBase64, imageMimeType, additionalParams);
       case AICapability.imageGeneration:
-        return _sendImageGenerationRequest(aiContext, model, additionalParams);
+        return _sendImageGenerationRequest(
+            systemPrompt, model, additionalParams);
       case AICapability.audioGeneration:
-        return _sendTTSRequest(aiContext, model, additionalParams, voice);
+        return _sendTTSRequest(systemPrompt, model, additionalParams, voice);
       case AICapability.audioTranscription:
         return _sendTranscriptionRequest(
           imageBase64 ?? '',
-          aiContext,
+          systemPrompt,
           model,
         );
       case AICapability.realtimeConversation:
-        return _handleRealtimeRequest(aiContext, model, additionalParams);
+        return _handleRealtimeRequest(systemPrompt, model, additionalParams);
     }
   }
 
   Future<ProviderResponse> _sendTextRequest(
-    final AIContext aiContext,
+    final AISystemPrompt systemPrompt,
     final String? model,
     final String? imageBase64,
     final String? imageMimeType,
@@ -145,7 +146,7 @@ class GoogleProvider extends BaseProvider {
             text: 'Error: Invalid or missing model for Google provider');
       }
 
-      final history = aiContext.history ?? [];
+      final history = systemPrompt.history ?? [];
       final contents = <Map<String, dynamic>>[];
 
       // Add conversation history
@@ -168,11 +169,11 @@ class GoogleProvider extends BaseProvider {
         contents.add({'role': role, 'parts': parts});
       }
 
-      // ✨ Build system instruction from AIContext
+      // ✨ Build system instruction from AISystemPrompt
       final systemParts = <String>[];
 
       // Include context
-      final contextJson = aiContext.toJson();
+      final contextJson = systemPrompt.toJson();
       final contextData = contextJson['context'];
       if (contextData != null) {
         final contextStr =
@@ -184,15 +185,16 @@ class GoogleProvider extends BaseProvider {
         }
       }
 
-      // Include instructions from aiContext.instructions
-      if (aiContext.instructions.isNotEmpty) {
-        final instructionsStr = jsonEncode(aiContext.instructions);
+      // Include instructions from systemPrompt.instructions
+      if (systemPrompt.instructions.isNotEmpty) {
+        final instructionsStr = jsonEncode(systemPrompt.instructions);
         if (instructionsStr.isNotEmpty &&
             instructionsStr != '{}' &&
             instructionsStr != 'null') {
           // If instructions contain a 'raw' key, use that directly
-          if (aiContext.instructions.containsKey('raw')) {
-            systemParts.add('Instructions:\n${aiContext.instructions['raw']}');
+          if (systemPrompt.instructions.containsKey('raw')) {
+            systemParts
+                .add('Instructions:\n${systemPrompt.instructions['raw']}');
           } else {
             systemParts.add('Instructions:\n$instructionsStr');
           }
@@ -393,11 +395,11 @@ class GoogleProvider extends BaseProvider {
   }
 
   Future<ProviderResponse> _sendImageGenerationRequest(
-    final AIContext aiContext,
+    final AISystemPrompt systemPrompt,
     final String? model,
     final AdditionalParams? additionalParams,
   ) async {
-    final history = aiContext.history ?? [];
+    final history = systemPrompt.history ?? [];
     final prompt = history.isNotEmpty ? history.last['content'] ?? '' : '';
     if (prompt.isEmpty) {
       return ProviderResponse(
@@ -463,8 +465,8 @@ After generating the image, provide your response as a JSON object with the foll
         'parts': userParts,
       });
 
-      // ✨ 2. Build systemInstruction from AIContext (mismo enfoque que _sendTextRequest)
-      final contextJson = aiContext.toJson();
+      // ✨ 2. Build systemInstruction from AISystemPrompt (mismo enfoque que _sendTextRequest)
+      final contextJson = systemPrompt.toJson();
       final systemParts = <String>[];
 
       // Include context
@@ -479,15 +481,16 @@ After generating the image, provide your response as a JSON object with the foll
         }
       }
 
-      // Include instructions from aiContext.instructions
-      if (aiContext.instructions.isNotEmpty) {
-        final instructionsStr = jsonEncode(aiContext.instructions);
+      // Include instructions from systemPrompt.instructions
+      if (systemPrompt.instructions.isNotEmpty) {
+        final instructionsStr = jsonEncode(systemPrompt.instructions);
         if (instructionsStr.isNotEmpty &&
             instructionsStr != '{}' &&
             instructionsStr != 'null') {
           // If instructions contain a 'raw' key, use that directly
-          if (aiContext.instructions.containsKey('raw')) {
-            systemParts.add('Instructions:\n${aiContext.instructions['raw']}');
+          if (systemPrompt.instructions.containsKey('raw')) {
+            systemParts
+                .add('Instructions:\n${systemPrompt.instructions['raw']}');
           } else {
             systemParts.add('Instructions:\n$instructionsStr');
           }
@@ -533,12 +536,12 @@ After generating the image, provide your response as a JSON object with the foll
 
   /// Native Gemini TTS using generateContent
   Future<ProviderResponse> _sendTTSRequest(
-    final AIContext aiContext,
+    final AISystemPrompt systemPrompt,
     final String? model,
     final AdditionalParams? additionalParams,
     final String? voice,
   ) async {
-    final history = aiContext.history ?? [];
+    final history = systemPrompt.history ?? [];
     final text = history.isNotEmpty ? history.last['content'] ?? '' : '';
     if (text.isEmpty) {
       return ProviderResponse(text: 'Error: No text provided for TTS.');
@@ -692,7 +695,7 @@ Requirements:
   /// Native Gemini STT using generateContent
   Future<ProviderResponse> _sendTranscriptionRequest(
     final String audioBase64,
-    final AIContext aiContext,
+    final AISystemPrompt systemPrompt,
     final String? model,
   ) async {
     if (audioBase64.isEmpty) {
@@ -705,7 +708,7 @@ Requirements:
           model ?? getDefaultModel(AICapability.audioTranscription);
 
       // Construir prompt desde Context
-      final promptText = _buildPromptFromContext(aiContext);
+      final promptText = _buildPromptFromContext(systemPrompt);
       final transcriptionPrompt = promptText.isNotEmpty
           ? promptText
           : 'Please transcribe this audio file to text. Provide only the transcribed text without additional comments.';
@@ -759,7 +762,7 @@ Requirements:
 
   /// Handle realtime conversation setup
   Future<ProviderResponse> _handleRealtimeRequest(
-    final AIContext aiContext,
+    final AISystemPrompt systemPrompt,
     final String? model,
     final AdditionalParams? additionalParams,
   ) async {
@@ -773,7 +776,7 @@ Requirements:
         model ?? getDefaultModel(AICapability.realtimeConversation);
     return ProviderResponse(
       text:
-          'Realtime conversation session configured successfully. Provider: google, Model: $realtimeModel, History: ${aiContext.history?.length ?? 0} messages',
+          'Realtime conversation session configured successfully. Provider: google, Model: $realtimeModel, History: ${systemPrompt.history?.length ?? 0} messages',
     );
   }
 
@@ -787,8 +790,8 @@ Requirements:
     final String? model,
     final AdditionalParams? additionalParams,
   }) async {
-    // Create temporary AIContext for TTS
-    final aiContext = AIContext(
+    // Create temporary AISystemPrompt for TTS
+    final systemPrompt = AISystemPrompt(
       context: '',
       dateTime: DateTime.now(),
       instructions: {},
@@ -798,7 +801,7 @@ Requirements:
     );
 
     return _sendTTSRequest(
-      aiContext,
+      systemPrompt,
       model,
       additionalParams,
       voice,
@@ -808,10 +811,10 @@ Requirements:
   Future<ProviderResponse> transcribeAudio({
     required final String audioBase64,
     final String? model,
-    final AIContext? aiContext,
+    final AISystemPrompt? systemPrompt,
   }) async {
-    final effectiveContext = aiContext ??
-        AIContext(
+    final effectiveContext = systemPrompt ??
+        AISystemPrompt(
           context: {'task': 'audio_transcription'},
           dateTime: DateTime.now(),
           instructions: {},
@@ -1069,9 +1072,9 @@ Requirements:
       .any((final v) => v.name.toLowerCase() == voiceName.toLowerCase());
 
   /// Construye prompt para transcripción desde Context
-  String _buildPromptFromContext(final AIContext aiContext) {
+  String _buildPromptFromContext(final AISystemPrompt systemPrompt) {
     final parts = <String>[];
-    final contextJson = aiContext.toJson();
+    final contextJson = systemPrompt.toJson();
 
     // Agregar contexto usando serialización correcta
     final contextData = contextJson['context'];
@@ -1084,8 +1087,8 @@ Requirements:
     }
 
     // Agregar instrucciones si hay
-    if (aiContext.instructions.isNotEmpty) {
-      final instructionsStr = jsonEncode(aiContext.instructions);
+    if (systemPrompt.instructions.isNotEmpty) {
+      final instructionsStr = jsonEncode(systemPrompt.instructions);
       if (instructionsStr.isNotEmpty && instructionsStr != '{}') {
         parts.add(instructionsStr);
       }

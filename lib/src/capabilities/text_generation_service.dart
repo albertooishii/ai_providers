@@ -19,19 +19,19 @@ class TextGenerationService {
   /// [context] - Opcional. Si no se proporciona, usa configuración por defecto.
   Future<AIResponse> generate(
     final String message, [
-    final AIContext? aiContext,
+    final AISystemPrompt? systemPrompt,
   ]) async {
     try {
       AILogger.d(
           '[TextGenerationService] 🤖 Generando texto: ${message.substring(0, message.length.clamp(0, 50))}...');
 
       // Usar system prompt por defecto si no se proporciona
-      final effectiveContext = aiContext ?? _createDefaultTextContext();
+      final effectiveContext = systemPrompt ?? _createDefaultTextContext();
 
       // Llamar directamente a AIProviderManager (no a AI.text() para evitar circular dependency)
       return await AIProviderManager.instance.sendMessage(
         message: message,
-        aiContext: effectiveContext,
+        systemPrompt: effectiveContext,
       );
     } catch (e) {
       AILogger.e('[TextGenerationService] ❌ Error generando texto: $e');
@@ -48,12 +48,12 @@ class TextGenerationService {
     try {
       AILogger.d('[TextGenerationService] 🔧 Generando con defaults...');
 
-      final aiContext = _createDefaultTextContext(
+      final systemPrompt = _createDefaultTextContext(
         context: context,
         conversationHistory: conversationHistory,
       );
 
-      return await generate(message, aiContext);
+      return await generate(message, systemPrompt);
     } catch (e) {
       AILogger.e('[TextGenerationService] ❌ Error generando con defaults: $e');
       rethrow;
@@ -63,13 +63,13 @@ class TextGenerationService {
   /// Genera conversación con historial - para uso avanzado
   Future<AIResponse> generateWithHistory(
     final String message, {
-    final AIContext? aiContext,
+    final AISystemPrompt? systemPrompt,
     final List<Map<String, dynamic>>? conversationHistory,
   }) async {
     try {
       AILogger.d('[TextGenerationService] 💬 Generando con historial...');
 
-      final effectiveContext = aiContext ??
+      final effectiveContext = systemPrompt ??
           _createDefaultTextContext(conversationHistory: conversationHistory);
 
       // Añadir historial al context
@@ -85,7 +85,7 @@ class TextGenerationService {
   }
 
   /// Crea Context por defecto optimizado para generación de texto
-  AIContext _createDefaultTextContext({
+  AISystemPrompt _createDefaultTextContext({
     final Map<String, dynamic>? context,
     final List<Map<String, dynamic>>? conversationHistory,
   }) {
@@ -113,7 +113,7 @@ class TextGenerationService {
       'format': 'Usa markdown para formatear respuestas cuando sea apropiado.',
     };
 
-    return AIContext(
+    return AISystemPrompt(
       context: defaultContext,
       dateTime: DateTime.now(),
       instructions: instructions,

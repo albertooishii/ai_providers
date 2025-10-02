@@ -5,7 +5,7 @@ import '../core/provider_registry.dart';
 import '../models/additional_params.dart';
 import '../models/provider_response.dart';
 import '../models/ai_provider_metadata.dart';
-import '../models/ai_context.dart';
+import '../models/ai_system_prompt.dart';
 import 'package:http/http.dart' as http;
 import '../utils/logger.dart';
 import '../models/ai_capability.dart';
@@ -99,7 +99,7 @@ class XAIProvider extends BaseProvider {
 
   @override
   Future<ProviderResponse> sendMessage({
-    required final AIContext aiContext,
+    required final AISystemPrompt systemPrompt,
     required final AICapability capability,
     final String? model,
     final String? imageBase64,
@@ -111,7 +111,7 @@ class XAIProvider extends BaseProvider {
       case AICapability.textGeneration:
       case AICapability.imageAnalysis:
         return _sendTextRequest(
-            aiContext, model, imageBase64, imageMimeType, additionalParams);
+            systemPrompt, model, imageBase64, imageMimeType, additionalParams);
       default:
         return ProviderResponse(
             text: 'Capability $capability not supported by XAI provider');
@@ -119,7 +119,7 @@ class XAIProvider extends BaseProvider {
   }
 
   Future<ProviderResponse> _sendTextRequest(
-    final AIContext aiContext,
+    final AISystemPrompt systemPrompt,
     final String? model,
     final String? imageBase64,
     final String? imageMimeType,
@@ -133,12 +133,12 @@ class XAIProvider extends BaseProvider {
             text: 'Error: Invalid or missing model for XAI provider');
       }
 
-      final history = aiContext.history ?? [];
+      final history = systemPrompt.history ?? [];
       final messages = <Map<String, dynamic>>[];
 
       // Add system prompt
-      messages
-          .add({'role': 'system', 'content': jsonEncode(aiContext.toJson())});
+      messages.add(
+          {'role': 'system', 'content': jsonEncode(systemPrompt.toJson())});
 
       // Add conversation history
       for (int i = 0; i < history.length; i++) {
