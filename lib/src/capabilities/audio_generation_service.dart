@@ -8,6 +8,7 @@ import '../../ai_providers.dart';
 import '../core/ai_provider_manager.dart';
 import '../models/additional_params.dart';
 import '../utils/logger.dart';
+import '../infrastructure/cache_service.dart';
 
 /// 🎤 AudioGenerationService - Servicio completo de generación de audio
 ///
@@ -210,13 +211,25 @@ class AudioGenerationService {
         // Already a full path
         fullPath = fileName;
       } else {
-        // Construct path using MediaPersistenceService - need to get audio directory
-        // For now, use the standard temp cache path
-        fullPath = '/tmp/ai_providers_cache/audio/$fileName';
+        // Construct path using CompleteCacheService to get the correct audio directory
+        try {
+          final cacheService = CompleteCacheService.instance;
+          final audioDir = await cacheService.getAudioCacheDirectory();
+          fullPath = '${audioDir.path}/$fileName';
+        } on Exception catch (e) {
+          AILogger.w(
+              '[AudioGenerationService] Error obteniendo directorio de audio: $e');
+          return false;
+        }
       }
 
       if (!File(fullPath).existsSync()) {
-        AILogger.w('[AudioGenerationService] Archivo no existe: $fullPath');
+        AILogger.w('[AudioGenerationService] ⚠️ Archivo no existe: $fullPath');
+        AILogger.i(
+            '[AudioGenerationService] 🔄 Archivo borrado tras limpiar caché. Se regenerará automáticamente.');
+
+        // Retornar false - ahora que el caché en memoria también se limpia,
+        // no debería haber más cache hits inválidos
         return false;
       }
 

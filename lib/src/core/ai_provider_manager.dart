@@ -447,11 +447,17 @@ class AIProviderManager {
           if (providerResp.audioBase64 != null &&
               providerResp.audioBase64!.isNotEmpty) {
             try {
+              AILogger.d(
+                  '[AIProviderManager] 🎵 Processing audio from provider: ${providerResp.audioBase64!.length} chars');
+
               // Extraer formato de audio deseado desde additionalParams
               String outputFormat = 'm4a'; // Default
               if (additionalParams?.audioParams != null) {
                 outputFormat = additionalParams!.audioParams!.audioFormat;
               }
+
+              AILogger.d(
+                  '[AIProviderManager] 🎵 Target audio format: $outputFormat');
 
               final result = await MediaPersistenceService.instance
                   .saveBase64AudioComplete(
@@ -464,12 +470,22 @@ class AIProviderManager {
                 convertedAudioBase64 =
                     result.base64; // Base64 del M4A convertido
                 AILogger.d(
-                    '[AIProviderManager] Audio converted and saved: $outputFormat');
+                    '[AIProviderManager] 🎵 Audio converted and saved: $outputFormat');
+                AILogger.d(
+                    '[AIProviderManager] 🎵 Audio file path: $audioFileName');
+                AILogger.d(
+                    '[AIProviderManager] 🎵 Converted audio base64: ${convertedAudioBase64.length} chars');
+              } else {
+                AILogger.w(
+                    '[AIProviderManager] ❌ Audio conversion returned null result');
               }
             } on Exception catch (e) {
               AILogger.w(
                   '[AIProviderManager] Failed to persist provider audio: $e');
             }
+          } else {
+            AILogger.d(
+                '[AIProviderManager] 🎵 No audioBase64 in provider response');
           }
 
           // Build final AIResponse combining provider metadata and persisted filenames
@@ -752,7 +768,17 @@ class AIProviderManager {
 
   Future<int> clearAudioCache() async {
     try {
+      // Limpiar archivos físicos de audio
       final deleted = await MediaPersistenceService.instance.clearAudioCache();
+
+      // También limpiar caché en memoria para evitar cache hits inválidos
+      if (_cacheService?.memoryCache != null) {
+        final memoryCacheSize = _cacheService!.memoryCache!.size;
+        _cacheService!.memoryCache!.clear();
+        AILogger.d(
+            '[AIProviderManager] Cleared memory cache: $memoryCacheSize entries removed');
+      }
+
       AILogger.i(
           '[AIProviderManager] Cleared audio cache: $deleted files removed');
       return deleted;

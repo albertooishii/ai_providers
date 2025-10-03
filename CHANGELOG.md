@@ -1,5 +1,31 @@
 # Registro de Cambios
 
+## [1.7.0] - 3 de octubre de 2025 🤖 ANDROID NATIVE PROVIDER COMPLETO
+
+### 🚀 Nueva Funcionalidad Principal
+- **AndroidNativeProvider**: Provider completo para TTS y STT nativo en Android
+- **Flutter TTS Integration**: Soporte completo para Android Text-to-Speech nativo
+- **Speech-to-Text nativo**: Integración con `speech_to_text` plugin para transcripción en tiempo real
+- **Gestión inteligente de voces**: Exportación automática de voces disponibles con análisis detallado
+- **Fallback automático**: STT falla gracefully en archivos pre-grabados, permite fallback a Google/OpenAI
+
+### 🎵 Sistema de Voces Avanzado
+- **Filtrado de voces español**: Detecta y filtra voces españolas de alta calidad automáticamente
+- **Clasificación de género corregida**: Géneros de voces españolas basados en pruebas reales de audio
+- **Exportación de voces**: Auto-exporta voces disponibles a JSON en Downloads para análisis
+- **Configuración de motor**: Soporte para múltiples motores TTS (Google TTS, Samsung TTS, etc.)
+
+### 🔧 Mejoras Técnicas
+- **Separación de filtrado**: Filtros de UI independientes de lógica TTS core
+- **Transcripción en tiempo real**: STT funciona solo con micrófono en vivo (diseño del plugin)
+- **Fallback inteligente**: Detección automática de archivos vs micrófono en tiempo real
+- **Configuración por capacidad**: android_native primario para audio_generation y audio_transcription
+
+### 📱 Compatibilidad
+- **Solo Android**: Provider se inicializa únicamente en dispositivos Android
+- **Graceful degradation**: En otros SO, usa automáticamente Google/OpenAI/XAI
+- **Permisos automáticos**: Manejo automático de permisos de micrófono y TTS
+
 ## [1.6.3] - 3 de octubre de 2025 🔧 OPENAI TTS HOTFIX + PROVIDER TRACKING
 
 ### 🐛 Corrección Crítica
