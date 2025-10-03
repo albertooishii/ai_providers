@@ -156,12 +156,15 @@ class AiAudioParams {
   final String? emotion;
 
   /// Convierte a `Map<String, dynamic>` para compatibilidad con additionalParams
+  ///
+  /// **Importante:** Solo incluye parámetros que los providers necesitan internamente.
+  /// El audioFormat final se maneja por MediaPersistenceService, no por providers.
   Map<String, dynamic> toMap() {
     final map = <String, dynamic>{};
 
     map['speed'] = speed;
-    map['response_format'] = 'pcm'; // Interno: siempre PCM para providers
-    map['audioFormat'] = audioFormat; // Final: para MediaPersistenceService
+    map['response_format'] = 'pcm'; // ✅ Siempre PCM para todos los providers
+    // ❌ NO incluir audioFormat aquí - es solo para MediaPersistenceService
     if (language != null) map['language'] = language;
     if (accent != null) map['accent'] = accent;
     if (temperature != null) map['temperature'] = temperature;

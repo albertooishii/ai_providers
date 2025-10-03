@@ -370,8 +370,9 @@ class OpenAIProvider extends BaseProvider {
     // Use voice parameter directly with fallback to default
     final selectedVoice = voice ?? getDefaultVoice();
     final speed = audioParams.speed; // Siempre tiene valor por defecto (1.0)
-    final responseFormat =
-        audioParams.audioFormat; // ✅ Siempre tiene valor por defecto 'pcm'
+    // 🔧 FIXED: OpenAI TTS API solo acepta formatos específicos, siempre usar 'pcm'
+    const responseFormat =
+        'pcm'; // Hardcoded para OpenAI - MediaPersistenceService convertirá a formato deseado
 
     final payload = <String, dynamic>{
       'model': selectedModel,

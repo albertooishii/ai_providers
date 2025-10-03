@@ -1,5 +1,13 @@
 # Registro de Cambios
 
+## [1.6.3] - 3 de octubre de 2025 🔧 OPENAI TTS HOTFIX
+
+### 🐛 Corrección Crítica
+- **OpenAI TTS API Fix**: Hardcoded `response_format: 'pcm'` en OpenAI Provider
+- **Problema resuelto**: OpenAI TTS API rechazaba formato 'm4a', ahora siempre usa PCM
+- **Conversión automática**: MediaPersistenceService convierte PCM → formato deseado (M4A/MP3)
+- **Compatibilidad total**: Mantiene funcionalidad completa con Google y otros providers
+
 ## [1.6.2] - 3 de octubre de 2025 🚀 FFMPEG INTEGRATION - FORMATO AUDIO OPCIONAL
 
 ### 🔧 Mejoras en API
