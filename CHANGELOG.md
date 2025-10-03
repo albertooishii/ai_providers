@@ -1,5 +1,37 @@
 # Registro de Cambios
 
+## [1.6.2] - 3 de octubre de 2025 🚀 FFMPEG INTEGRATION - FORMATO AUDIO OPCIONAL
+
+### 🔧 Mejoras en API
+- **`audioFormat` opcional**: Usuario puede elegir entre M4A (default) o MP3 para salida final
+- **M4A por defecto**: Si no se especifica `audioFormat`, se usa M4A automáticamente (75% menos espacio)
+- **PCM interno optimizado**: Providers usan PCM internamente, `audioFormat` solo afecta conversión final
+- **API simplificada**: `AiAudioParams()` sin parámetros funciona perfectamente
+
+### 🎯 Conversión de Audio Mejorada
+- **FFmpeg Kit integrado**: Reemplaza `flutter_audio_toolkit` con `ffmpeg_kit_flutter_new ^3.2.0`
+- **Soporte multiplataforma**: Android, iOS y macOS con conversión nativa de alta calidad
+- **FFmpeg nativo como fallback**: Linux y Windows pueden usar FFmpeg del sistema si está instalado
+- **Instrucciones automáticas**: Guías de instalación de FFmpeg por plataforma cuando no está disponible
+- **Triple fallback inteligente**: FFmpeg Kit → FFmpeg nativo → WAV sin compresión
+
+### 🔧 Mejoras Técnicas
+- **Detección automática de plataforma**: `_isFFmpegSupported()` determina disponibilidad de FFmpeg Kit
+- **Comandos FFmpeg optimizados**: Configuración específica por formato con sample rate 24kHz
+- **Logging mejorado**: Trazas detalladas de conversión y fallbacks por plataforma
+- **Error handling robusto**: Fallback automático a través de múltiples métodos
+- **Instrucciones contextuales**: Mensajes informativos sobre instalación de FFmpeg por distro/OS
+
+### ✨ Nuevas Características
+- **`AiAudioFormat.m4a`** y **`AiAudioFormat.mp3`** constantes disponibles
+- **Validación automática**: Solo acepta 'm4a' o 'mp3', fallback a M4A si valor inválido
+- **Compatibilidad universal**: Linux, Windows y Web completamente soportados
+
+### 📚 Documentación
+- Ejemplos muestran uso opcional de `audioFormat`
+- Documentación clarifica M4A como formato recomendado por defecto
+- Guías de instalación de FFmpeg incluidas
+
 ## [1.6.1] - 3 de octubre de 2025 🎯 AI.listen() retorna nullable
 
 ### ✨ Mejoras

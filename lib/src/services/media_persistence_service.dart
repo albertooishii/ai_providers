@@ -2,9 +2,82 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:math';
 import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
+import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
+import 'package:ffmpeg_kit_flutter_new/return_code.dart';
 import '../utils/logger.dart';
 import '../infrastructure/cache_service.dart';
+
+/// Información del formato de audio detectado
+class AudioFormatInfo {
+  AudioFormatInfo({
+    required this.isWav,
+    required this.isPcm,
+    required this.formatName,
+    this.sampleRate,
+    this.channels,
+    this.bitsPerSample,
+  });
+  final bool isWav;
+  final bool isPcm;
+  final String formatName;
+  final int? sampleRate;
+  final int? channels;
+  final int? bitsPerSample;
+}
+
+/// Parámetros unificados para conversión FFmpeg
+class _FFmpegParams {
+  _FFmpegParams({
+    required this.inputPath,
+    required this.outputPath,
+    required this.format,
+    required this.sampleRate,
+    required this.channels,
+    required this.bitrate,
+  });
+  final String inputPath;
+  final String outputPath;
+  final String format;
+  final int sampleRate;
+  final int channels;
+  final int bitrate;
+
+  /// Generar argumentos FFmpeg unificados
+  List<String> get args {
+    final List<String> baseArgs = [
+      '-f',
+      's16le',
+      '-ar',
+      sampleRate.toString(),
+      '-ac',
+      channels.toString(),
+      '-i',
+      inputPath,
+    ];
+
+    switch (format.toLowerCase()) {
+      case 'm4a':
+      case 'aac':
+        return baseArgs +
+            ['-c:a', 'aac', '-b:a', '${bitrate}k', '-y', outputPath];
+      case 'mp3':
+        return baseArgs +
+            ['-c:a', 'libmp3lame', '-b:a', '${bitrate}k', '-y', outputPath];
+      default:
+        throw ArgumentError('Formato no soportado: $format');
+    }
+  }
+
+  /// Generar comando FFmpeg unificado para FFmpeg Kit
+  String get command {
+    return args
+        .join(' ')
+        .replaceAll(inputPath, '"$inputPath"')
+        .replaceAll(outputPath, '"$outputPath"');
+  }
+}
 
 /// Servicio consolidado de persistencia para archivos multimedia
 /// Maneja imágenes y audio usando la misma infraestructura
@@ -157,14 +230,17 @@ class MediaPersistenceService {
     }
   }
 
-  /// Guardar audio desde base64
-  /// Maneja automáticamente diferentes formatos:
-  /// - Si detecta cabecera WAV: guarda directo
-  /// - Si es PCM raw: convierte a WAV antes de guardar
+  /// Guardar audio desde base64 (OPTIMIZADO)
+  /// Pipeline optimizado:
+  /// - Detección inteligente de formato
+  /// - Conversión directa PCM→M4A sin archivos temporales
+  /// - Cache basado en hash de contenido
   /// Retorna la ruta completa del archivo guardado o null si falló
   Future<String?> saveBase64Audio(
     final String base64, {
     final String prefix = 'tts',
+    final String outputFormat = 'm4a', // 'm4a', 'wav', 'mp3'
+    final int bitrate = 128, // kbps para formatos comprimidos
   }) async {
     try {
       if (base64.trim().isEmpty) return null;
@@ -179,57 +255,386 @@ class MediaPersistenceService {
       }
 
       Uint8List audioData;
-      bool isWavFile = false;
+      AudioFormatInfo formatInfo;
 
       try {
         audioData = base64Decode(normalized);
+        formatInfo = _detectAudioFormat(audioData);
 
-        // Detectar formato de audio basado en la cabecera
-        isWavFile = audioData.length > 12 &&
-            audioData[0] == 0x52 &&
-            audioData[1] == 0x49 &&
-            audioData[2] == 0x46 &&
-            audioData[3] == 0x46; // "RIFF"
-
-        if (isWavFile) {
-          AILogger.d(
-              '[MediaPersistence] Decoded ${audioData.length} bytes as WAV format');
-        } else {
-          AILogger.d(
-              '[MediaPersistence] Decoded ${audioData.length} bytes as raw PCM format');
-        }
+        AILogger.d(
+            '[MediaPersistence] Decoded ${audioData.length} bytes as ${formatInfo.formatName}');
       } on FormatException catch (e) {
         AILogger.w('Invalid base64 format: $e');
         return null;
       }
 
-      // Generate filename
-      final fileName = '${prefix}_${DateTime.now().millisecondsSinceEpoch}.wav';
-      final audioDir = await _getAudioDir();
-      final filePath = '${audioDir.path}/$fileName';
-
-      // Manejar según el formato detectado
-      Uint8List finalAudioData;
-      if (isWavFile) {
-        // Ya es formato WAV completo - guardar directamente
-        finalAudioData = audioData;
-      } else {
-        // Es PCM raw - convertir a formato WAV (24kHz, mono, 16-bit)
-        finalAudioData = _createWavFile(audioData,
-            sampleRate: 24000, channels: 1, bitsPerSample: 16);
+      // Cache inteligente basado en hash
+      final contentHash = _calculateContentHash(audioData);
+      final cachedPath = await _checkAudioCache(contentHash, outputFormat);
+      if (cachedPath != null) {
+        AILogger.d('[MediaPersistence] ♻️ Using cached audio: $cachedPath');
+        return cachedPath;
       }
 
-      final file = await File(filePath).writeAsBytes(finalAudioData);
+      // Generate filename with appropriate extension
+      final extension = outputFormat.toLowerCase();
+      final fileName =
+          '${prefix}_${DateTime.now().millisecondsSinceEpoch}.$extension';
+      final audioDir = await _getAudioDir();
+      final finalPath = '${audioDir.path}/$fileName';
 
-      if (file.existsSync()) {
-        AILogger.d('[MediaPersistence] Saved WAV audio as $filePath');
-        return filePath;
+      // Optimización: evitar conversión si el formato ya es el deseado
+      if (_isFormatCompatible(formatInfo, outputFormat)) {
+        await File(finalPath).writeAsBytes(audioData);
+        await _cacheAudioFile(contentHash, finalPath, outputFormat);
+        AILogger.d(
+            '[MediaPersistence] 🚀 Saved audio directly (no conversion): $finalPath');
+        return finalPath;
+      }
+
+      // Si es WAV y lo solicitamos, usar directamente
+      if (extension == 'wav') {
+        final Uint8List wavData = formatInfo.isWav
+            ? audioData
+            : _createWavFile(audioData,
+                sampleRate: 24000, channels: 1, bitsPerSample: 16);
+        await File(finalPath).writeAsBytes(wavData);
+        await _cacheAudioFile(contentHash, finalPath, outputFormat);
+        AILogger.d('[MediaPersistence] Saved WAV audio: $finalPath');
+        return finalPath;
+      }
+
+      // Conversión optimizada sin archivos temporales
+      final success = await _convertToCompressedFormatOptimized(
+        audioData,
+        formatInfo,
+        finalPath,
+        outputFormat,
+        bitrate,
+      );
+
+      if (success && File(finalPath).existsSync()) {
+        await _cacheAudioFile(contentHash, finalPath, outputFormat);
+        AILogger.d(
+            '[MediaPersistence] 🎵 Saved optimized $outputFormat: $finalPath');
+        return finalPath;
       }
 
       return null;
     } on Exception catch (e) {
       AILogger.w('[MediaPersistence] Error saving audio: $e');
       return null;
+    }
+  }
+
+  /// Cache de archivos de audio para evitar reconversiones
+  final Map<String, String> _audioCache = {};
+
+  /// Detectar formato de audio automáticamente
+  AudioFormatInfo _detectAudioFormat(final Uint8List audioData) {
+    if (audioData.length < 4) {
+      return AudioFormatInfo(
+          isWav: false, isPcm: true, formatName: 'PCM (Unknown)');
+    }
+
+    // Detectar WAV (RIFF header)
+    final isWav = audioData.length > 12 &&
+        audioData[0] == 0x52 && // 'R'
+        audioData[1] == 0x49 && // 'I'
+        audioData[2] == 0x46 && // 'F'
+        audioData[3] == 0x46; // 'F'
+
+    if (isWav) {
+      // Extraer información del header WAV
+      try {
+        final byteData = ByteData.sublistView(audioData);
+        final sampleRate = byteData.getUint32(24, Endian.little);
+        final channels = byteData.getUint16(22, Endian.little);
+        final bitsPerSample = byteData.getUint16(34, Endian.little);
+
+        return AudioFormatInfo(
+          isWav: true,
+          isPcm: false,
+          formatName:
+              'WAV (${sampleRate}Hz, ${channels}ch, ${bitsPerSample}bit)',
+          sampleRate: sampleRate,
+          channels: channels,
+          bitsPerSample: bitsPerSample,
+        );
+      } on Exception {
+        return AudioFormatInfo(
+            isWav: true, isPcm: false, formatName: 'WAV (Invalid header)');
+      }
+    }
+
+    // Detectar M4A/AAC (ftyp header)
+    if (audioData.length > 8) {
+      final hasM4AHeader = audioData[4] == 0x66 && // 'f'
+          audioData[5] == 0x74 && // 't'
+          audioData[6] == 0x79 && // 'y'
+          audioData[7] == 0x70; // 'p'
+
+      if (hasM4AHeader) {
+        return AudioFormatInfo(
+            isWav: false, isPcm: false, formatName: 'M4A/MP4');
+      }
+    }
+
+    // Default: PCM raw
+    return AudioFormatInfo(
+      isWav: false,
+      isPcm: true,
+      formatName: 'PCM Raw (${audioData.length} bytes)',
+    );
+  }
+
+  /// Verificar si el formato actual es compatible con el solicitado
+  bool _isFormatCompatible(
+      final AudioFormatInfo current, final String requested) {
+    final req = requested.toLowerCase();
+
+    // WAV es compatible con WAV
+    if (current.isWav && req == 'wav') return true;
+
+    // M4A es compatible con M4A/AAC
+    if (current.formatName.contains('M4A') && (req == 'm4a' || req == 'aac')) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /// Calcular hash del contenido para cache
+  String _calculateContentHash(final Uint8List data) {
+    // Hash simple basado en tamaño y primeros/últimos bytes
+    final size = data.length;
+    final start = data.take(16).join();
+    final end = data.skip(size - 16).take(16).join();
+    return '${size}_${start}_$end';
+  }
+
+  /// Verificar cache de audio
+  Future<String?> _checkAudioCache(
+      final String contentHash, final String format) async {
+    final cacheKey = '${contentHash}_$format';
+    final cachedPath = _audioCache[cacheKey];
+
+    if (cachedPath != null && File(cachedPath).existsSync()) {
+      return cachedPath;
+    }
+
+    // Limpiar cache si el archivo ya no existe
+    _audioCache.remove(cacheKey);
+    return null;
+  }
+
+  /// Guardar archivo en cache
+  Future<void> _cacheAudioFile(final String contentHash, final String filePath,
+      final String format) async {
+    final cacheKey = '${contentHash}_$format';
+    _audioCache[cacheKey] = filePath;
+
+    // Limitar tamaño del cache (mantener últimos 50)
+    if (_audioCache.length > 50) {
+      final oldestKey = _audioCache.keys.first;
+      _audioCache.remove(oldestKey);
+    }
+  }
+
+  /// Conversión optimizada sin archivos temporales
+  Future<bool> _convertToCompressedFormatOptimized(
+    final Uint8List audioData,
+    final AudioFormatInfo formatInfo,
+    final String outputPath,
+    final String format,
+    final int bitrate,
+  ) async {
+    try {
+      AILogger.d(
+          '[MediaPersistence] 🚀 Optimized conversion: ${formatInfo.formatName} → $format ($bitrate kbps)');
+
+      // Verificar si FFmpeg está disponible
+      if (!_isFFmpegSupported()) {
+        return _optimizedPlatformFallback(
+            audioData, formatInfo, outputPath, format, bitrate);
+      }
+
+      return _convertWithFFmpegOptimized(
+          audioData, formatInfo, outputPath, format, bitrate);
+    } on Exception catch (e) {
+      AILogger.e('[MediaPersistence] Error en conversión optimizada: $e');
+      return _fallbackToWavOptimized(audioData, formatInfo, outputPath);
+    }
+  }
+
+  /// Conversión unificada con FFmpeg (Kit o Nativo)
+  Future<bool> _convertWithUnifiedFFmpeg(
+    final Uint8List audioData,
+    final AudioFormatInfo formatInfo,
+    final String outputPath,
+    final String format,
+    final int bitrate,
+    final bool useFFmpegKit,
+  ) async {
+    try {
+      final String method = useFFmpegKit ? 'FFmpeg Kit' : 'Native FFmpeg';
+      AILogger.d(
+          '[MediaPersistence] 🎵 $method unified: ${formatInfo.formatName} → $format');
+
+      // Preparar datos PCM comunes
+      final Uint8List pcmData = formatInfo.isWav
+          ? audioData.sublist(44) // Extraer PCM del WAV
+          : audioData;
+
+      // Crear archivo PCM temporal
+      final tempPcmPath = '${outputPath}_temp.pcm';
+      await File(tempPcmPath).writeAsBytes(pcmData);
+
+      try {
+        // Parámetros unificados
+        final params = _FFmpegParams(
+          inputPath: tempPcmPath,
+          outputPath: outputPath,
+          format: format,
+          sampleRate: formatInfo.sampleRate ?? 24000,
+          channels: formatInfo.channels ?? 1,
+          bitrate: bitrate,
+        );
+
+        // Ejecutar según el método disponible
+        final bool success = useFFmpegKit
+            ? await _executeFFmpegKit(params)
+            : await _executeNativeFFmpeg(params);
+
+        if (success) {
+          AILogger.d(
+              '[MediaPersistence] ✅ $method unified success: $outputPath');
+          return File(outputPath).existsSync();
+        } else {
+          AILogger.e('[MediaPersistence] $method unified failed');
+          return false;
+        }
+      } finally {
+        // Limpiar archivo temporal PCM siempre
+        try {
+          await File(tempPcmPath).delete();
+        } on Exception catch (_) {}
+      }
+    } on Exception catch (e) {
+      AILogger.e('[MediaPersistence] Error en conversión unificada: $e');
+      return false;
+    }
+  }
+
+  /// Ejecutar FFmpeg Kit con parámetros unificados
+  Future<bool> _executeFFmpegKit(final _FFmpegParams params) async {
+    try {
+      final session = await FFmpegKit.execute(params.command);
+      final returnCode = await session.getReturnCode();
+
+      if (!ReturnCode.isSuccess(returnCode)) {
+        final output = await session.getOutput();
+        AILogger.e('[MediaPersistence] FFmpeg Kit error: $output');
+        return false;
+      }
+      return true;
+    } on Exception catch (e) {
+      AILogger.e('[MediaPersistence] FFmpeg Kit execution error: $e');
+      return false;
+    }
+  }
+
+  /// Ejecutar FFmpeg nativo con parámetros unificados
+  Future<bool> _executeNativeFFmpeg(final _FFmpegParams params) async {
+    try {
+      // Verificar FFmpeg disponible
+      final ffmpegResult = await Process.run('ffmpeg', ['-version']);
+      if (ffmpegResult.exitCode != 0) {
+        await _showFFmpegInstallInstructions();
+        return false;
+      }
+
+      // Ejecutar comando
+      final result = await Process.run('ffmpeg', params.args);
+
+      if (result.exitCode != 0) {
+        AILogger.e('[MediaPersistence] Native FFmpeg error: ${result.stderr}');
+        return false;
+      }
+      return true;
+    } on Exception catch (e) {
+      AILogger.e('[MediaPersistence] Native FFmpeg execution error: $e');
+      return false;
+    }
+  }
+
+  /// Conversión con FFmpeg optimizada (ahora usa método unificado)
+  Future<bool> _convertWithFFmpegOptimized(
+    final Uint8List audioData,
+    final AudioFormatInfo formatInfo,
+    final String outputPath,
+    final String format,
+    final int bitrate,
+  ) async {
+    return _convertWithUnifiedFFmpeg(audioData, formatInfo, outputPath, format,
+        bitrate, true); // useFFmpegKit = true
+  }
+
+  /// Fallback optimizado para plataformas no soportadas (ahora usa método unificado)
+  Future<bool> _optimizedPlatformFallback(
+    final Uint8List audioData,
+    final AudioFormatInfo formatInfo,
+    final String outputPath,
+    final String format,
+    final int bitrate,
+  ) async {
+    try {
+      // Intentar FFmpeg nativo unificado
+      final success = await _convertWithUnifiedFFmpeg(audioData, formatInfo,
+          outputPath, format, bitrate, false); // useFFmpegKit = false
+
+      if (success) {
+        return true;
+      }
+
+      // Fallback WAV optimizado si FFmpeg no está disponible
+      return _fallbackToWavOptimized(audioData, formatInfo, outputPath);
+    } on Exception catch (e) {
+      AILogger.e(
+          '[MediaPersistence] Error en platform fallback optimizado: $e');
+      return _fallbackToWavOptimized(audioData, formatInfo, outputPath);
+    }
+  }
+
+  /// Fallback final optimizado: guardar como WAV
+  Future<bool> _fallbackToWavOptimized(
+    final Uint8List audioData,
+    final AudioFormatInfo formatInfo,
+    final String outputPath,
+  ) async {
+    try {
+      // Cambiar extensión a WAV
+      final wavPath =
+          outputPath.replaceAll('.m4a', '.wav').replaceAll('.mp3', '.wav');
+
+      Uint8List wavData;
+      if (formatInfo.isWav) {
+        // Ya es WAV, usar directamente
+        wavData = audioData;
+      } else {
+        // Crear WAV desde PCM
+        wavData = _createWavFile(audioData,
+            sampleRate: 24000, channels: 1, bitsPerSample: 16);
+      }
+
+      await File(wavPath).writeAsBytes(wavData);
+
+      AILogger.i(
+          '[MediaPersistence] 🚨 Fallback optimizado: guardado como WAV en $wavPath');
+      return File(wavPath).existsSync();
+    } on Exception catch (e) {
+      AILogger.e('[MediaPersistence] Error en WAV fallback optimizado: $e');
+      return false;
     }
   }
 
@@ -356,6 +761,59 @@ class MediaPersistenceService {
     final hex = toHex(bytes);
     return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
   }
+
+  /// Verificar si FFmpeg está soportado en la plataforma actual
+  bool _isFFmpegSupported() {
+    // FFmpeg Kit soporta Android, iOS y macOS
+    return Platform.isAndroid || Platform.isIOS || Platform.isMacOS;
+  }
+
+  /// Mostrar instrucciones de instalación de FFmpeg según la plataforma
+  Future<void> _showFFmpegInstallInstructions() async {
+    String instructions;
+
+    if (Platform.isLinux) {
+      instructions = '''
+╔══════════════════════════════════════════════════════════════════╗
+║                    🎵 FFmpeg no encontrado                       ║
+╠══════════════════════════════════════════════════════════════════╣
+║ Para conversión de audio en Linux, instala FFmpeg:              ║
+║                                                                  ║
+║ Ubuntu/Debian:   sudo apt update && sudo apt install ffmpeg     ║
+║ Fedora:          sudo dnf install ffmpeg                        ║
+║ Arch:            sudo pacman -S ffmpeg                          ║
+║ Snap:            sudo snap install ffmpeg                       ║
+║                                                                  ║
+║ Mientras tanto, usaremos formato WAV (sin compresión)           ║
+╚══════════════════════════════════════════════════════════════════╝''';
+    } else if (Platform.isWindows) {
+      instructions = '''
+╔══════════════════════════════════════════════════════════════════╗
+║                    🎵 FFmpeg no encontrado                       ║
+╠══════════════════════════════════════════════════════════════════╣
+║ Para conversión de audio en Windows, instala FFmpeg:            ║
+║                                                                  ║
+║ Chocolatey:      choco install ffmpeg                           ║
+║ Scoop:           scoop install ffmpeg                           ║
+║ Winget:          winget install FFmpeg                          ║
+║ Manual:          https://ffmpeg.org/download.html#build-windows ║
+║                                                                  ║
+║ Mientras tanto, usaremos formato WAV (sin compresión)           ║
+╚══════════════════════════════════════════════════════════════════╝''';
+    } else {
+      instructions = '''
+╔══════════════════════════════════════════════════════════════════╗
+║                    🎵 FFmpeg no encontrado                       ║
+╠══════════════════════════════════════════════════════════════════╣
+║ Para conversión de audio, instala FFmpeg desde:                 ║
+║ https://ffmpeg.org/download.html                                ║
+║                                                                  ║
+║ Mientras tanto, usaremos formato WAV (sin compresión)           ║
+╚══════════════════════════════════════════════════════════════════╝''';
+    }
+
+    AILogger.i('\n$instructions');
+  }
 }
 
 /// Backward compatibility - Image persistence
@@ -378,8 +836,15 @@ class AudioPersistenceService {
   Future<String?> saveBase64Audio(
     final String base64, {
     final String prefix = 'audio',
+    final String outputFormat = 'm4a',
+    final int bitrate = 128,
   }) =>
-      MediaPersistenceService.instance.saveBase64Audio(base64, prefix: prefix);
+      MediaPersistenceService.instance.saveBase64Audio(
+        base64,
+        prefix: prefix,
+        outputFormat: outputFormat,
+        bitrate: bitrate,
+      );
 
   Future<List<int>?> loadAudioAsBytes(final String fileName) =>
       MediaPersistenceService.instance.loadAudioAsBytes(fileName);

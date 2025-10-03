@@ -119,23 +119,6 @@ class AiImageParams {
     return map;
   }
 
-  /// Merge con otros parámetros manteniendo compatibilidad
-  Map<String, dynamic> mergeWithAdditionalParams(
-      final Map<String, dynamic>? additionalParams) {
-    final imageParams = toMap();
-    final combined = <String, dynamic>{};
-
-    // Primero añadir parámetros adicionales existentes
-    if (additionalParams != null) {
-      combined.addAll(additionalParams);
-    }
-
-    // Luego sobrescribir con parámetros de imagen específicos (mayor prioridad)
-    combined.addAll(imageParams);
-
-    return combined;
-  }
-
   /// Copy with para modificaciones inmutables
   AiImageParams copyWith({
     final String? aspectRatio,

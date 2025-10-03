@@ -68,7 +68,7 @@ export 'src/models/ai_audio.dart';
 /// Enhanced image generation parameters (format, size, fidelity, seed, etc.)
 export 'src/models/ai_image_params.dart';
 
-/// Enhanced audio generation/transcription parameters (speed, format, language, temperature)
+/// Enhanced audio generation/transcription parameters (speed, language, temperature) - siempre M4A output
 export 'src/models/ai_audio_params.dart';
 
 /// Simple AI Provider model for public API (different from internal ProviderConfig)

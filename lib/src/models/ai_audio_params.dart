@@ -17,45 +17,55 @@
 /// | Campo | Tipo | Valores | Descripción |
 /// |-------|------|---------|-------------|
 /// | `speed` | `double` | `0.25` - `4.0` | Velocidad de síntesis de voz. `1.0` es velocidad normal. |
-/// | `audioFormat` | `String?` | `wav`, `mp3`, `opus`, `aac`, `flac`, `pcm` | Formato de audio de salida para síntesis TTS. |
+/// | `audioFormat` | `String?` | `m4a`, `mp3` | Formato de salida final opcional. M4A por defecto si null (75% menos espacio). |
 /// | `language` | `String?` | `es`, `en`, `es-ES`, `en-US` | Idioma ISO estándar para filtrado de voces y síntesis. |
 /// | `accent` | `String?` | Texto libre | Acento o estilo de pronunciación personalizado (ej: "español con acento japonés"). |
 /// | `temperature` | `double?` | `0.0` - `1.0` | Creatividad en la expresión vocal (Google principalmente). |
 /// | `emotion` | `String?` | Texto libre o constantes | Emoción a transmitir en la síntesis (ej: "susurrando pero asustada"). |
 ///
+/// **Proceso interno:** Los providers usan PCM internamente, `audioFormat` solo afecta la conversión final.
+///
 /// **Ejemplo de uso:**
 /// ```dart
-/// const params = AiAudioParams(
+/// // M4A por defecto (recomendado)
+/// const params1 = AiAudioParams(
 ///   speed: 1.2,
-///   audioFormat: AiAudioFormat.pcm,  // PCM recomendado
-///   language: 'es',  // ISO para Android Native
-///   accent: 'español con acento japonés',  // OpenAI + Google
-///   emotion: AiAudioEmotion.whisper,  // O texto libre personalizado
+///   language: 'es',
+///   accent: 'español con acento japonés',
 /// );
 ///
-/// final audio = await AI.speak('Hola mundo', params);
+/// // MP3 si se prefiere compatibilidad universal
+/// const params2 = AiAudioParams(
+///   speed: 1.0,
+///   audioFormat: 'mp3',
+///   emotion: AiAudioEmotion.whisper,
+/// );
+///
+/// final audio = await AI.speak('Hola mundo', params1);
+/// // Retorna M4A por defecto o formato elegido
 /// ```
 ///
 /// Compatible con el sistema de additionalParams existente pero con estructura tipada.
 class AiAudioParams {
   const AiAudioParams({
     this.speed = 1.0,
-    this.audioFormat = 'pcm',
+    final String? audioFormat, // Opcional: m4a por defecto, mp3 alternativa
     this.language,
     this.accent,
     this.temperature,
     this.emotion,
-  });
+  }) : _audioFormat = audioFormat;
 
   /// Factory constructor desde `Map<String, dynamic>` para compatibilidad
   factory AiAudioParams.fromMap(final Map<String, dynamic>? params) {
     if (params == null) return const AiAudioParams();
 
+    final format = params['audioFormat'] as String? ??
+        params['response_format'] as String?;
+
     return AiAudioParams(
       speed: (params['speed'] as num?)?.toDouble() ?? 1.0,
-      audioFormat: params['response_format'] as String? ??
-          params['audioFormat'] as String? ??
-          'pcm',
+      audioFormat: (format == 'mp3' || format == 'm4a') ? format : null,
       language: params['language'] as String?,
       temperature: (params['temperature'] as num?)?.toDouble(),
       emotion: params['emotion'] as String?,
@@ -73,17 +83,22 @@ class AiAudioParams {
   /// - Google: ❌ No soportado directamente
   final double speed;
 
-  /// Formato de archivo de audio para salida TTS (síntesis de voz).
+  /// Formato de salida final del audio generado (opcional, M4A por defecto).
   ///
-  /// Valor por defecto: `'pcm'` (recomendado, compatible con todos los proveedores).
+  /// **Opciones disponibles:**
+  /// - `null` o `'m4a'`: M4A/AAC comprimido (por defecto, 75% menos espacio)
+  /// - `'mp3'`: MP3 comprimido (compatible universalmente)
   ///
-  /// **Formatos por proveedor:**
-  /// - OpenAI: `mp3`, `opus`, `aac`, `flac`, `wav`, `pcm`
-  /// - Google: Solo `pcm` (formato nativo)
-  /// - Android Native: Siempre `wav` (hardcoded)
-  ///
-  /// Valores disponibles en [AiAudioFormat] para conveniencia.
-  final String audioFormat;
+  /// **Nota:** Los providers usan PCM internamente para máxima compatibilidad.
+  /// Este parámetro solo afecta la conversión final.
+  final String? _audioFormat;
+
+  /// Getter que devuelve el formato efectivo (m4a por defecto)
+  String get audioFormat {
+    if (_audioFormat == null) return 'm4a';
+    if (_audioFormat == 'mp3' || _audioFormat == 'm4a') return _audioFormat;
+    return 'm4a'; // Fallback si valor inválido
+  }
 
   /// Idioma ISO estándar para compatibilidad y filtrado de voces.
   ///
@@ -145,30 +160,14 @@ class AiAudioParams {
     final map = <String, dynamic>{};
 
     map['speed'] = speed;
-    map['response_format'] = audioFormat;
+    map['response_format'] = 'pcm'; // Interno: siempre PCM para providers
+    map['audioFormat'] = audioFormat; // Final: para MediaPersistenceService
     if (language != null) map['language'] = language;
     if (accent != null) map['accent'] = accent;
     if (temperature != null) map['temperature'] = temperature;
     if (emotion != null) map['emotion'] = emotion;
 
     return map;
-  }
-
-  /// Merge con otros parámetros manteniendo compatibilidad
-  Map<String, dynamic> mergeWithAdditionalParams(
-      final Map<String, dynamic>? additionalParams) {
-    final audioParams = toMap();
-    final combined = <String, dynamic>{};
-
-    // Primero añadir parámetros adicionales existentes
-    if (additionalParams != null) {
-      combined.addAll(additionalParams);
-    }
-
-    // Luego sobrescribir con parámetros de audio específicos (mayor prioridad)
-    combined.addAll(audioParams);
-
-    return combined;
   }
 
   /// Copy with para modificaciones inmutables
@@ -182,7 +181,7 @@ class AiAudioParams {
   }) {
     return AiAudioParams(
       speed: speed ?? this.speed,
-      audioFormat: audioFormat ?? this.audioFormat,
+      audioFormat: audioFormat ?? _audioFormat,
       language: language ?? this.language,
       accent: accent ?? this.accent,
       temperature: temperature ?? this.temperature,
@@ -197,27 +196,15 @@ class AiAudioParams {
   }
 }
 
-/// Constantes para formatos de audio de salida TTS.
+/// Constantes para formatos de audio de salida final.
 ///
-/// Define los tipos de archivo soportados por los proveedores para síntesis de voz.
+/// Define solo los formatos comprimidos disponibles para el usuario.
 class AiAudioFormat {
-  /// PCM - Audio crudo sin compresión (recomendado, único formato de Google)
-  static const String pcm = 'pcm';
+  /// M4A - Formato comprimido AAC (recomendado, 75% menos espacio)
+  static const String m4a = 'm4a';
 
-  /// WAV - Formato sin compresión, máxima calidad
-  static const String wav = 'wav';
-
-  /// MP3 - Formato comprimido universal, buena calidad/tamaño
+  /// MP3 - Formato comprimido universal (máxima compatibilidad)
   static const String mp3 = 'mp3';
-
-  /// Opus - Formato moderno, alta eficiencia para voz
-  static const String opus = 'opus';
-
-  /// AAC - Formato avanzado, usado en dispositivos móviles
-  static const String aac = 'aac';
-
-  /// FLAC - Formato sin pérdida, máxima calidad sin compresión
-  static const String flac = 'flac';
 }
 
 /// Constantes para emociones comunes en síntesis de voz.

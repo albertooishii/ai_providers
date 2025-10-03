@@ -47,6 +47,8 @@ Future<void> main() async {
   final text = await AI.text('Resume el estado del arte en IA generativa');
   final image = await AI.image('Robot pintando un mural retro futurista');
   final audio = await AI.speak('Hola, este es un ejemplo de TTS');
+  final audioM4a = await AI.speak('Audio en M4A', AiAudioParams(audioFormat: 'm4a')); // M4A por defecto
+  final audioMp3 = await AI.speak('Audio en MP3', AiAudioParams(audioFormat: 'mp3')); // Opcionalmente MP3
   final transcript = await AI.listen();
 
   debugPrint('Texto: ${text.text}');
@@ -107,11 +109,15 @@ flutter run
 ### Audio (TTS/STT)
 | Método | Descripción | Retorno |
 |--------|-------------|---------|
-| `AI.speak(String text, [AiAudioParams? audioParams, bool play = false])` | Genera audio TTS y opcionalmente lo reproduce. | `Future<AIResponse>` |
+| `AI.speak(String text, [AiAudioParams? audioParams, bool play = false])` | Genera audio TTS (M4A por defecto, MP3 opcional) y opcionalmente lo reproduce. | `Future<AIResponse>` |
 | `AI.listen({Duration? duration, Duration silenceTimeout, bool autoStop = true, AISystemPrompt? systemPrompt})` | Graba audio. Si `autoStop=true` (default): retorna AIResponse con transcripción. Si `autoStop=false`: retorna null (usar `AI.stopListen()` para obtener resultado). | `Future<AIResponse?>` |
 | `AI.transcribe(String audioBase64, [AISystemPrompt? systemPrompt])` | Transcribe audio existente en base64. | `Future<AIResponse>` |
 | `AI.stopSpeak()` / `AI.pauseSpeak()` | Controla la reproducción de audio en curso. | `Future<bool>` |
 | `AI.stopListen()` | Detiene grabación en curso y retorna AIResponse con transcripción + audio grabado. | `Future<AIResponse?>` |
+
+**Formatos de audio soportados:** 
+- `'m4a'` (por defecto): Mayor compresión, ideal para móviles
+- `'mp3'`: Compatible universal, ligeramente mayor tamaño
 
 ### Gestión avanzada y utilidades
 | Método | Descripción | Retorno |

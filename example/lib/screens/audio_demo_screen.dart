@@ -619,7 +619,7 @@ class _AudioDemoScreenState extends State<AudioDemoScreen>
       final audioParams = AiAudioParams(
         language: 'es-ES', // Default language
         speed: 1.0,
-        audioFormat: 'pcm',
+        // audioFormat: M4A por defecto (opcional especificar)
       );
 
       final response = await AI.speak(
@@ -1369,7 +1369,7 @@ class _AudioDemoScreenState extends State<AudioDemoScreen>
           final audioParams = AiAudioParams(
             language: 'es-ES',
             speed: 1.0,
-            audioFormat: 'pcm',
+            // M4A automático por defecto
           );
 
           await AI.speak(
@@ -1390,7 +1390,7 @@ class _AudioDemoScreenState extends State<AudioDemoScreen>
           final audioParams = AiAudioParams(
             language: 'es-ES',
             speed: 1.0,
-            audioFormat: 'pcm',
+            audioFormat: 'mp3', // Ejemplo de alternativa MP3
           );
 
           await AI.speak(

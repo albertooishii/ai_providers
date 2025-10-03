@@ -446,9 +446,16 @@ class AIProviderManager {
           if (providerResp.audioBase64 != null &&
               providerResp.audioBase64!.isNotEmpty) {
             try {
+              // Extraer formato de audio deseado desde additionalParams
+              String outputFormat = 'm4a'; // Default
+              if (additionalParams?.audioParams != null) {
+                outputFormat = additionalParams!.audioParams!.audioFormat;
+              }
+
               final saved =
                   await MediaPersistenceService.instance.saveBase64Audio(
                 providerResp.audioBase64!,
+                outputFormat: outputFormat,
               );
               if (saved != null && saved.isNotEmpty) {
                 audioFileName = saved;

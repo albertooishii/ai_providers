@@ -476,33 +476,6 @@ class OpenAIProvider extends BaseProvider {
     );
   }
 
-  /// DEPRECATED: Legacy method - use AI.speak() instead
-  /// Voice is now managed through AI.setSelectedVoiceForProvider()
-  @Deprecated(
-      'Use AI.speak() with voice management via AI.setSelectedVoiceForProvider()')
-  Future<ProviderResponse> generateAudio({
-    required final String text,
-    final String? voice,
-    final String? model,
-    final AdditionalParams? additionalParams,
-  }) async {
-    // Create a simple context for TTS request
-    final ttsContext = AISystemPrompt(
-      context: {'instructions': 'Convert text to speech'},
-      dateTime: DateTime.now(),
-      instructions: {'role': 'Convert the given text to speech'},
-      history: [
-        {'role': 'user', 'content': text}
-      ],
-    );
-    return _sendTTSRequest(
-      ttsContext,
-      model,
-      additionalParams,
-      voice,
-    );
-  }
-
   Future<ProviderResponse> transcribeAudio({
     required final String audioBase64,
     final String? model,

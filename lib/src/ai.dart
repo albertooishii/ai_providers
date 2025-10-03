@@ -123,13 +123,14 @@ class AI {
   ///   'Buenos días, ¿cómo estás?',
   ///   AiAudioParams(
   ///     speed: 1.2,
-  ///     audioFormat: AiAudioFormat.wav,
+  ///     // audioFormat: M4A por defecto (opcional: AiAudioFormat.mp3)
   ///     language: 'es',
   ///     accent: 'español con acento japonés',
   ///     emotion: 'susurrando pero asustada como si acabaras de despertar',
   ///   ),
   ///   play: true,  // Reproduce automáticamente
   /// );
+  /// // Retorna M4A comprimido por defecto (o MP3 si se especifica)
   /// ```
   ///
   /// [text] - Texto a sintetizar

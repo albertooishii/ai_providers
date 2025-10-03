@@ -773,34 +773,6 @@ Requirements:
     );
   }
 
-  /// DEPRECATED: Legacy method - use AI.speak() instead
-  /// Voice is now managed through AI.setSelectedVoiceForProvider()
-  @Deprecated(
-      'Use AI.speak() with voice management via AI.setSelectedVoiceForProvider()')
-  Future<ProviderResponse> generateAudio({
-    required final String text,
-    final String? voice,
-    final String? model,
-    final AdditionalParams? additionalParams,
-  }) async {
-    // Create temporary AISystemPrompt for TTS
-    final systemPrompt = AISystemPrompt(
-      context: '',
-      dateTime: DateTime.now(),
-      instructions: {},
-      history: [
-        {'role': 'user', 'content': text}
-      ],
-    );
-
-    return _sendTTSRequest(
-      systemPrompt,
-      model,
-      additionalParams,
-      voice,
-    );
-  }
-
   Future<ProviderResponse> transcribeAudio({
     required final String audioBase64,
     final String? model,

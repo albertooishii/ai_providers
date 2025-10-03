@@ -28,7 +28,6 @@ abstract class BaseProvider {
   /// Default values - can be overridden by providers
   Map<String, dynamic> get defaults => {
         'image_mime_type': 'image/png',
-        'audio_format': 'mp3',
         'avatar_size': '1024x1024',
         'transcription_model': config.defaults[AICapability.audioTranscription],
       };
