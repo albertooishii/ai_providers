@@ -425,6 +425,7 @@ class AIProviderManager {
           // Persist any binary payloads returned by the provider and construct final AIResponse
           String? imageFileName;
           String? audioFileName;
+          String? convertedAudioBase64;
 
           // Only save image to cache if explicitly requested
           if (saveToCache &&
@@ -452,13 +453,18 @@ class AIProviderManager {
                 outputFormat = additionalParams!.audioParams!.audioFormat;
               }
 
-              final saved =
-                  await MediaPersistenceService.instance.saveBase64Audio(
+              final result = await MediaPersistenceService.instance
+                  .saveBase64AudioComplete(
                 providerResp.audioBase64!,
                 outputFormat: outputFormat,
               );
-              if (saved != null && saved.isNotEmpty) {
-                audioFileName = saved;
+
+              if (result != null) {
+                audioFileName = result.filePath;
+                convertedAudioBase64 =
+                    result.base64; // Base64 del M4A convertido
+                AILogger.d(
+                    '[AIProviderManager] Audio converted and saved: $outputFormat');
               }
             } on Exception catch (e) {
               AILogger.w(
@@ -469,6 +475,7 @@ class AIProviderManager {
           // Build final AIResponse combining provider metadata and persisted filenames
           final finalResp = AIResponse(
             text: providerResp.text,
+            provider: providerId,
             image: providerResp.prompt.isNotEmpty ||
                     imageFileName != null ||
                     providerResp.imageBase64 != null
@@ -481,10 +488,10 @@ class AIProviderManager {
                     createdAtMs: DateTime.now().millisecondsSinceEpoch,
                   )
                 : null,
-            audio: audioFileName != null || providerResp.audioBase64 != null
+            audio: audioFileName != null || convertedAudioBase64 != null
                 ? AiAudio(
                     url: audioFileName,
-                    base64: providerResp.audioBase64,
+                    base64: convertedAudioBase64, // Base64 del M4A convertido
                     createdAtMs: DateTime.now().millisecondsSinceEpoch,
                   )
                 : null,

@@ -1,12 +1,27 @@
 # Registro de Cambios
 
-## [1.6.3] - 3 de octubre de 2025 🔧 OPENAI TTS HOTFIX
+## [1.6.3] - 3 de octubre de 2025 🔧 OPENAI TTS HOTFIX + PROVIDER TRACKING
 
 ### 🐛 Corrección Crítica
 - **OpenAI TTS API Fix**: Hardcoded `response_format: 'pcm'` en OpenAI Provider
 - **Problema resuelto**: OpenAI TTS API rechazaba formato 'm4a', ahora siempre usa PCM
 - **Conversión automática**: MediaPersistenceService convierte PCM → formato deseado (M4A/MP3)
 - **Compatibilidad total**: Mantiene funcionalidad completa con Google y otros providers
+
+### ✨ Nueva Funcionalidad
+- **Provider tracking**: Todas las respuestas `AIResponse` incluyen campo `provider` identificando el proveedor usado
+- **Debugging mejorado**: Fácil identificar qué provider generó cada respuesta (OpenAI, Google, XAI, etc.)
+- **Analytics enhancement**: Permite tracking y análisis detallado del uso por proveedor
+- **Audio base64 consistente**: El campo `base64` ahora contiene el M4A convertido (no PCM crudo)
+- **Proceso simplificado**: Eliminada conversión doble, ahora url y base64 tienen el mismo formato
+
+### 🔧 Cambios en API
+- **BREAKING**: `AIResponse` constructor ahora requiere parámetro `provider: String`
+- **Automático**: El campo se completa automáticamente por `AIProviderManager`
+- **Fallback**: Respuestas internas usan `'transcription_service'` como provider
+
+### 🎙️ Correcciones de Voces
+- **Google Provider**: Corregidos géneros de voces según documentación oficial de Google Cloud TTS
 
 ## [1.6.2] - 3 de octubre de 2025 🚀 FFMPEG INTEGRATION - FORMATO AUDIO OPCIONAL
 

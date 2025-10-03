@@ -819,13 +819,13 @@ Requirements:
         id: 'Zephyr',
         name: 'Zephyr',
         language: 'multi',
-        gender: VoiceGender.neutral,
+        gender: VoiceGender.female,
         description: 'Brilliant voice'),
     const VoiceInfo(
         id: 'Puck',
         name: 'Puck',
         language: 'multi',
-        gender: VoiceGender.neutral,
+        gender: VoiceGender.male,
         description: 'Optimistic voice'),
     const VoiceInfo(
         id: 'Charon',
@@ -899,13 +899,13 @@ Requirements:
         id: 'Umbriel',
         name: 'Umbriel',
         language: 'multi',
-        gender: VoiceGender.neutral,
+        gender: VoiceGender.male,
         description: 'Relaxed voice'),
     const VoiceInfo(
         id: 'Algieba',
         name: 'Algieba',
         language: 'multi',
-        gender: VoiceGender.female,
+        gender: VoiceGender.male,
         description: 'Soft voice'),
     const VoiceInfo(
         id: 'Despina',
@@ -945,7 +945,7 @@ Requirements:
         id: 'Achernar',
         name: 'Achernar',
         language: 'multi',
-        gender: VoiceGender.male,
+        gender: VoiceGender.female,
         description: 'Soft voice'),
     const VoiceInfo(
         id: 'Alnilam',
@@ -959,13 +959,13 @@ Requirements:
         id: 'Schedar',
         name: 'Schedar',
         language: 'multi',
-        gender: VoiceGender.female,
+        gender: VoiceGender.male,
         description: 'Even voice'),
     const VoiceInfo(
         id: 'Gacrux',
         name: 'Gacrux',
         language: 'multi',
-        gender: VoiceGender.male,
+        gender: VoiceGender.female,
         description: 'Mature voice'),
     const VoiceInfo(
         id: 'Pulcherrima',
@@ -999,7 +999,7 @@ Requirements:
         id: 'Sadachbia',
         name: 'Sadachbia',
         language: 'multi',
-        gender: VoiceGender.female,
+        gender: VoiceGender.male,
         description: 'Animated voice'),
     const VoiceInfo(
         id: 'Sadaltager',

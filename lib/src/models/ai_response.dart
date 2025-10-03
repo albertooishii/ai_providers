@@ -8,6 +8,7 @@ import 'ai_audio.dart';
 ///
 /// **Estructura:**
 /// - `text`: Contenido textual generado (siempre presente)
+/// - `provider`: Identificador del proveedor que generó la respuesta
 /// - `image`: Imagen generada (opcional, solo en generación de imágenes)
 /// - `audio`: Audio generado (opcional, solo en TTS/STT)
 ///
@@ -46,6 +47,7 @@ import 'ai_audio.dart';
 class AIResponse {
   AIResponse({
     required this.text,
+    required this.provider,
     this.image,
     this.audio,
   });
@@ -53,17 +55,20 @@ class AIResponse {
   factory AIResponse.fromJson(final Map<String, dynamic> json) {
     return AIResponse(
       text: json['text'] ?? '',
+      provider: json['provider'] ?? '',
       image: json['image'] != null ? AiImage.fromJson(json['image']) : null,
       audio: json['audio'] != null ? AiAudio.fromJson(json['audio']) : null,
     );
   }
 
   final String text;
+  final String provider;
   final AiImage? image;
   final AiAudio? audio;
 
   Map<String, dynamic> toJson() => {
         'text': text,
+        'provider': provider,
         if (image != null) 'image': image!.toJson(),
         if (audio != null) 'audio': audio!.toJson(),
       };

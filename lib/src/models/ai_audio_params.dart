@@ -163,8 +163,6 @@ class AiAudioParams {
     final map = <String, dynamic>{};
 
     map['speed'] = speed;
-    map['response_format'] = 'pcm'; // ✅ Siempre PCM para todos los providers
-    // ❌ NO incluir audioFormat aquí - es solo para MediaPersistenceService
     if (language != null) map['language'] = language;
     if (accent != null) map['accent'] = accent;
     if (temperature != null) map['temperature'] = temperature;

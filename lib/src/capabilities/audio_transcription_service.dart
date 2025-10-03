@@ -353,7 +353,8 @@ class AudioTranscriptionService {
       );
 
       // Crear AIResponse con transcripción Y audio grabado
-      final result = await _createAIResponseWithAudio(audioPath, transcript);
+      final result = await _createAIResponseWithAudio(
+          audioPath, transcript, response.provider);
 
       // Reset estado para próxima grabación
       _resetRecordingState();
@@ -396,7 +397,8 @@ class AudioTranscriptionService {
 
   /// Crea AIResponse con transcripción y audio completo (URL + base64)
   Future<AIResponse> _createAIResponseWithAudio(
-      final String audioPath, final String transcript) async {
+      final String audioPath, final String transcript,
+      [final String? provider]) async {
     try {
       // Leer archivo de audio para obtener base64 y metadatos
       final file = File(audioPath);
@@ -416,13 +418,14 @@ class AudioTranscriptionService {
 
       return AIResponse(
         text: transcript,
+        provider: provider ?? 'transcription_service',
         audio: aiAudio,
       );
     } on Exception catch (e) {
       AILogger.e(
           '[AudioTranscriptionService] Error creando AIResponse con audio: $e');
       // Fallback: solo transcripción sin audio
-      return AIResponse(text: transcript);
+      return AIResponse(text: transcript, provider: 'transcription_service');
     }
   }
 
@@ -658,8 +661,9 @@ class AudioTranscriptionService {
 
       // Crear AIResponse con audio si tenemos resultado y recordingPath
       final audioResponse = result != null
-          ? await _createAIResponseWithAudio(recordingPath, result)
-          : AIResponse(text: result ?? '');
+          ? await _createAIResponseWithAudio(
+              recordingPath, result, response.provider)
+          : AIResponse(text: result ?? '', provider: 'transcription_service');
 
       // Si hay un completer esperando (manual stop), completarlo
       if (_manualStopCompleter != null && !_manualStopCompleter!.isCompleted) {
@@ -683,7 +687,10 @@ class AudioTranscriptionService {
       // Reset del estado también en caso de error
       _resetRecordingState();
 
-      return AIResponse(text: ''); // Retornar AIResponse vacío en caso de error
+      return AIResponse(
+          text: '',
+          provider:
+              'transcription_service'); // Retornar AIResponse vacío en caso de error
     }
   }
 

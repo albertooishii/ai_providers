@@ -27,6 +27,17 @@ class AudioFormatInfo {
   final int? bitsPerSample;
 }
 
+/// Resultado del guardado de audio con ruta y base64 del archivo final
+class AudioSaveResult {
+  AudioSaveResult({
+    required this.filePath,
+    required this.base64,
+  });
+
+  final String filePath;
+  final String base64;
+}
+
 /// Parámetros unificados para conversión FFmpeg
 class _FFmpegParams {
   _FFmpegParams({
@@ -236,6 +247,41 @@ class MediaPersistenceService {
   /// - Conversión directa PCM→M4A sin archivos temporales
   /// - Cache basado en hash de contenido
   /// Retorna la ruta completa del archivo guardado o null si falló
+  /// Guarda audio desde base64 y devuelve tanto la ruta como el base64 del archivo final
+  Future<AudioSaveResult?> saveBase64AudioComplete(
+    final String base64, {
+    final String prefix = 'tts',
+    final String outputFormat = 'm4a', // 'm4a', 'wav', 'mp3'
+    final int bitrate = 128, // kbps para formatos comprimidos
+  }) async {
+    try {
+      final filePath = await saveBase64Audio(
+        base64,
+        prefix: prefix,
+        outputFormat: outputFormat,
+        bitrate: bitrate,
+      );
+
+      if (filePath == null) return null;
+
+      // Leer el archivo convertido y generar base64
+      final file = File(filePath);
+      if (!file.existsSync()) return null;
+
+      final convertedBytes = await file.readAsBytes();
+      final convertedBase64 = base64Encode(convertedBytes);
+
+      return AudioSaveResult(
+        filePath: filePath,
+        base64: convertedBase64,
+      );
+    } on Exception catch (e) {
+      AILogger.w('[MediaPersistence] Error saving audio complete: $e');
+      return null;
+    }
+  }
+
+  /// Método legacy - mantener compatibilidad
   Future<String?> saveBase64Audio(
     final String base64, {
     final String prefix = 'tts',
