@@ -193,9 +193,6 @@ class CompleteCacheService {
     return '$provider:$voice:$languageCode:$speakingRate:$pitch:$audioFormat:$text';
   }
 
-  /// Business rule for default audio file extension
-  static String _getDefaultAudioExtension() => 'mp3';
-
   /// Business rule for cache key generation
   static String _generateCacheKey(
       {required final String provider, required final String type}) {
@@ -358,9 +355,10 @@ class CompleteCacheService {
       );
 
       final audioDir = await getAudioCacheDirectory();
+      // ✅ Use audioFormat parameter instead of hardcoded default
       final ext = (extension != null && extension.trim().isNotEmpty)
           ? extension.trim().replaceAll('.', '')
-          : _getDefaultAudioExtension();
+          : audioFormat; // ✅ Use the audioFormat parameter (m4a, mp3, etc)
       final cachedFile = File('${audioDir.path}/$hash.$ext');
 
       AILogger.d(
