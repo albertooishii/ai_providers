@@ -125,31 +125,6 @@ class AudioGenerationService {
     }
   }
 
-  /// Genera audio/TTS simplificado (wrapper para compatibilidad)
-  /// DEPRECATED: Usar synthesize() directamente
-  Future<String?> synthesizeTts(
-    final String text, {
-    final String? languageCode,
-    final bool forDialogDemo = false,
-  }) async {
-    try {
-      if (text.trim().isEmpty) {
-        AILogger.w('[AudioGenerationService] Texto vacío para TTS');
-        return null;
-      }
-
-      // Usar synthesize() directamente - más eficiente y sin duplicación
-      final response = await synthesize(text);
-
-      return response.audio?.url?.isNotEmpty == true
-          ? response.audio!.url
-          : null;
-    } on Exception catch (e) {
-      AILogger.e('[AudioGenerationService] Error generando TTS: $e');
-      return null;
-    }
-  }
-
   /// Inicializar TTS con callbacks
   void _initializeTts() {
     _flutterTts = FlutterTts();

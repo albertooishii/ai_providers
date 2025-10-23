@@ -357,6 +357,15 @@ class AIProviderManager {
         }
 
         // ✅ CHECK PERSISTENT CACHE FIRST (CompleteCacheService)
+        AILogger.i(
+          '[AIProviderManager] 🔍 Checking persistent audio cache...',
+          tag: 'AI_PROVIDERS',
+        );
+        AILogger.d(
+          '[AIProviderManager] Cache params: text=${userMessage.substring(0, userMessage.length > 50 ? 50 : userMessage.length)}..., voice=${voiceToUse ?? 'default'}, lang=${audioParams.language ?? 'es'}, provider=$providerId, format=${audioParams.audioFormat}',
+          tag: 'AI_PROVIDERS',
+        );
+
         final cachedAudioFile = await _cacheService!.getCachedAudioFile(
           text: userMessage,
           voice: voiceToUse ?? 'default',
@@ -368,15 +377,19 @@ class AIProviderManager {
         );
 
         if (cachedAudioFile != null) {
-          AILogger.d(
-              '[AIProviderManager] Persistent cache hit for audio: ${cachedAudioFile.path}');
+          AILogger.i(
+            '[AIProviderManager] ✅ CACHE HIT! Using cached audio: ${cachedAudioFile.path}',
+            tag: 'AI_PROVIDERS',
+          );
           try {
             // ✅ Leer archivo cacheado y convertir a base64
             final cachedBytes = await cachedAudioFile.readAsBytes();
             final cachedBase64 = base64Encode(cachedBytes);
 
-            AILogger.d(
-                '[AIProviderManager] 🎵 Cached audio base64 generated: ${cachedBase64.length} chars');
+            AILogger.i(
+              '[AIProviderManager] 🎵 Cached audio loaded: ${cachedBytes.length} bytes → ${cachedBase64.length} base64 chars',
+              tag: 'AI_PROVIDERS',
+            );
 
             return AIResponse(
               text: userMessage,
@@ -393,6 +406,11 @@ class AIProviderManager {
                 '[AIProviderManager] Stack trace: ${StackTrace.current}');
             rethrow;
           }
+        } else {
+          AILogger.w(
+            '[AIProviderManager] ❌ CACHE MISS - will generate with AI provider',
+            tag: 'AI_PROVIDERS',
+          );
         }
 
         // Calculate the model that will actually be used for proper cache key
@@ -535,8 +553,10 @@ class AIProviderManager {
                 audioFormat: outputFormat,
               );
 
-              AILogger.d(
-                  '[AIProviderManager] 🎵 Cache hash for audio: $ttsHash');
+              AILogger.i(
+                '[AIProviderManager] 💾 Saving audio to cache with hash: $ttsHash',
+                tag: 'AI_PROVIDERS',
+              );
 
               final result = await MediaPersistenceService.instance
                   .saveBase64AudioComplete(
@@ -549,10 +569,10 @@ class AIProviderManager {
                 audioFileName = result.filePath;
                 convertedAudioBase64 =
                     result.base64; // Base64 del M4A convertido
-                AILogger.d(
-                    '[AIProviderManager] 🎵 Audio converted and saved: $outputFormat');
-                AILogger.d(
-                    '[AIProviderManager] 🎵 Audio file path: $audioFileName');
+                AILogger.i(
+                  '[AIProviderManager] ✅ Audio saved to cache: $audioFileName',
+                  tag: 'AI_PROVIDERS',
+                );
                 AILogger.d(
                     '[AIProviderManager] 🎵 Converted audio base64: ${convertedAudioBase64.length} chars');
               } else {

@@ -6,6 +6,7 @@ import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:ffmpeg_kit_flutter_new/ffmpeg_kit.dart';
 import 'package:ffmpeg_kit_flutter_new/return_code.dart';
+import 'package:crypto/crypto.dart';
 import '../utils/logger.dart';
 import '../infrastructure/cache_service.dart';
 
@@ -283,14 +284,14 @@ class MediaPersistenceService {
     }
   }
 
-  /// Método legacy - mantener compatibilidad
+  /// Guardar audio desde base64 con hash consistente
+  /// SIEMPRE usa hash (texto+voz+modelo+formato) - nunca timestamp
   Future<String?> saveBase64Audio(
     final String base64, {
     final String prefix = 'tts',
     final String outputFormat = 'm4a', // 'm4a', 'wav', 'mp3'
     final int bitrate = 128, // kbps para formatos comprimidos
-    final String?
-        hash, // ✅ Si se proporciona, usar como nombre de archivo para cache
+    final String? hash, // Si se proporciona, usar como nombre de archivo
   }) async {
     try {
       if (base64.trim().isEmpty) return null;
@@ -318,11 +319,11 @@ class MediaPersistenceService {
         return null;
       }
 
-      // ✅ Usar hash como nombre si se proporciona, si no usar timestamp
+      // ✅ SIEMPRE usar hash - nunca timestamp
+      // Si no se proporciona hash, generar uno basado en el contenido del audio
       final extension = outputFormat.toLowerCase();
-      final fileName = hash != null
-          ? '$hash.$extension'
-          : '${prefix}_${DateTime.now().millisecondsSinceEpoch}.$extension';
+      final finalHash = hash ?? _generateContentHash(normalized);
+      final fileName = '$finalHash.$extension';
       final audioDir = await _getAudioDir();
       final finalPath = '${audioDir.path}/$fileName';
 
@@ -760,6 +761,14 @@ class MediaPersistenceService {
 
     final hex = toHex(bytes);
     return '${hex.substring(0, 8)}-${hex.substring(8, 12)}-${hex.substring(12, 16)}-${hex.substring(16, 20)}-${hex.substring(20)}';
+  }
+
+  /// ✅ Generar hash consistente basado en contenido del audio (base64)
+  /// Nunca timestamp - mismo audio siempre genera el mismo hash
+  String _generateContentHash(final String base64Content) {
+    final bytes = utf8.encode(base64Content);
+    final digest = sha256.convert(bytes);
+    return digest.toString();
   }
 
   /// Verificar si FFmpeg está soportado en la plataforma actual

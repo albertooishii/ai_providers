@@ -333,6 +333,15 @@ class CompleteCacheService {
     final String audioFormat = 'm4a',
   }) async {
     try {
+      AILogger.i(
+        '[CompleteCacheService] 🔍 Searching for cached audio...',
+        tag: 'AI_PROVIDERS',
+      );
+      AILogger.d(
+        '[CompleteCacheService] Cache params: provider=$provider, voice=$voice, lang=$languageCode, rate=$speakingRate, pitch=$pitch, format=$audioFormat',
+        tag: 'AI_PROVIDERS',
+      );
+
       final hash = generateTtsHash(
         text: text,
         voice: voice,
@@ -343,23 +352,37 @@ class CompleteCacheService {
         audioFormat: audioFormat,
       );
 
+      AILogger.d(
+        '[CompleteCacheService] Generated hash: $hash',
+        tag: 'AI_PROVIDERS',
+      );
+
       final audioDir = await getAudioCacheDirectory();
       final ext = (extension != null && extension.trim().isNotEmpty)
           ? extension.trim().replaceAll('.', '')
           : _getDefaultAudioExtension();
       final cachedFile = File('${audioDir.path}/$hash.$ext');
 
+      AILogger.d(
+        '[CompleteCacheService] Looking for file: ${cachedFile.path}',
+        tag: 'AI_PROVIDERS',
+      );
+
       if (cachedFile.existsSync()) {
         try {
           final len = await cachedFile.length();
           if (len > 0) {
-            AILogger.d(
-                '[Cache] Audio encontrado en caché: ${cachedFile.path} (size=$len)');
+            AILogger.i(
+              '[CompleteCacheService] ✅ CACHE HIT! File found: ${cachedFile.path} ($len bytes)',
+              tag: 'AI_PROVIDERS',
+            );
             return cachedFile;
           } else {
             // Remove zero-length files to avoid playback errors
-            AILogger.d(
-                '[Cache] Found zero-length cached audio, deleting: ${cachedFile.path}');
+            AILogger.w(
+              '[CompleteCacheService] Found zero-length cached audio, deleting: ${cachedFile.path}',
+              tag: 'AI_PROVIDERS',
+            );
             try {
               await cachedFile.delete();
             } on Exception catch (_) {}
@@ -368,6 +391,11 @@ class CompleteCacheService {
           AILogger.e('[Cache] Error checking cached file length: $e');
           return null;
         }
+      } else {
+        AILogger.w(
+          '[CompleteCacheService] ❌ CACHE MISS - file does not exist',
+          tag: 'AI_PROVIDERS',
+        );
       }
     } on Exception catch (e) {
       AILogger.e('[Cache] Error obteniendo audio cacheado: $e');
