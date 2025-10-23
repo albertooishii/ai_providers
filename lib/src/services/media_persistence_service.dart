@@ -314,14 +314,6 @@ class MediaPersistenceService {
         return null;
       }
 
-      // Cache inteligente basado en hash
-      final contentHash = _calculateContentHash(audioData);
-      final cachedPath = await _checkAudioCache(contentHash, outputFormat);
-      if (cachedPath != null) {
-        AILogger.d('[MediaPersistence] ♻️ Using cached audio: $cachedPath');
-        return cachedPath;
-      }
-
       // Generate filename with appropriate extension
       final extension = outputFormat.toLowerCase();
       final fileName =
@@ -332,7 +324,6 @@ class MediaPersistenceService {
       // Optimización: evitar conversión si el formato ya es el deseado
       if (_isFormatCompatible(formatInfo, outputFormat)) {
         await File(finalPath).writeAsBytes(audioData);
-        await _cacheAudioFile(contentHash, finalPath, outputFormat);
         AILogger.d(
             '[MediaPersistence] 🚀 Saved audio directly (no conversion): $finalPath');
         return finalPath;
@@ -345,7 +336,6 @@ class MediaPersistenceService {
             : _createWavFile(audioData,
                 sampleRate: 24000, channels: 1, bitsPerSample: 16);
         await File(finalPath).writeAsBytes(wavData);
-        await _cacheAudioFile(contentHash, finalPath, outputFormat);
         AILogger.d('[MediaPersistence] Saved WAV audio: $finalPath');
         return finalPath;
       }
@@ -360,7 +350,6 @@ class MediaPersistenceService {
       );
 
       if (success && File(finalPath).existsSync()) {
-        await _cacheAudioFile(contentHash, finalPath, outputFormat);
         AILogger.d(
             '[MediaPersistence] 🎵 Saved optimized $outputFormat: $finalPath');
         return finalPath;
@@ -372,9 +361,6 @@ class MediaPersistenceService {
       return null;
     }
   }
-
-  /// Cache de archivos de audio para evitar reconversiones
-  final Map<String, String> _audioCache = {};
 
   /// Detectar formato de audio automáticamente
   AudioFormatInfo _detectAudioFormat(final Uint8List audioData) {
@@ -448,43 +434,6 @@ class MediaPersistenceService {
     }
 
     return false;
-  }
-
-  /// Calcular hash del contenido para cache
-  String _calculateContentHash(final Uint8List data) {
-    // Hash simple basado en tamaño y primeros/últimos bytes
-    final size = data.length;
-    final start = data.take(16).join();
-    final end = data.skip(size - 16).take(16).join();
-    return '${size}_${start}_$end';
-  }
-
-  /// Verificar cache de audio
-  Future<String?> _checkAudioCache(
-      final String contentHash, final String format) async {
-    final cacheKey = '${contentHash}_$format';
-    final cachedPath = _audioCache[cacheKey];
-
-    if (cachedPath != null && File(cachedPath).existsSync()) {
-      return cachedPath;
-    }
-
-    // Limpiar cache si el archivo ya no existe
-    _audioCache.remove(cacheKey);
-    return null;
-  }
-
-  /// Guardar archivo en cache
-  Future<void> _cacheAudioFile(final String contentHash, final String filePath,
-      final String format) async {
-    final cacheKey = '${contentHash}_$format';
-    _audioCache[cacheKey] = filePath;
-
-    // Limitar tamaño del cache (mantener últimos 50)
-    if (_audioCache.length > 50) {
-      final oldestKey = _audioCache.keys.first;
-      _audioCache.remove(oldestKey);
-    }
   }
 
   /// Conversión optimizada sin archivos temporales

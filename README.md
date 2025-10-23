@@ -27,13 +27,21 @@ AI Providers ofrece un único facade `AI.*` para conectar tu app Flutter con mú
        - assets/ai_providers_config.yaml
    ```
 
-3. **Definir tus claves API** en `.env` (formato JSON Array)
+3. **Configurar el archivo `.env`** en la raíz del proyecto (formato JSON Array)
    ```env
    OPENAI_API_KEYS=["sk-proj-..."]
    GEMINI_API_KEYS=["AIza...", "AIza..."]
    GROK_API_KEYS=["xai-..."]
    ```
    > El SDK rota automáticamente entre las claves incluidas en cada arreglo.
+
+4. **Registrar el `.env` como asset** en `pubspec.yaml`
+   ```yaml
+   # pubspec.yaml
+   flutter:
+     assets:
+       - .env  # ← Esencial para que Flutter pueda acceder al archivo
+   ```
 
 ## 🧪 Uso esencial
 ```dart
@@ -64,9 +72,11 @@ Future<void> main() async {
 
 ```bash
 cd example
-cp .env.example .env
+cp .env.example .env  # Copia y edita con tus claves API reales
 flutter run
 ```
+
+> ⚠️ **Importante**: El archivo `.env` debe estar en la **raíz del proyecto** y registrado como asset en `pubspec.yaml` para que `flutter_dotenv` pueda cargarlo correctamente.
 
 ## ⚙️ Configuración avanzada
 - Seleccionar modelo o proveedor preferido:

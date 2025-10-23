@@ -115,7 +115,7 @@ export 'src/capabilities/hybrid_conversation_service.dart';
 // through the AI facade using AI.getService<ServiceType>() method.
 
 // ═══════════════════════════════════════════════════════════════════════════════
-// � INTERNAL REGISTRY (NO LONGER EXPORTED)
+//  INTERNAL REGISTRY (NO LONGER EXPORTED)
 // ═══════════════════════════════════════════════════════════════════════════════
 //
 // ❌ ProviderRegistry - INTERNAL ONLY (initialization happens automatically)

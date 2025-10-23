@@ -185,7 +185,7 @@ void main() {
         print('⚠️  Funciones posiblemente innecesarias:');
         for (final func in actuallyUnused) {
           final file = publicFunctions[func]!;
-          print('   �️ $func (en $file)');
+          print('   ️ $func (en $file)');
         }
         print('');
       }

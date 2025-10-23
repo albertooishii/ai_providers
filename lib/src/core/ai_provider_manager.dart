@@ -22,6 +22,7 @@ import '../models/ai_init_config.dart';
 import '../models/ai_response.dart';
 import '../models/ai_image.dart';
 import '../models/ai_audio.dart';
+import '../models/ai_audio_params.dart';
 import '../models/provider_response.dart';
 import '../models/retry_config.dart';
 import '../services/media_persistence_service.dart';
@@ -337,6 +338,54 @@ class AIProviderManager {
       // Check cache first if available (ONLY for audio generation/TTS - not for text generation)
       CacheKey? cacheKey;
       if (_cacheService != null && capability == AICapability.audioGeneration) {
+        // Get audio parameters for cache differentiation
+        final audioParams =
+            additionalParams?.audioParams ?? const AiAudioParams();
+
+        // Extract text from system prompt history (user message is the last one)
+        final userMessage = systemPrompt.history?.isNotEmpty == true
+            ? systemPrompt.history!.last['content'] as String? ?? ''
+            : '';
+
+        // Get voice if this is audio generation
+        String? voiceToUse;
+        try {
+          voiceToUse = await getVoiceForRequest(providerId, capability);
+        } on Exception catch (_) {
+          voiceToUse = 'default';
+        }
+
+        // ✅ CHECK PERSISTENT CACHE FIRST (CompleteCacheService)
+        final cachedAudioFile = await _cacheService!.getCachedAudioFile(
+          text: userMessage,
+          voice: voiceToUse ?? 'default',
+          languageCode: audioParams.language ?? 'es',
+          provider: providerId,
+          speakingRate: audioParams.speed,
+          pitch: audioParams.temperature ?? 0.0,
+          audioFormat: audioParams.audioFormat,
+        );
+
+        if (cachedAudioFile != null) {
+          AILogger.d(
+              '[AIProviderManager] Persistent cache hit for audio: ${cachedAudioFile.path}');
+          try {
+            return AIResponse(
+              text: userMessage,
+              provider: providerId,
+              audio: AiAudio(
+                url: cachedAudioFile.path,
+                createdAtMs: DateTime.now().millisecondsSinceEpoch,
+              ),
+            );
+          } on Exception catch (e) {
+            AILogger.e('[AIProviderManager] Error processing cached audio: $e');
+            AILogger.e(
+                '[AIProviderManager] Stack trace: ${StackTrace.current}');
+            rethrow;
+          }
+        }
+
         // Calculate the model that will actually be used for proper cache key
         String? modelToUseForCache =
             await _getSavedModelForProviderIfSupported(capability, providerId);
@@ -350,7 +399,7 @@ class AIProviderManager {
 
         final cachedResponse = await _cacheService!.memoryCache?.get(cacheKey);
         if (cachedResponse != null) {
-          AILogger.d('Cache hit for provider: $providerId');
+          AILogger.d('Memory cache hit for provider: $providerId');
           try {
             return cachedResponse;
           } on Exception catch (e) {

@@ -180,6 +180,7 @@ class CompleteCacheService {
   }
 
   /// Business rule for TTS hash generation strategy
+  /// Incluye audioFormat para evitar colisiones entre formatos (M4A vs MP3)
   static String _generateTtsIdentifier({
     required final String text,
     required final String voice,
@@ -187,8 +188,9 @@ class CompleteCacheService {
     required final String provider,
     required final double speakingRate,
     required final double pitch,
+    final String audioFormat = 'm4a',
   }) {
-    return '$provider:$voice:$languageCode:$speakingRate:$pitch:$text';
+    return '$provider:$voice:$languageCode:$speakingRate:$pitch:$audioFormat:$text';
   }
 
   /// Business rule for default audio file extension
@@ -292,6 +294,7 @@ class CompleteCacheService {
   // ============================================================
 
   /// Genera un hash único para el texto y configuración TTS
+  /// Incluye audioFormat para diferenciación M4A vs MP3
   String generateTtsHash({
     required final String text,
     required final String voice,
@@ -299,6 +302,7 @@ class CompleteCacheService {
     required final String provider,
     final double speakingRate = 1.0,
     final double pitch = 0.0,
+    final String audioFormat = 'm4a',
   }) {
     // Use Domain Service to generate identifier
     final input = _generateTtsIdentifier(
@@ -308,6 +312,7 @@ class CompleteCacheService {
       provider: provider,
       speakingRate: speakingRate,
       pitch: pitch,
+      audioFormat: audioFormat,
     );
 
     final bytes = utf8.encode(input);
@@ -316,6 +321,7 @@ class CompleteCacheService {
   }
 
   /// Obtiene archivo de audio cacheado
+  /// Incluye audioFormat en la búsqueda para diferenciación correcta
   Future<File?> getCachedAudioFile({
     required final String text,
     required final String voice,
@@ -324,6 +330,7 @@ class CompleteCacheService {
     final double speakingRate = 1.0,
     final double pitch = 0.0,
     final String? extension,
+    final String audioFormat = 'm4a',
   }) async {
     try {
       final hash = generateTtsHash(
@@ -333,6 +340,7 @@ class CompleteCacheService {
         provider: provider,
         speakingRate: speakingRate,
         pitch: pitch,
+        audioFormat: audioFormat,
       );
 
       final audioDir = await getAudioCacheDirectory();

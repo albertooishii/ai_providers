@@ -9,7 +9,7 @@ import 'dart:convert';
 class AISystemPrompt {
   const AISystemPrompt({
     required this.context,
-    required this.dateTime,
+    this.dateTime,
     this.history,
     required this.instructions,
   });
@@ -18,17 +18,14 @@ class AISystemPrompt {
   factory AISystemPrompt.fromJson(final Map<String, dynamic> json) {
     return AISystemPrompt(
       context: json['context'] ?? <String, dynamic>{},
-      dateTime: DateTime.parse(
-        json['dateTime'] ?? DateTime.now().toIso8601String(),
-      ),
+      dateTime:
+          json['dateTime'] != null ? DateTime.parse(json['dateTime']) : null,
       history: json['history'] != null
           ? (json['history'] as List<dynamic>)
               .map((final e) => Map<String, dynamic>.from(e as Map))
               .toList()
           : null,
-      instructions: json['instructions'] is Map
-          ? Map<String, dynamic>.from(json['instructions'] as Map)
-          : <String, dynamic>{},
+      instructions: json['instructions'] ?? '',
     );
   }
 
@@ -40,21 +37,21 @@ class AISystemPrompt {
   /// - Any profile or configuration object
   final dynamic context;
 
-  /// Timestamp for the system prompt
-  final DateTime dateTime;
+  /// Timestamp for the system prompt (optional)
+  final DateTime? dateTime;
 
   /// Conversation history for context
   final List<Map<String, dynamic>>? history;
 
-  /// System instructions as structured data
-  final Map<String, dynamic> instructions;
+  /// System instructions - can be String or Map&lt;String, dynamic&gt;
+  final dynamic instructions;
 
   /// Convert to JSON
   Map<String, dynamic> toJson() => {
         'context': context is Map<String, dynamic>
             ? context
             : (context?.toJson?.call() ?? context.toString()),
-        'dateTime': dateTime.toIso8601String(),
+        if (dateTime != null) 'dateTime': dateTime!.toIso8601String(),
         if (history != null && history!.isNotEmpty) 'history': history,
         'instructions': instructions,
       };
@@ -91,7 +88,7 @@ class AISystemPrompt {
     final dynamic context,
     final DateTime? dateTime,
     final List<Map<String, dynamic>>? history,
-    final Map<String, dynamic>? instructions,
+    final dynamic instructions,
   }) {
     return AISystemPrompt(
       context: context ?? this.context,
@@ -116,12 +113,14 @@ class AISystemPrompt {
         context,
         dateTime,
         history != null ? Object.hashAll(history!) : null,
-        Object.hashAll(
-          instructions.entries.map((final e) => Object.hash(e.key, e.value)),
-        ),
-      );
-
-  // Helper methods for deep comparison
+        instructions is Map
+            ? Object.hashAll(
+                (instructions as Map)
+                    .entries
+                    .map((final e) => Object.hash(e.key, e.value)),
+              )
+            : instructions.hashCode,
+      ); // Helper methods for deep comparison
   static bool _mapEquals<K, V>(final Map<K, V>? a, final Map<K, V>? b) {
     if (a == null) return b == null;
     if (b == null || a.length != b.length) return false;
