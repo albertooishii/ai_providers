@@ -517,10 +517,32 @@ class AIProviderManager {
               AILogger.d(
                   '[AIProviderManager] 🎵 Target audio format: $outputFormat');
 
+              // ✅ Generar hash para cache coherente (mismo que se usa en getCachedAudioFile)
+              // Recalcular userMessage y audioParams del contexto local
+              final audioParams =
+                  additionalParams?.audioParams ?? const AiAudioParams();
+              final userMessage = systemPrompt.history?.isNotEmpty == true
+                  ? systemPrompt.history!.last['content'] as String? ?? ''
+                  : '';
+
+              final ttsHash = _cacheService?.generateTtsHash(
+                text: userMessage,
+                voice: voiceToUse ?? 'default',
+                languageCode: audioParams.language ?? 'es',
+                provider: providerId,
+                speakingRate: audioParams.speed,
+                pitch: audioParams.temperature ?? 0.0,
+                audioFormat: outputFormat,
+              );
+
+              AILogger.d(
+                  '[AIProviderManager] 🎵 Cache hash for audio: $ttsHash');
+
               final result = await MediaPersistenceService.instance
                   .saveBase64AudioComplete(
                 providerResp.audioBase64!,
                 outputFormat: outputFormat,
+                hash: ttsHash, // ✅ Pasar hash para filename coherente
               );
 
               if (result != null) {

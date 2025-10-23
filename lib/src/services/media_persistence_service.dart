@@ -253,6 +253,7 @@ class MediaPersistenceService {
     final String prefix = 'tts',
     final String outputFormat = 'm4a', // 'm4a', 'wav', 'mp3'
     final int bitrate = 128, // kbps para formatos comprimidos
+    final String? hash, // ✅ Parámetro para usar hash como nombre de archivo
   }) async {
     try {
       final filePath = await saveBase64Audio(
@@ -260,6 +261,7 @@ class MediaPersistenceService {
         prefix: prefix,
         outputFormat: outputFormat,
         bitrate: bitrate,
+        hash: hash, // ✅ Pasar hash para cache coherente
       );
 
       if (filePath == null) return null;
@@ -287,6 +289,8 @@ class MediaPersistenceService {
     final String prefix = 'tts',
     final String outputFormat = 'm4a', // 'm4a', 'wav', 'mp3'
     final int bitrate = 128, // kbps para formatos comprimidos
+    final String?
+        hash, // ✅ Si se proporciona, usar como nombre de archivo para cache
   }) async {
     try {
       if (base64.trim().isEmpty) return null;
@@ -314,10 +318,11 @@ class MediaPersistenceService {
         return null;
       }
 
-      // Generate filename with appropriate extension
+      // ✅ Usar hash como nombre si se proporciona, si no usar timestamp
       final extension = outputFormat.toLowerCase();
-      final fileName =
-          '${prefix}_${DateTime.now().millisecondsSinceEpoch}.$extension';
+      final fileName = hash != null
+          ? '$hash.$extension'
+          : '${prefix}_${DateTime.now().millisecondsSinceEpoch}.$extension';
       final audioDir = await _getAudioDir();
       final finalPath = '${audioDir.path}/$fileName';
 
