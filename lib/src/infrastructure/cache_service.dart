@@ -180,7 +180,7 @@ class CompleteCacheService {
   }
 
   /// Business rule for TTS hash generation strategy
-  /// Incluye audioFormat para evitar colisiones entre formatos (M4A vs MP3)
+  /// Incluye audioFormat para tener hashes DIFERENTES por formato (M4A vs MP3)
   static String _generateTtsIdentifier({
     required final String text,
     required final String voice,

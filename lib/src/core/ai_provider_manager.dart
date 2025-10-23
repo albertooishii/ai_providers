@@ -4,6 +4,7 @@
 library;
 
 import 'dart:async';
+import 'dart:convert';
 import 'dart:io';
 
 import '../core/config_loader.dart';
@@ -370,11 +371,19 @@ class AIProviderManager {
           AILogger.d(
               '[AIProviderManager] Persistent cache hit for audio: ${cachedAudioFile.path}');
           try {
+            // ✅ Leer archivo cacheado y convertir a base64
+            final cachedBytes = await cachedAudioFile.readAsBytes();
+            final cachedBase64 = base64Encode(cachedBytes);
+
+            AILogger.d(
+                '[AIProviderManager] 🎵 Cached audio base64 generated: ${cachedBase64.length} chars');
+
             return AIResponse(
               text: userMessage,
               provider: providerId,
               audio: AiAudio(
                 url: cachedAudioFile.path,
+                base64: cachedBase64, // ✅ Base64 del archivo cacheado
                 createdAtMs: DateTime.now().millisecondsSinceEpoch,
               ),
             );
