@@ -425,16 +425,35 @@ class AIProviderManager {
             model: modelToUseForCache ?? '');
 
         final cachedResponse = await _cacheService!.memoryCache?.get(cacheKey);
+
+        // ✅ CRITICAL: Validate memory cache entry is not null before returning
+        // If memory cache contains null (corruption), skip and regenerate
         if (cachedResponse != null) {
-          AILogger.d('Memory cache hit for provider: $providerId');
-          try {
-            return cachedResponse;
-          } on Exception catch (e) {
-            AILogger.e(
-                '[AIProviderManager] Error processing cached response: $e');
-            AILogger.e(
-                '[AIProviderManager] Stack trace: ${StackTrace.current}');
-            rethrow;
+          // Extra validation: ensure audio is not null
+          if (cachedResponse.audio != null &&
+              cachedResponse.audio!.base64 != null &&
+              cachedResponse.audio!.base64!.isNotEmpty) {
+            AILogger.d('Memory cache hit for provider: $providerId');
+            try {
+              return cachedResponse;
+            } on Exception catch (e) {
+              AILogger.e(
+                  '[AIProviderManager] Error processing cached response: $e');
+              AILogger.e(
+                  '[AIProviderManager] Stack trace: ${StackTrace.current}');
+              rethrow;
+            }
+          } else {
+            // ⚠️ CACHE CORRUPTION: Memory cache has response but audio is null
+            AILogger.w(
+              '[AIProviderManager] ⚠️ CACHE CORRUPTION DETECTED - Memory cache has null audio for $providerId',
+              tag: 'AI_PROVIDERS',
+            );
+            AILogger.d(
+              '[AIProviderManager] Skipping corrupted cache entry, will regenerate',
+              tag: 'AI_PROVIDERS',
+            );
+            // Continue to provider generation instead of returning null
           }
         }
       }
