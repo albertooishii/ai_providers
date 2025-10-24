@@ -542,8 +542,13 @@ class AIProviderManager {
           if (providerResp.audioBase64 != null &&
               providerResp.audioBase64!.isNotEmpty) {
             try {
+              AILogger.i(
+                  '[AIProviderManager] ✅ Audio received from provider $providerId: ${providerResp.audioBase64!.length} chars');
+              final preview = providerResp.audioBase64!.length > 50
+                  ? providerResp.audioBase64!.substring(0, 50)
+                  : providerResp.audioBase64!;
               AILogger.d(
-                  '[AIProviderManager] 🎵 Processing audio from provider: ${providerResp.audioBase64!.length} chars');
+                  '[AIProviderManager] Audio base64 preview: $preview...');
 
               // Extraer formato de audio deseado desde additionalParams
               String outputFormat = 'm4a'; // Default
@@ -603,8 +608,10 @@ class AIProviderManager {
                   '[AIProviderManager] Failed to persist provider audio: $e');
             }
           } else {
+            AILogger.w(
+                '[AIProviderManager] ⚠️ NO AUDIO from provider $providerId - audioBase64 is ${providerResp.audioBase64 == null ? "null" : "empty"}');
             AILogger.d(
-                '[AIProviderManager] 🎵 No audioBase64 in provider response');
+                '[AIProviderManager] Full ProviderResponse: text="${providerResp.text}", imageBase64=${providerResp.imageBase64 != null}, audioBase64=${providerResp.audioBase64}');
           }
 
           // Build final AIResponse combining provider metadata and persisted filenames

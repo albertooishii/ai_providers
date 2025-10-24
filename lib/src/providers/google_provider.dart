@@ -597,20 +597,28 @@ After generating the image, provide your response as a JSON object with the foll
       if (isSuccessfulResponse(response.statusCode)) {
         final responseBody = jsonDecode(response.body);
 
+        // 🔍 DEBUG: Log complete response structure
+        AILogger.d(
+            '[GoogleProvider] 📊 TTS Response (full body): $responseBody');
+
         // Extraer audio de la respuesta de Gemini
         String? audioBase64;
         if (responseBody['candidates'] != null &&
             responseBody['candidates'].isNotEmpty) {
           final candidate = responseBody['candidates'][0];
+          AILogger.d('[GoogleProvider] 🎵 Candidate structure: $candidate');
+
           if (candidate['content'] != null &&
               candidate['content']['parts'] != null &&
               candidate['content']['parts'].isNotEmpty) {
             final part = candidate['content']['parts'][0];
+            AILogger.d('[GoogleProvider] 📦 Part structure: $part');
+
             if (part['inlineData'] != null &&
                 part['inlineData']['data'] != null) {
               audioBase64 = part['inlineData']['data'];
               AILogger.d(
-                  '[GoogleProvider] Extracted audio base64 data (${audioBase64?.length ?? 0} chars)');
+                  '[GoogleProvider] ✅ Extracted audio base64 data (${audioBase64?.length ?? 0} chars)');
               // Debug: verify base64 starts correctly
               if (audioBase64 != null && audioBase64.isNotEmpty) {
                 final first50 = audioBase64.length > 50
@@ -618,17 +626,48 @@ After generating the image, provide your response as a JSON object with the foll
                     : audioBase64;
                 AILogger.d('[GoogleProvider] Base64 preview: $first50...');
               }
+            } else {
+              AILogger.w(
+                  '[GoogleProvider] ⚠️ No inlineData found in part: ${part.keys.toList()}');
+            }
+          } else {
+            AILogger.w(
+                '[GoogleProvider] ⚠️ No content/parts in candidate: ${candidate.keys.toList()}');
+          }
+        } else {
+          AILogger.w(
+              '[GoogleProvider] ⚠️ No candidates in response: ${responseBody.keys.toList()}');
+        }
+
+        if (audioBase64 == null || audioBase64.isEmpty) {
+          AILogger.e(
+              '[GoogleProvider] ❌ No audio extracted from response. Response keys: ${responseBody.keys.toList()}');
+
+          // 🔍 Analyze finish reason to understand why no audio
+          if (responseBody['candidates'] != null &&
+              responseBody['candidates'].isNotEmpty) {
+            final finishReason = responseBody['candidates'][0]['finishReason'];
+            AILogger.e('[GoogleProvider] Finish reason: $finishReason');
+
+            if (finishReason == 'OTHER') {
+              AILogger.e(
+                  '[GoogleProvider] Gemini returned finishReason=OTHER (likely safety filter or unsupported request)');
+              throw StateError(
+                  'Gemini TTS returned OTHER finish reason - possibly blocked by safety filter');
             }
           }
+
+          throw StateError(
+              'Gemini TTS returned no audio data. Full response: ${responseBody.toString()}');
         }
 
         return ProviderResponse(
           text: 'Audio generated successfully with Gemini TTS',
-          audioBase64: audioBase64 ?? '',
+          audioBase64: audioBase64,
         );
       } else {
         AILogger.e(
-            '[GoogleProvider] Audio generation failed with HTTP ${response.statusCode}: ${response.body}');
+            '[GoogleProvider] ❌ Audio generation failed with HTTP ${response.statusCode}: ${response.body}');
         throw HttpException(
             'HTTP ${response.statusCode}: ${response.reasonPhrase ?? 'Audio generation failed'}');
       }
