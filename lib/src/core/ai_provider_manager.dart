@@ -467,9 +467,7 @@ class AIProviderManager {
         try {
           modelToUse = await _getSavedModelForProviderIfSupported(
               capability, providerId);
-        } on Exception catch (_) {
-          // ignore and fallback to auto selection below
-        }
+        } on Exception catch (_) {}
 
         modelToUse ??= await _getModelForCapability(capability, providerId);
 
