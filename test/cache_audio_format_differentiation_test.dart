@@ -1,8 +1,11 @@
 import 'package:test/test.dart';
+import 'package:flutter_test/flutter_test.dart' as flutter_test;
 import 'package:ai_providers/src/infrastructure/cache_service.dart';
 import 'package:ai_providers/src/models/ai_audio_params.dart';
 
 void main() {
+  // Ensure platform channels (e.g., path_provider) are available in tests
+  flutter_test.TestWidgetsFlutterBinding.ensureInitialized();
   group('Audio Cache - Format Differentiation', () {
     late CompleteCacheService cacheService;
 
