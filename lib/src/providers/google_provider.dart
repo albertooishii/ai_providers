@@ -714,13 +714,16 @@ After generating the image, provide your response as a JSON object with the foll
 
       AILogger.d('[GoogleProvider] 🎭 Speaker configs: $speakerVoiceConfigs');
 
+      // Build enhanced prompt with language and other parameters
+      final enhancedText = _buildMultiVoiceTtsPrompt(text, audioParams);
+
       final contents = [
         {
           'role': 'user',
           'parts': [
             {
-              'text': text
-            } // Text should have "Speaker1: ...\nSpeaker2: ..." format
+              'text': enhancedText
+            } // Text should have "Speaker1: ...\nSpeaker2: ..." format with language instructions
           ],
         }
       ];
@@ -832,6 +835,55 @@ Requirements:
           ? 'faster than normal (${audioParams.speed}x speed)'
           : 'slower than normal (${audioParams.speed}x speed)';
       promptBuilder.write('\n- Speaking pace: $speedDescription');
+    }
+
+    // Añadir formato de audio (Google siempre genera PCM internamente)
+    promptBuilder
+        .write('\n- Audio format preference: ${audioParams.audioFormat}');
+
+    return promptBuilder.toString();
+  }
+
+  /// Construye un prompt TTS avanzado para multi-voice incluyendo idioma y parámetros
+  String _buildMultiVoiceTtsPrompt(
+    final String text,
+    final AiAudioParams audioParams,
+  ) {
+    final promptBuilder = StringBuffer();
+
+    promptBuilder.write(
+        '''Please generate multi-speaker speech audio for the following text:
+"$text"
+
+Requirements:
+- Use natural intonation and pacing for each speaker
+- Clear pronunciation for all speakers''');
+
+    // Añadir idioma si está especificado
+    if (audioParams.language != null) {
+      promptBuilder.write(
+          '\n- All speakers should speak in ${audioParams.language} language');
+    }
+
+    // Añadir acento personalizado si está especificado
+    if (audioParams.accent != null) {
+      promptBuilder
+          .write('\n- Use accent/pronunciation style: ${audioParams.accent}');
+    }
+
+    // Añadir emoción personalizada si está especificada
+    if (audioParams.emotion != null) {
+      promptBuilder.write(
+          '\n- Emotional expression for all speakers: ${audioParams.emotion}');
+    }
+
+    // Añadir velocidad si no es la por defecto
+    if (audioParams.speed != 1.0) {
+      final speedDescription = audioParams.speed > 1.0
+          ? 'faster than normal (${audioParams.speed}x speed)'
+          : 'slower than normal (${audioParams.speed}x speed)';
+      promptBuilder
+          .write('\n- Speaking pace for all speakers: $speedDescription');
     }
 
     // Añadir formato de audio (Google siempre genera PCM internamente)
