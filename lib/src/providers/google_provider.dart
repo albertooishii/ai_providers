@@ -554,7 +554,7 @@ After generating the image, provide your response as a JSON object with the foll
       // Single-voice mode (existing logic)
       final selectedVoice = voice ?? getDefaultVoice();
       final ttsPrompt =
-          _buildAdvancedTtsPrompt(text, selectedVoice, audioParams);
+          _buildTtsPrompt(text, audioParams, voice: selectedVoice);
 
       final contents = [
         {
@@ -715,7 +715,7 @@ After generating the image, provide your response as a JSON object with the foll
       AILogger.d('[GoogleProvider] 🎭 Speaker configs: $speakerVoiceConfigs');
 
       // Build enhanced prompt with language and other parameters
-      final enhancedText = _buildMultiVoiceTtsPrompt(text, audioParams);
+      final enhancedText = _buildTtsPrompt(text, audioParams);
 
       final contents = [
         {
@@ -798,24 +798,44 @@ After generating the image, provide your response as a JSON object with the foll
   }
 
   /// Construye un prompt TTS avanzado usando los nuevos parámetros de audio
-  String _buildAdvancedTtsPrompt(
+  /// Construye un prompt TTS avanzado para single-voice o multi-voice
+  ///
+  /// - Si [voice] es null: genera prompt para multi-speaker
+  /// - Si [voice] es especificada: genera prompt para single-speaker
+  String _buildTtsPrompt(
     final String text,
-    final String voice,
-    final AiAudioParams audioParams,
-  ) {
+    final AiAudioParams audioParams, {
+    final String? voice,
+  }) {
     final promptBuilder = StringBuffer();
+    final isMultiVoice = voice == null;
 
-    promptBuilder.write('''
+    if (isMultiVoice) {
+      promptBuilder.write(
+          '''Please generate multi-speaker speech audio for the following text:
+"$text"
+
+Requirements:
+- Use natural intonation and pacing for each speaker
+- Clear pronunciation for all speakers''');
+    } else {
+      promptBuilder.write('''
 Please generate speech audio for the following text using voice "$voice":
 "$text"
 
 Requirements:
 - Use natural intonation and pacing
 - Clear pronunciation''');
+    }
 
     // Añadir idioma si está especificado
     if (audioParams.language != null) {
-      promptBuilder.write('\n- Speak in ${audioParams.language} language');
+      if (isMultiVoice) {
+        promptBuilder.write(
+            '\n- All speakers should speak in ${audioParams.language} language');
+      } else {
+        promptBuilder.write('\n- Speak in ${audioParams.language} language');
+      }
     }
 
     // Añadir acento personalizado si está especificado
@@ -826,7 +846,12 @@ Requirements:
 
     // Añadir emoción personalizada si está especificada
     if (audioParams.emotion != null) {
-      promptBuilder.write('\n- Emotional expression: ${audioParams.emotion}');
+      if (isMultiVoice) {
+        promptBuilder.write(
+            '\n- Emotional expression for all speakers: ${audioParams.emotion}');
+      } else {
+        promptBuilder.write('\n- Emotional expression: ${audioParams.emotion}');
+      }
     }
 
     // Añadir velocidad si no es la por defecto
@@ -834,56 +859,12 @@ Requirements:
       final speedDescription = audioParams.speed > 1.0
           ? 'faster than normal (${audioParams.speed}x speed)'
           : 'slower than normal (${audioParams.speed}x speed)';
-      promptBuilder.write('\n- Speaking pace: $speedDescription');
-    }
-
-    // Añadir formato de audio (Google siempre genera PCM internamente)
-    promptBuilder
-        .write('\n- Audio format preference: ${audioParams.audioFormat}');
-
-    return promptBuilder.toString();
-  }
-
-  /// Construye un prompt TTS avanzado para multi-voice incluyendo idioma y parámetros
-  String _buildMultiVoiceTtsPrompt(
-    final String text,
-    final AiAudioParams audioParams,
-  ) {
-    final promptBuilder = StringBuffer();
-
-    promptBuilder.write(
-        '''Please generate multi-speaker speech audio for the following text:
-"$text"
-
-Requirements:
-- Use natural intonation and pacing for each speaker
-- Clear pronunciation for all speakers''');
-
-    // Añadir idioma si está especificado
-    if (audioParams.language != null) {
-      promptBuilder.write(
-          '\n- All speakers should speak in ${audioParams.language} language');
-    }
-
-    // Añadir acento personalizado si está especificado
-    if (audioParams.accent != null) {
-      promptBuilder
-          .write('\n- Use accent/pronunciation style: ${audioParams.accent}');
-    }
-
-    // Añadir emoción personalizada si está especificada
-    if (audioParams.emotion != null) {
-      promptBuilder.write(
-          '\n- Emotional expression for all speakers: ${audioParams.emotion}');
-    }
-
-    // Añadir velocidad si no es la por defecto
-    if (audioParams.speed != 1.0) {
-      final speedDescription = audioParams.speed > 1.0
-          ? 'faster than normal (${audioParams.speed}x speed)'
-          : 'slower than normal (${audioParams.speed}x speed)';
-      promptBuilder
-          .write('\n- Speaking pace for all speakers: $speedDescription');
+      if (isMultiVoice) {
+        promptBuilder
+            .write('\n- Speaking pace for all speakers: $speedDescription');
+      } else {
+        promptBuilder.write('\n- Speaking pace: $speedDescription');
+      }
     }
 
     // Añadir formato de audio (Google siempre genera PCM internamente)
