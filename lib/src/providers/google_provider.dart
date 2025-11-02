@@ -854,6 +854,21 @@ Requirements:
       }
     }
 
+    // Añadir temperatura (creativity) si está especificada
+    if (audioParams.temperature != null) {
+      final creativityLevel = audioParams.temperature! < 0.33
+          ? 'deterministic and consistent'
+          : audioParams.temperature! < 0.66
+              ? 'natural and balanced'
+              : 'creative and expressive';
+      if (isMultiVoice) {
+        promptBuilder
+            .write('\n- Voice creativity for all speakers: $creativityLevel');
+      } else {
+        promptBuilder.write('\n- Voice creativity: $creativityLevel');
+      }
+    }
+
     // Añadir velocidad si no es la por defecto
     if (audioParams.speed != 1.0) {
       final speedDescription = audioParams.speed > 1.0
