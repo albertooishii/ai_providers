@@ -543,13 +543,16 @@ After generating the image, provide your response as a JSON object with the foll
     try {
       final selectedModel =
           model ?? getDefaultModel(AICapability.audioGeneration);
-      // Use voice parameter directly with fallback to getDefaultVoice()
-      final selectedVoice = voice ??
-          getDefaultVoice(); // Crear AiAudioParams desde additionalParams para usar los nuevos campos
       final audioParams =
           additionalParams?.audioParams ?? const AiAudioParams();
 
-      // Construir prompt nativo de TTS con parámetros avanzados
+      // 🎭 Multi-voice mode: use Gemini's multi-speaker support with freeform text
+      if (audioParams.multiVoiceEnabled) {
+        return _sendMultiVoiceTTSRequest(text, selectedModel, audioParams);
+      }
+
+      // Single-voice mode (existing logic)
+      final selectedVoice = voice ?? getDefaultVoice();
       final ttsPrompt =
           _buildAdvancedTtsPrompt(text, selectedVoice, audioParams);
 
@@ -563,7 +566,7 @@ After generating the image, provide your response as a JSON object with the foll
       ];
 
       final generationConfig = <String, dynamic>{
-        'response_modalities': ['AUDIO'], // Configurar para respuesta de audio
+        'response_modalities': ['AUDIO'],
         'speech_config': {
           'voice_config': {
             'prebuilt_voice_config': {
@@ -573,7 +576,6 @@ After generating the image, provide your response as a JSON object with the foll
         }
       };
 
-      // Añadir temperature si está especificada
       if (audioParams.temperature != null) {
         generationConfig['temperature'] = audioParams.temperature;
       }
@@ -583,7 +585,6 @@ After generating the image, provide your response as a JSON object with the foll
         'generationConfig': generationConfig,
       };
 
-      // Validation: ensure we have a model
       if (selectedModel == null || selectedModel.isEmpty) {
         throw StateError(
             'No TTS model available in Google provider configuration');
@@ -597,11 +598,9 @@ After generating the image, provide your response as a JSON object with the foll
       if (isSuccessfulResponse(response.statusCode)) {
         final responseBody = jsonDecode(response.body);
 
-        // 🔍 DEBUG: Log complete response structure
         AILogger.d(
             '[GoogleProvider] 📊 TTS Response (full body): $responseBody');
 
-        // Extraer audio de la respuesta de Gemini
         String? audioBase64;
         if (responseBody['candidates'] != null &&
             responseBody['candidates'].isNotEmpty) {
@@ -619,7 +618,6 @@ After generating the image, provide your response as a JSON object with the foll
               audioBase64 = part['inlineData']['data'];
               AILogger.d(
                   '[GoogleProvider] ✅ Extracted audio base64 data (${audioBase64?.length ?? 0} chars)');
-              // Debug: verify base64 starts correctly
               if (audioBase64 != null && audioBase64.isNotEmpty) {
                 final first50 = audioBase64.length > 50
                     ? audioBase64.substring(0, 50)
@@ -643,7 +641,6 @@ After generating the image, provide your response as a JSON object with the foll
           AILogger.e(
               '[GoogleProvider] ❌ No audio extracted from response. Response keys: ${responseBody.keys.toList()}');
 
-          // 🔍 Analyze finish reason to understand why no audio
           if (responseBody['candidates'] != null &&
               responseBody['candidates'].isNotEmpty) {
             final finishReason = responseBody['candidates'][0]['finishReason'];
@@ -675,6 +672,125 @@ After generating the image, provide your response as a JSON object with the foll
       AILogger.e('[GoogleProvider] TTS request failed: $e');
       return ProviderResponse(text: 'Error connecting to Gemini TTS: $e');
     }
+  }
+
+  /// Multi-voice TTS using freeform text (Gemini handles speaker detection)
+  /// Text should be formatted as: "Speaker1: text\nSpeaker2: text"
+  Future<ProviderResponse> _sendMultiVoiceTTSRequest(
+    final String text,
+    final String? selectedModel,
+    final AiAudioParams audioParams,
+  ) async {
+    try {
+      AILogger.d('[GoogleProvider] 🎭 Multi-voice TTS (freeform mode)');
+
+      // Get configured voices from YAML
+      final voicesList = _getConfiguredMultiVoices();
+      AILogger.d(
+          '[GoogleProvider] Using voices for multi-speaker: $voicesList');
+
+      // Build speaker voice configs from configured voices
+      final speakerVoiceConfigs = <Map<String, dynamic>>[];
+      for (int i = 0; i < voicesList.length; i++) {
+        speakerVoiceConfigs.add({
+          'speaker_alias': 'Speaker${i + 1}',
+          'speaker_id': voicesList[i],
+        });
+      }
+
+      final contents = [
+        {
+          'role': 'user',
+          'parts': [
+            {'text': text} // Pass text directly with Speaker: format
+          ],
+        }
+      ];
+
+      final generationConfig = <String, dynamic>{
+        'response_modalities': ['AUDIO'],
+        'speech_config': {
+          'voice_config': {
+            'multi_speaker_voice_config': {
+              'speaker_voice_configs': speakerVoiceConfigs,
+            }
+          }
+        }
+      };
+
+      if (audioParams.temperature != null) {
+        generationConfig['temperature'] = audioParams.temperature;
+      }
+
+      final bodyMap = {
+        'contents': contents,
+        'generationConfig': generationConfig,
+      };
+
+      if (selectedModel == null || selectedModel.isEmpty) {
+        throw StateError('No TTS model available');
+      }
+
+      final url = Uri.parse(
+          getEndpointUrl('tts_generate').replaceAll('{model}', selectedModel));
+      final response = await http.Client()
+          .post(url, headers: buildAuthHeaders(), body: jsonEncode(bodyMap));
+
+      if (isSuccessfulResponse(response.statusCode)) {
+        final responseBody = jsonDecode(response.body);
+
+        AILogger.d('[GoogleProvider] 🎭 Multi-voice response received');
+
+        String? audioBase64;
+        if (responseBody['candidates'] != null &&
+            responseBody['candidates'].isNotEmpty) {
+          final candidate = responseBody['candidates'][0];
+
+          if (candidate['content'] != null &&
+              candidate['content']['parts'] != null &&
+              candidate['content']['parts'].isNotEmpty) {
+            final part = candidate['content']['parts'][0];
+
+            if (part['inlineData'] != null &&
+                part['inlineData']['data'] != null) {
+              audioBase64 = part['inlineData']['data'];
+              AILogger.d(
+                  '[GoogleProvider] ✅ Multi-voice audio generated successfully');
+            }
+          }
+        }
+
+        if (audioBase64 == null || audioBase64.isEmpty) {
+          throw StateError('Multi-voice TTS returned no audio data');
+        }
+
+        return ProviderResponse(
+          text: 'Multi-voice audio generated successfully',
+          audioBase64: audioBase64,
+        );
+      } else {
+        AILogger.e(
+            '[GoogleProvider] ❌ Multi-voice TTS failed (HTTP ${response.statusCode})');
+        throw HttpException(
+            'Multi-voice TTS failed: HTTP ${response.statusCode}');
+      }
+    } on Exception catch (e) {
+      AILogger.e('[GoogleProvider] Multi-voice TTS error: $e');
+      rethrow;
+    }
+  }
+
+  /// Gets configured voices from YAML config (for multi-voice synthesis)
+  /// voices.default is always a List<String>
+  List<String> _getConfiguredMultiVoices() {
+    final voices = config.voices['default'];
+
+    if (voices == null || voices.isEmpty) {
+      throw StateError(
+          'Multi-voice synthesis requires voices.default configured in YAML as a list');
+    }
+
+    return voices.take(3).toList();
   }
 
   /// Construye un prompt TTS avanzado usando los nuevos parámetros de audio

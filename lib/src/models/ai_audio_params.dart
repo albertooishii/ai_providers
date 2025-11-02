@@ -54,6 +54,7 @@ class AiAudioParams {
     this.accent,
     this.temperature,
     this.emotion,
+    this.multiVoiceEnabled = false,
   }) : _audioFormat = audioFormat;
 
   /// Factory constructor desde `Map<String, dynamic>` para compatibilidad
@@ -69,6 +70,7 @@ class AiAudioParams {
       language: params['language'] as String?,
       temperature: (params['temperature'] as num?)?.toDouble(),
       emotion: params['emotion'] as String?,
+      multiVoiceEnabled: (params['multiVoiceEnabled'] as bool?) ?? false,
     );
   }
 
@@ -155,6 +157,13 @@ class AiAudioParams {
   /// Valores básicos disponibles en [AiAudioEmotion] para conveniencia.
   final String? emotion;
 
+  /// Habilita síntesis multi-locutor (Gemini TTS Modo 2).
+  ///
+  /// Cuando es `true`, el provider intenta usar múltiples voces según
+  /// configuración en YAML (speakers). Los detalles específicos de voces
+  /// se cargan desde la configuración, no desde aquí.
+  final bool multiVoiceEnabled;
+
   /// Convierte a `Map<String, dynamic>` para compatibilidad con additionalParams
   ///
   /// **Importante:** Solo incluye parámetros que los providers necesitan internamente.
@@ -167,6 +176,7 @@ class AiAudioParams {
     if (accent != null) map['accent'] = accent;
     if (temperature != null) map['temperature'] = temperature;
     if (emotion != null) map['emotion'] = emotion;
+    if (multiVoiceEnabled) map['multiVoiceEnabled'] = true;
 
     return map;
   }
@@ -179,6 +189,7 @@ class AiAudioParams {
     final String? accent,
     final double? temperature,
     final String? emotion,
+    final bool? multiVoiceEnabled,
   }) {
     return AiAudioParams(
       speed: speed ?? this.speed,
@@ -187,13 +198,15 @@ class AiAudioParams {
       accent: accent ?? this.accent,
       temperature: temperature ?? this.temperature,
       emotion: emotion ?? this.emotion,
+      multiVoiceEnabled: multiVoiceEnabled ?? this.multiVoiceEnabled,
     );
   }
 
   @override
   String toString() {
     return 'AiAudioParams(speed: $speed, audioFormat: $audioFormat, '
-        'language: $language, temperature: $temperature, emotion: $emotion)';
+        'language: $language, temperature: $temperature, emotion: $emotion, '
+        'multiVoiceEnabled: $multiVoiceEnabled)';
   }
 }
 

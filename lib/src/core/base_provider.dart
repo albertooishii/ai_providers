@@ -69,10 +69,19 @@ abstract class BaseProvider {
   }
 
   /// Get default voice from YAML config
+  /// voices.default is always a `List<String>`, returns the first one
   String getDefaultVoice() {
-    return config.voices['default'] ??
-        config.voices['tts_default'] ??
-        _getProviderSpecificDefaultVoice();
+    final defaultVoices = config.voices['default'];
+    if (defaultVoices != null && defaultVoices.isNotEmpty) {
+      return defaultVoices.first;
+    }
+
+    final ttsDefaultVoices = config.voices['tts_default'];
+    if (ttsDefaultVoices != null && ttsDefaultVoices.isNotEmpty) {
+      return ttsDefaultVoices.first;
+    }
+
+    return _getProviderSpecificDefaultVoice();
   }
 
   /// Each provider can override this for their specific default
