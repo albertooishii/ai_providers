@@ -171,7 +171,7 @@ class ProviderConfig {
       voices: Map<String, dynamic>.from(
         map['voices'] ?? {},
       ).map((final key, final value) {
-        // voices.* should always be List<String>
+        // voices must be List<String> - fail if not
         return MapEntry(key, (value as List).cast<String>());
       }),
       rateLimits: map['rate_limits'] != null
