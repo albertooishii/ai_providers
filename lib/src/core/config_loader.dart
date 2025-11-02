@@ -683,8 +683,10 @@ class AIProviderConfigLoader {
         final currentProvider = getDefaultAudioProvider();
         if (currentProvider.isNotEmpty) {
           final providerConfig = config.aiProviders[currentProvider];
-          final voices = providerConfig?.voices ?? {};
-          return voices['default'];
+          final voices = providerConfig?.voices['default'];
+          if (voices != null && voices.isNotEmpty) {
+            return voices.first;
+          }
         }
       }
 
@@ -695,8 +697,11 @@ class AIProviderConfigLoader {
         final providers = config['ai_providers'] as Map<String, dynamic>? ?? {};
         final providerConfig =
             providers[currentProvider] as Map<String, dynamic>? ?? {};
-        final voices = providerConfig['voices'] as Map<String, dynamic>? ?? {};
-        return voices['default'] as String?;
+        final voices = (providerConfig['voices'] as Map<String, dynamic>? ??
+            {})['default'] as List?;
+        if (voices != null && voices.isNotEmpty) {
+          return voices.first.toString();
+        }
       }
 
       AILogger.w('No default audio provider configured');
@@ -715,8 +720,10 @@ class AIProviderConfigLoader {
       if (manager.isInitialized && manager.config != null) {
         final config = manager.config!;
         final providerConfig = config.aiProviders[providerId];
-        final voices = providerConfig?.voices ?? {};
-        return voices['default'];
+        final voices = providerConfig?.voices['default'];
+        if (voices != null && voices.isNotEmpty) {
+          return voices.first;
+        }
       }
 
       // Fallback: usar configuración cacheada localmente
@@ -724,8 +731,12 @@ class AIProviderConfigLoader {
       final providers = config['ai_providers'] as Map<String, dynamic>? ?? {};
       final providerConfig =
           providers[providerId] as Map<String, dynamic>? ?? {};
-      final voices = providerConfig['voices'] as Map<String, dynamic>? ?? {};
-      return voices['default'] as String?;
+      final voices = (providerConfig['voices'] as Map<String, dynamic>? ??
+          {})['default'] as List?;
+      if (voices != null && voices.isNotEmpty) {
+        return voices.first.toString();
+      }
+      return null;
     } on Exception catch (e) {
       AILogger.w('Failed to get default voice for provider $providerId: $e');
       return null;
