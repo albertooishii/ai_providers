@@ -674,46 +674,63 @@ After generating the image, provide your response as a JSON object with the foll
     }
   }
 
-  /// Multi-voice TTS using freeform text (Gemini handles speaker detection)
+  /// Multi-voice TTS using speaker names in text
   /// Text should be formatted as: "Speaker1: text\nSpeaker2: text"
+  /// Speakers must match names in speakerVoiceConfigs
   Future<ProviderResponse> _sendMultiVoiceTTSRequest(
     final String text,
     final String? selectedModel,
     final AiAudioParams audioParams,
   ) async {
     try {
-      AILogger.d('[GoogleProvider] 🎭 Multi-voice TTS (freeform mode)');
+      AILogger.d('[GoogleProvider] 🎭 Multi-voice TTS');
+      AILogger.d('[GoogleProvider] 🎭 Input text: $text');
 
       // Get configured voices from YAML
-      final voicesList = _getConfiguredMultiVoices();
-      AILogger.d(
-          '[GoogleProvider] Using voices for multi-speaker: $voicesList');
+      final voices = config.voices;
+      if (voices.isEmpty) {
+        throw StateError('No voices configured in YAML for multi-voice TTS');
+      }
 
-      // Build speaker voice configs from configured voices
+      // Build speaker voice configs
+      // Gemini multi-voice requires exactly 2 speakers maximum
+      final maxVoices = voices.take(2).toList();
+      if (maxVoices.length < 2) {
+        throw StateError(
+            'Multi-voice TTS requires at least 2 voices configured in YAML');
+      }
+
       final speakerVoiceConfigs = <Map<String, dynamic>>[];
-      for (int i = 0; i < voicesList.length; i++) {
+      for (int i = 0; i < maxVoices.length; i++) {
         speakerVoiceConfigs.add({
-          'speaker_alias': 'Speaker${i + 1}',
-          'speaker_id': voicesList[i],
+          'speaker': 'Speaker${i + 1}',
+          'voiceConfig': {
+            'prebuiltVoiceConfig': {
+              'voiceName': maxVoices[i],
+            }
+          }
         });
       }
+
+      AILogger.d('[GoogleProvider] 🎭 Speaker configs: $speakerVoiceConfigs');
 
       final contents = [
         {
           'role': 'user',
           'parts': [
-            {'text': text} // Pass text directly with Speaker: format
+            {
+              'text': text
+            } // Text should have "Speaker1: ...\nSpeaker2: ..." format
           ],
         }
       ];
 
+      // Multi-voice config using correct field names
       final generationConfig = <String, dynamic>{
-        'response_modalities': ['AUDIO'],
-        'speech_config': {
-          'voice_config': {
-            'multi_speaker_voice_config': {
-              'speaker_voice_configs': speakerVoiceConfigs,
-            }
+        'responseModalities': ['AUDIO'],
+        'speechConfig': {
+          'multiSpeakerVoiceConfig': {
+            'speakerVoiceConfigs': speakerVoiceConfigs,
           }
         }
       };
@@ -739,8 +756,6 @@ After generating the image, provide your response as a JSON object with the foll
       if (isSuccessfulResponse(response.statusCode)) {
         final responseBody = jsonDecode(response.body);
 
-        AILogger.d('[GoogleProvider] 🎭 Multi-voice response received');
-
         String? audioBase64;
         if (responseBody['candidates'] != null &&
             responseBody['candidates'].isNotEmpty) {
@@ -754,8 +769,6 @@ After generating the image, provide your response as a JSON object with the foll
             if (part['inlineData'] != null &&
                 part['inlineData']['data'] != null) {
               audioBase64 = part['inlineData']['data'];
-              AILogger.d(
-                  '[GoogleProvider] ✅ Multi-voice audio generated successfully');
             }
           }
         }
@@ -771,6 +784,7 @@ After generating the image, provide your response as a JSON object with the foll
       } else {
         AILogger.e(
             '[GoogleProvider] ❌ Multi-voice TTS failed (HTTP ${response.statusCode})');
+        AILogger.e('[GoogleProvider] ❌ Response body: ${response.body}');
         throw HttpException(
             'Multi-voice TTS failed: HTTP ${response.statusCode}');
       }
@@ -778,18 +792,6 @@ After generating the image, provide your response as a JSON object with the foll
       AILogger.e('[GoogleProvider] Multi-voice TTS error: $e');
       rethrow;
     }
-  }
-
-  /// Gets configured voices from YAML config (for multi-voice synthesis)
-  List<String> _getConfiguredMultiVoices() {
-    final voices = config.voices;
-
-    if (voices.isEmpty) {
-      throw StateError(
-          'Multi-voice synthesis requires voices configured in YAML');
-    }
-
-    return voices.take(3).toList();
   }
 
   /// Construye un prompt TTS avanzado usando los nuevos parámetros de audio
