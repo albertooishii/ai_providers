@@ -1142,15 +1142,10 @@ class AIProviderManager {
   String? _selectVoice(final String providerId) {
     try {
       final providerConfig = _config!.aiProviders[providerId];
-      if (providerConfig == null) return null;
-
-      // Return first voice from default list
-      final defaultVoices = providerConfig.voices['default'] ??
-          providerConfig.voices['tts_default'];
-      if (defaultVoices != null && defaultVoices.isNotEmpty) {
-        return defaultVoices.first;
+      if (providerConfig == null || providerConfig.voices.isEmpty) {
+        return null;
       }
-      return null;
+      return providerConfig.voices.first;
     } on Exception catch (e) {
       AILogger.w('[AIProviderManager] Error selecting voice: $e');
       return null;

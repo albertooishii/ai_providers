@@ -781,13 +781,12 @@ After generating the image, provide your response as a JSON object with the foll
   }
 
   /// Gets configured voices from YAML config (for multi-voice synthesis)
-  /// voices.default is always a `List<String>`
   List<String> _getConfiguredMultiVoices() {
-    final voices = config.voices['default'];
+    final voices = config.voices;
 
-    if (voices == null || voices.isEmpty) {
+    if (voices.isEmpty) {
       throw StateError(
-          'Multi-voice synthesis requires voices.default configured in YAML as a list');
+          'Multi-voice synthesis requires voices configured in YAML');
     }
 
     return voices.take(3).toList();

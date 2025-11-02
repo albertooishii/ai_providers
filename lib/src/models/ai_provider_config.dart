@@ -168,12 +168,7 @@ class ProviderConfig {
         map['defaults'] ?? {},
       ).map((final key, final value) => MapEntry(
           AICapabilityExtension.fromIdentifier(key)!, value as String)),
-      voices: Map<String, dynamic>.from(
-        map['voices'] ?? {},
-      ).map((final key, final value) {
-        // voices must be List<String> - fail if not
-        return MapEntry(key, (value as List).cast<String>());
-      }),
+      voices: (map['voices'] as List<dynamic>? ?? []).cast<String>(),
       rateLimits: map['rate_limits'] != null
           ? RateLimits.fromMap(Map<String, dynamic>.from(map['rate_limits']))
           : RateLimits.fromMap({}), // Fallback para rate_limits null
@@ -212,7 +207,7 @@ class ProviderConfig {
   final ApiSettings apiSettings;
   final Map<AICapability, List<String>> models;
   final Map<AICapability, String> defaults;
-  final Map<String, List<String>> voices;
+  final List<String> voices;
   final RateLimits rateLimits;
   final ProviderConfiguration configuration;
   final List<String> modelPrefixes;

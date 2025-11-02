@@ -683,7 +683,7 @@ class AIProviderConfigLoader {
         final currentProvider = getDefaultAudioProvider();
         if (currentProvider.isNotEmpty) {
           final providerConfig = config.aiProviders[currentProvider];
-          final voices = providerConfig?.voices['default'];
+          final voices = providerConfig?.voices;
           if (voices != null && voices.isNotEmpty) {
             return voices.first;
           }
@@ -697,10 +697,9 @@ class AIProviderConfigLoader {
         final providers = config['ai_providers'] as Map<String, dynamic>? ?? {};
         final providerConfig =
             providers[currentProvider] as Map<String, dynamic>? ?? {};
-        final voices = (providerConfig['voices'] as Map<String, dynamic>? ??
-            {})['default'] as List?;
+        final voices = (providerConfig['voices'] as List?)?.cast<String>();
         if (voices != null && voices.isNotEmpty) {
-          return voices.first.toString();
+          return voices.first;
         }
       }
 
@@ -720,7 +719,7 @@ class AIProviderConfigLoader {
       if (manager.isInitialized && manager.config != null) {
         final config = manager.config!;
         final providerConfig = config.aiProviders[providerId];
-        final voices = providerConfig?.voices['default'];
+        final voices = providerConfig?.voices;
         if (voices != null && voices.isNotEmpty) {
           return voices.first;
         }
@@ -731,10 +730,9 @@ class AIProviderConfigLoader {
       final providers = config['ai_providers'] as Map<String, dynamic>? ?? {};
       final providerConfig =
           providers[providerId] as Map<String, dynamic>? ?? {};
-      final voices = (providerConfig['voices'] as Map<String, dynamic>? ??
-          {})['default'] as List?;
+      final voices = (providerConfig['voices'] as List?)?.cast<String>();
       if (voices != null && voices.isNotEmpty) {
-        return voices.first.toString();
+        return voices.first;
       }
       return null;
     } on Exception catch (e) {
