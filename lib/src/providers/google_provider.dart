@@ -886,7 +886,14 @@ Requirements:
     promptBuilder
         .write('\n- Audio format preference: ${audioParams.audioFormat}');
 
-    return promptBuilder.toString();
+    final finalPrompt = promptBuilder.toString();
+
+    // Log audit: show all parameters being sent to Gemini
+    AILogger.d(
+        '[GoogleProvider] 🎤 TTS Prompt (emotion + temperature + speed):\n$finalPrompt',
+        tag: 'TTS_PARAMS');
+
+    return finalPrompt;
   }
 
   /// Native Gemini STT using generateContent
